@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Production Render URL - Set to domain root for absolute path handling
-const API_URL = 'https://course-finder-backend.onrender.com';
+const API_URL = 'https://course-finder-fnxs.onrender.com';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -48,7 +48,7 @@ api.getMe = () => api.get('/api/auth/me');
 api.getUserProfile = (userId) => api.get(`/api/auth/profile/${userId}`);
 
 // SOCIAL FEED & ACTIVITY
-api.getRecentActivity = () => api.get('/api/completed/recent'); 
+api.getRecentActivity = () => api.get('/api/completed/recent');
 
 // LIKES
 api.likeCompletion = (id) => api.post(`/api/completed/${id}/like`);
