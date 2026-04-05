@@ -2,24 +2,21 @@ import mongoose from 'mongoose';
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      // These options are defaults in Mongoose 8.x but kept for clarity
-    });
+    const uri = process.env.MONGO_URI || process.env.MONGODB_URI;
 
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    if (!uri) {
+      console.error("❌ No MongoDB URI found in environment variables");
+      process.exit(1);
+    }
 
-    // Handle connection events
-    mongoose.connection.on('error', (err) => {
-      console.error(`❌ MongoDB connection error: ${err.message}`);
-    });
+    console.log("🔍 MONGO_URI:", uri ? "Loaded ✅" : "Missing ❌");
 
-    mongoose.connection.on('disconnected', () => {
-      console.warn('⚠️  MongoDB disconnected');
-    });
+    await mongoose.connect(uri);
 
+    console.log("✅ MongoDB Connected");
   } catch (error) {
-    console.error(`❌ MongoDB connection failed: ${error.message}`);
-    process.exit(1); // Exit with failure
+    console.error("❌ MongoDB connection failed:", error.message);
+    process.exit(1);
   }
 };
 

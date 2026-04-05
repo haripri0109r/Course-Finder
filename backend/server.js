@@ -13,13 +13,13 @@ const startServer = async () => {
     // 2. Start HTTP server
     const server = app.listen(PORT, () => {
       console.log('');
-      console.log('╔══════════════════════════════════════╗');
-      console.log('║     Course Finder API — Running      ║');
-      console.log('╠══════════════════════════════════════╣');
-      console.log(`║  Port    : ${PORT}                       ║`);
-      console.log(`║  Mode    : ${process.env.NODE_ENV?.padEnd(25)}║`);
+      console.log('╔════════════════════════════════════════════════╗');
+      console.log('║     Course Finder API — Running                ║');
+      console.log('╠════════════════════════════════════════════════╣');
+      console.log(`║  Port    : ${PORT}                             ║`);
+      console.log(`║  Mode    : ${process.env.NODE_ENV?.padEnd(25)} ║`);
       console.log(`║  Health  : http://localhost:${PORT}/api/health ║`);
-      console.log('╚══════════════════════════════════════╝');
+      console.log('╚════════════════════════════════════════════════╝');
       console.log('');
     });
 
