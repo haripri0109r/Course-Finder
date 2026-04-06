@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import api from '../services/api';
 import CourseCard from '../components/CourseCard';

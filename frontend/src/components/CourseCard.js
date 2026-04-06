@@ -1,7 +1,8 @@
 import React, { memo, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image, Linking, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { COLORS, RADIUS, SHADOW, SPACING, FONTS } from '../utils/theme';
 import { timeAgo } from '../utils/format';
+import { showToast } from './Toast';
 import AnimatedPressable from './AnimatedPressable';
 
 const CourseCard = memo(({ 
@@ -17,10 +18,14 @@ const CourseCard = memo(({
   onLike,
   onBookmark,
   onPress,
-  createdAt
+  createdAt,
+  image,
+  certificateUrl
 }) => {
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
+  const [imgLoading, setImgLoading] = useState(true);
+  const [imgError, setImgError] = useState(false);
 
   const platformColor = {
     Udemy: '#A435F0',
@@ -49,6 +54,8 @@ const CourseCard = memo(({
     }
   };
 
+  const isPdfCert = certificateUrl && (certificateUrl.endsWith('.pdf') || certificateUrl.includes('/raw/'));
+
   return (
     <AnimatedPressable
       style={styles.card}
@@ -59,7 +66,27 @@ const CourseCard = memo(({
       {/* Platform Accent Strip */}
       <View style={[styles.accent, { backgroundColor: platformColor[platform] || COLORS.primary }]} />
 
-      <View style={styles.content}>
+      <View style={styles.cardInner}>
+        <View style={styles.imageContainer}>
+          {imgLoading && (
+            <View style={styles.skeletonContainer}>
+              <ActivityIndicator color={COLORS.primary} />
+            </View>
+          )}
+          <Image 
+            source={{ uri: imgError ? `https://placehold.co/800x400/e2e8f0/64748b?text=${encodeURIComponent(platform || 'Course')}` : (image || `https://placehold.co/800x400/e2e8f0/64748b?text=${encodeURIComponent(platform || 'Course')}`) }} 
+            style={styles.thumbnail} 
+            resizeMode="cover"
+            onLoadStart={() => setImgLoading(true)}
+            onLoadEnd={() => setImgLoading(false)}
+            onError={() => {
+              setImgError(true);
+              setImgLoading(false);
+            }}
+          />
+        </View>
+
+        <View style={styles.content}>
         <View style={styles.headerRow}>
           {authorName && (
             <Text style={styles.authorTag}>Logged by <Text style={styles.authorName}>{authorName}</Text></Text>
@@ -91,6 +118,24 @@ const CourseCard = memo(({
           <Text style={styles.reviewSnippet} numberOfLines={2}>"{reviewSnippet}"</Text>
         )}
 
+        {certificateUrl ? (
+          <TouchableOpacity 
+            style={styles.certificateBtn} 
+            onPress={() => {
+              // Basic analytics hook execution
+              api.post('/api/analytics/cert-view', { url: certificateUrl }).catch(() => {});
+              
+              Linking.openURL(certificateUrl).catch(() => {
+                showToast('Unable to open certificate link', 'error');
+              });
+            }}
+          >
+            <Text style={styles.certificateText}>
+              {isPdfCert ? '📄 View Certificate [PDF]' : '🖼️ View Certificate [Image]'}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Text style={styles.statEmoji}>⭐</Text>
@@ -118,6 +163,7 @@ const CourseCard = memo(({
           </View>
         </View>
       </View>
+      </View>
     </AnimatedPressable>
   );
 });
@@ -133,6 +179,27 @@ const styles = StyleSheet.create({
   },
   accent: {
     width: 6,
+  },
+  cardInner: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  imageContainer: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#e1e4e8', // Standard skeleton backplate
+    position: 'relative',
+  },
+  skeletonContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  thumbnail: {
+    width: '100%',
+    height: 150,
+    zIndex: 2,
   },
   content: {
     flex: 1,
@@ -209,6 +276,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     padding: SPACING.md,
     borderRadius: RADIUS.md,
+  },
+  certificateBtn: {
+    backgroundColor: `${COLORS.primary}15`,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: RADIUS.sm,
+    alignSelf: 'flex-start',
+    marginBottom: SPACING.md,
+  },
+  certificateText: {
+    color: COLORS.primary,
+    ...FONTS.caption,
+    fontWeight: '700',
   },
   statsRow: {
     flexDirection: 'row',

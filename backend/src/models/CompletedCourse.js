@@ -28,6 +28,11 @@ const completedCourseSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    certificatePublicId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     progress: {
       type: Number,
       default: 100,

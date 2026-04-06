@@ -22,6 +22,11 @@ const courseSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    image: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     tags: {
       type: [String],
       default: [],

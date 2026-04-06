@@ -1,5 +1,6 @@
 import { Course, CompletedCourse } from '../models/index.js';
 import { createNotification } from '../services/notificationService.js';
+import { uploadBufferToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
 
 // ─── Helper: recalculate and persist course stats ─────────────────────────────
 const syncCourseStats = async (courseId) => {
@@ -41,7 +42,7 @@ const syncCourseStats = async (courseId) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const addCompletedCourse = async (req, res) => {
-  const { title, platform, url, tags, level, rating, review } = req.body;
+  const { title, platform, url, tags, level, rating, review, image, certificateUrl, certificatePublicId } = req.body;
 
   // 1. Validate required fields
   if (!title || !platform || !url) {
@@ -59,9 +60,14 @@ const addCompletedCourse = async (req, res) => {
       title: title.trim(),
       platform,
       url: url.trim(),
+      image: image ? image.trim() : '',
       tags: tags || [],
       level: level || 'beginner',
     });
+  } else if (image && !course.image) {
+    // Optionally update image if the course existed but had no image
+    course.image = image.trim();
+    await course.save();
   }
 
   // 3. Check for duplicate (unique index on user + course will throw 11000)
@@ -71,9 +77,38 @@ const addCompletedCourse = async (req, res) => {
   });
 
   if (alreadyAdded) {
+    let updated = false;
+    if (certificateUrl && certificateUrl.trim() !== alreadyAdded.certificateUrl) {
+      // If there's an old certificate, we should safely delete it
+      if (alreadyAdded.certificatePublicId) {
+        const oldIsPdf = alreadyAdded.certificateUrl.endsWith('.pdf') || alreadyAdded.certificateUrl.includes('/raw/');
+        deleteFromCloudinary(alreadyAdded.certificatePublicId, oldIsPdf ? 'raw' : 'image');
+      }
+      alreadyAdded.certificateUrl = certificateUrl.trim();
+      alreadyAdded.certificatePublicId = certificatePublicId ? certificatePublicId.trim() : null;
+      updated = true;
+    }
+    if (rating && rating !== alreadyAdded.rating) {
+      alreadyAdded.rating = rating;
+      updated = true;
+    }
+    if (review && review !== alreadyAdded.review) {
+      alreadyAdded.review = review;
+      updated = true;
+    }
+
+    if (updated) {
+      await alreadyAdded.save();
+      return res.status(200).json({
+        success: true,
+        message: 'Course profile updated successfully',
+        data: alreadyAdded,
+      });
+    }
+
     return res.status(409).json({
       success: false,
-      message: 'You have already added this course to your profile',
+      message: 'You have already added this course to your profile without new changes.',
     });
   }
 
@@ -83,6 +118,8 @@ const addCompletedCourse = async (req, res) => {
     course: course._id,
     rating: rating || undefined,
     review: review || '',
+    certificateUrl: certificateUrl ? certificateUrl.trim() : '',
+    certificatePublicId: certificatePublicId ? certificatePublicId.trim() : null,
   });
 
   // 5. Sync aggregated stats on the Course document
@@ -99,6 +136,58 @@ const addCompletedCourse = async (req, res) => {
     message: 'Course added to your profile',
     data: populated,
   });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/completed/upload-certificate
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const uploadCertificate = async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: 'No file provided. Please upload an image or PDF file.',
+    });
+  }
+
+  const { oldPublicId, oldResourceType } = req.body;
+
+  try {
+    // If user is overriding a staged certificate, clean the old one
+    if (oldPublicId) {
+      deleteFromCloudinary(oldPublicId, oldResourceType || 'image');
+    }
+
+    // Upload buffer to Cloudinary
+    const result = await uploadBufferToCloudinary(req.file.buffer, req.file.mimetype);
+
+    console.log(JSON.stringify({ 
+      event: "UPLOAD_SUCCESS", 
+      userId: req.user._id, 
+      bytes: req.file.size,
+      mimetype: req.file.mimetype,
+      publicId: result.public_id
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: 'Certificate uploaded successfully',
+      url: result.secure_url,
+      public_id: result.public_id,
+      resource_type: result.resource_type,
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ 
+      event: "UPLOAD_FAILURE", 
+      userId: req.user._id, 
+      error: error.message,
+      stack: error.stack
+    }));
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to upload certificate to cloud storage. ' + error.message,
+    });
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,12 +339,23 @@ const getUserCompletions = async (req, res) => {
   });
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+const trackCertView = async (req, res) => {
+  const { url } = req.body;
+  if (url) {
+    console.log(JSON.stringify({ event: 'CERTIFICATE_VIEWED', userId: req.user._id, url }));
+  }
+  return res.status(200).json({ success: true });
+};
+
 export { 
   addCompletedCourse, 
+  uploadCertificate,
   getMyCompletedCourses, 
   deleteCompletedCourse,
   likeCompletion,
   unlikeCompletion,
   getRecentActivity,
-  getUserCompletions
+  getUserCompletions,
+  trackCertView
 };

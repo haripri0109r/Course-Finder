@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Image } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import NetInfo from '@react-native-community/netinfo';
 import api from '../services/api';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
@@ -14,6 +16,14 @@ export default function AddCourseScreen() {
   const [url, setUrl] = useState('');
   const [rating, setRating] = useState('');
   const [review, setReview] = useState('');
+  const [image, setImage] = useState('');
+  const [certificateUrl, setCertificateUrl] = useState('');
+  const [certificatePublicId, setCertificatePublicId] = useState('');
+  const [certificatePreviewUri, setCertificatePreviewUri] = useState('');
+  const [stagedAsset, setStagedAsset] = useState(null);
+  const [uploadingCert, setUploadingCert] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadFailed, setUploadFailed] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -29,18 +39,101 @@ export default function AddCourseScreen() {
     return Object.keys(newErrors).length === 0;
   };
 
+  const handlePickCertificate = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/jpeg', 'image/png', 'application/pdf'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setCertificatePreviewUri(result.assets[0].uri);
+        setStagedAsset(result.assets[0]);
+        await uploadCertificateFile(result.assets[0]);
+      }
+    } catch (error) {
+      showToast('Failed to open file picker', 'error');
+    }
+  };
+
+  const retryUpload = async () => {
+    if (stagedAsset) {
+      await uploadCertificateFile(stagedAsset);
+    }
+  };
+
+  const uploadCertificateFile = async (asset) => {
+    try {
+      const netState = await NetInfo.fetch();
+      if (!netState.isConnected) {
+        showToast('No internet connection', 'error');
+        setUploadFailed(true);
+        return;
+      }
+
+      setUploadingCert(true);
+      setUploadFailed(false);
+      setUploadProgress(0);
+      const formData = new FormData();
+      formData.append('file', {
+        uri: asset.uri,
+        name: asset.name || 'document.pdf',
+        type: asset.mimeType || 'application/pdf',
+      });
+      // Pass old info for cleanup if replacing
+      if (certificatePublicId) {
+        formData.append('oldPublicId', certificatePublicId);
+        formData.append('oldResourceType', certificateUrl.endsWith('.pdf') ? 'raw' : 'image');
+      }
+
+      const response = await api.post('/api/completed/upload-certificate', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+           setUploadProgress(percentCompleted);
+        }
+      });
+      
+      if (response.data.success) {
+        setCertificateUrl(response.data.url);
+        setCertificatePublicId(response.data.public_id || '');
+        showToast('Certificate uploaded securely!', 'success');
+      } else {
+        showToast(response.data.message || 'Verification failed', 'error');
+        setUploadFailed(true);
+      }
+    } catch (error) {
+      const msg = error.response?.data?.message || 'Failed to upload certificate';
+      showToast(msg, 'error');
+      setUploadFailed(true);
+    } finally {
+      setUploadingCert(false);
+    }
+  };
+
   const handleSubmit = async () => {
+    if (uploadingCert) {
+      showToast('Please wait for the certificate to finish uploading.', 'info');
+      return;
+    }
+    if (uploadFailed) {
+      showToast('Please retry the certificate upload before submitting.', 'error');
+      return;
+    }
     if (!validate()) return;
 
     try {
       setLoading(true);
       await api.post('/api/completed', {
         title, platform, url,
+        image,
+        certificateUrl,
+        certificatePublicId,
         rating: rating ? Number(rating) : undefined,
         review,
       });
-      showToast('Course logged successfully!', 'success');
-      setTitle(''); setPlatform(''); setUrl(''); setRating(''); setReview('');
+      showToast(response.data.message || 'Course logged successfully!', 'success');
+      setTitle(''); setPlatform(''); setUrl(''); setRating(''); setReview(''); setImage(''); setCertificateUrl(''); setCertificatePublicId(''); setCertificatePreviewUri(''); setStagedAsset(null); setUploadFailed(false);
       setErrors({});
     } catch (error) {
       showToast(error.response?.data?.message || 'Failed to add course', 'error');
@@ -95,6 +188,39 @@ export default function AddCourseScreen() {
           error={errors.url}
         />
 
+        <InputField
+          label="Course Thumbnail URL (optional)"
+          placeholder="https://.../image.jpg"
+          value={image}
+          onChangeText={setImage}
+          autoCapitalize="none"
+          keyboardType="url"
+        />
+
+        <Text style={styles.label}>Certificate</Text>
+        <TouchableOpacity 
+          style={styles.uploadBtn} 
+          onPress={uploadFailed ? retryUpload : handlePickCertificate}
+          disabled={uploadingCert}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.uploadBtnText, uploadFailed && { color: '#EF4444' }]}>
+            {uploadingCert ? `⏳ Uploading... ${uploadProgress}%` : uploadFailed ? '⚠️ Upload Failed - Tap to Retry' : certificateUrl ? '🔄 Replace Document' : '📤 Upload Document'}
+          </Text>
+        </TouchableOpacity>
+
+        {certificatePreviewUri && !uploadFailed ? (
+          <View style={styles.previewContainer}>
+             {certificatePreviewUri.endsWith('.pdf') ? (
+               <Text style={styles.pdfPreview}>📄 PDF Document Readied</Text>
+             ) : (
+               <Image source={{ uri: certificatePreviewUri }} style={styles.imagePreview} />
+             )}
+             {uploadingCert && <Text style={styles.successTextSmall}>Synchronizing with Cloud...</Text>}
+             {certificateUrl !== '' && !uploadingCert && <Text style={styles.successTextSmall}>✅ Successfully Synced!</Text>}
+          </View>
+        ) : null}
+
         {/* Star Rating Selector */}
         <Text style={styles.label}>Your Rating</Text>
         <View style={styles.ratingRow}>
@@ -136,6 +262,51 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     minHeight: 40,
     borderRadius: RADIUS.pill,
+  },
+
+  uploadBtn: {
+    backgroundColor: `${COLORS.secondary}15`,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    marginLeft: SPACING.xs,
+  },
+  uploadBtnText: {
+    color: COLORS.secondary,
+    fontWeight: '700',
+    ...FONTS.body,
+  },
+  previewContainer: {
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pdfPreview: {
+    ...FONTS.caption,
+    color: COLORS.textPrimary,
+    fontStyle: 'italic',
+    marginBottom: SPACING.xs,
+    padding: SPACING.sm,
+    backgroundColor: COLORS.card,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  imagePreview: {
+    width: 200,
+    height: 120,
+    borderRadius: RADIUS.md,
+    resizeMode: 'cover',
+    marginBottom: SPACING.xs,
+  },
+  successTextSmall: {
+    ...FONTS.caption,
+    color: COLORS.secondary,
+    marginLeft: SPACING.xs,
+    marginBottom: SPACING.xl,
   },
 
   ratingRow: {
