@@ -4,12 +4,12 @@ import {
   removeBookmark, 
   getBookmarks 
 } from '../controllers/bookmarkController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { authenticate } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
-// All bookmark routes require authentication
-router.use(protect);
+// All notification routes require authentication
+router.use(authenticate);
 
 // GET /api/bookmarks
 router.get('/', getBookmarks);

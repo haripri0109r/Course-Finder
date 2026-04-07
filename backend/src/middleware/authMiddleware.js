@@ -2,10 +2,10 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models/index.js';
 
 /**
- * Protect middleware — verifies the Bearer token and attaches req.user.
+ * Authenticate middleware — verifies the Bearer token and attaches req.user.
  * Throws 401 if token is missing, invalid, or expired.
  */
-const protect = async (req, res, next) => {
+const authenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   // 1. Check that the Authorization header exists and starts with "Bearer "
@@ -45,4 +45,4 @@ const protect = async (req, res, next) => {
   }
 };
 
-export { protect };
+export { authenticate, authenticate as protect };

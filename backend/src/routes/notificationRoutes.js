@@ -4,12 +4,12 @@ import {
   markAsRead, 
   getUnreadCount 
 } from '../controllers/notificationController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { authenticate } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
 // All notification routes require authentication
-router.use(protect);
+router.use(authenticate);
 
 router.get('/', getNotifications);
 router.get('/unread-count', getUnreadCount);
