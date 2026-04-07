@@ -81,20 +81,21 @@ export default function CompletionDetailScreen({ route, navigation }) {
 
   const handleLike = async () => {
     if (!completion || isLikeLoading) return;
-    const isLiked = completion.likes.includes(currentUser._id);
+    const isLiked = completion.isLikedByMe;
     
     // Optimistic Update
-    const updatedLikes = isLiked 
-      ? completion.likes.filter(id => id !== currentUser._id)
-      : [...completion.likes, currentUser._id];
-    
-    setCompletion({ ...completion, likes: updatedLikes });
+    setCompletion({ 
+      ...completion, 
+      isLikedByMe: !isLiked,
+      likesCount: isLiked ? completion.likesCount - 1 : completion.likesCount + 1
+    });
     setIsLikeLoading(true);
 
     try {
-      if (isLiked) await api.unlikeCompletion(completionId);
-      else await api.likeCompletion(completionId);
+      if (isLiked) await api.unlikeCompletion(id);
+      else await api.likeCompletion(id);
     } catch (err) {
+      // Revert on error
       setCompletion(completion);
       showToast('Interaction failed', 'error');
     } finally {
@@ -106,7 +107,7 @@ export default function CompletionDetailScreen({ route, navigation }) {
     if (isBookmarkLoading) return;
     setIsBookmarkLoading(true);
     try {
-      await toggleBookmark(completionId);
+      await toggleBookmark(id);
     } catch (err) {
       showToast('Bookmark failed', 'error');
     } finally {
@@ -118,7 +119,7 @@ export default function CompletionDetailScreen({ route, navigation }) {
     if (!commentText.trim() || submitting) return;
     try {
       setSubmitting(true);
-      const res = await api.addComment(completionId, commentText.trim());
+      const res = await api.addComment(id, commentText.trim());
       if (res.data.success) {
         setComments([res.data.data, ...comments]);
         setCommentText('');
@@ -135,8 +136,8 @@ export default function CompletionDetailScreen({ route, navigation }) {
   if (error && !completion) return <RetryBox message="Unable to load post" error={error} onRetry={() => fetchData(false)} />;
   if (!completion) return null;
 
-  const isLiked = completion.likes.includes(currentUser._id);
-  const isBookmarked = bookmarks.has(completionId);
+  const isLiked = completion.isLikedByMe;
+  const isBookmarked = bookmarks.has(id);
 
   return (
     <KeyboardAvoidingView 
@@ -168,20 +169,20 @@ export default function CompletionDetailScreen({ route, navigation }) {
       >
         <AnimatedPressable 
           style={styles.authorRow}
-          onPress={() => navigation.navigate('UserProfile', { userId: completion.user._id })}
+          onPress={() => navigation.navigate('UserProfile', { userId: completion.userId })}
         >
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(completion.user?.name || 'U').charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarText}>{(completion.authorName || 'U').charAt(0).toUpperCase()}</Text>
           </View>
           <View>
-            <Text style={styles.authorName}>{completion.user?.name}</Text>
+            <Text style={styles.authorName}>{completion.authorName}</Text>
             <Text style={styles.timestamp}>{timeAgo(completion.createdAt)}</Text>
           </View>
         </AnimatedPressable>
 
         <View style={styles.contentCard}>
-          <Text style={styles.courseTitle}>{completion.course.title}</Text>
-          <Text style={styles.platform}>{completion.course.platform}</Text>
+          <Text style={styles.courseTitle}>{completion.title}</Text>
+          <Text style={styles.platform}>{completion.platform}</Text>
           
           <View style={styles.ratingRow}>
             <Text style={styles.stars}>{'⭐'.repeat(Math.round(completion.rating || 0))}</Text>
@@ -202,7 +203,7 @@ export default function CompletionDetailScreen({ route, navigation }) {
               haptic="impactMedium"
             >
               <Text style={styles.actionEmoji}>{isLiked ? '❤️' : '🤍'}</Text>
-              <Text style={styles.actionText}>{completion.likes.length} Likes</Text>
+              <Text style={styles.actionText}>{completion.likesCount} Likes</Text>
             </AnimatedPressable>
             <View style={styles.actionBtn}>
               <Text style={styles.actionEmoji}>💬</Text>

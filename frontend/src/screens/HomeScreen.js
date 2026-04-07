@@ -66,17 +66,21 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleLike = async (item) => {
-    // Note: The standardized formatter returns likesCount. 
-    // We'll manage the local toggle state optimistically.
-    const isLiked = item.isLikedByMe; // We can add this to formatter if needed, for now logic below:
+    const isLiked = item.isLikedByMe;
     
-    // Optimistic UI logic depends on local state tracking which we can improve later,
-    // for now we'll trigger the API and refresh or manage local count.
+    // Optimistic UI update
+    setActivity(prev => prev.map(a => 
+      a.id === item.id 
+        ? { ...a, isLikedByMe: !isLiked, likesCount: isLiked ? a.likesCount - 1 : a.likesCount + 1 }
+        : a
+    ));
+
     try {
       if (isLiked) await api.unlikeCompletion(item.id);
       else await api.likeCompletion(item.id);
-      fetchData(true); // Simplified refresh for consistency
     } catch (err) {
+      // Revert if silent refresh or error handling is needed
+      fetchData(true); 
       showToast('Interaction failed', 'error');
     }
   };
@@ -130,7 +134,7 @@ export default function HomeScreen({ navigation }) {
               reviewSnippet={item.review}
               likesCount={item.likesCount}
               commentsCount={0} 
-              isLiked={false} // Will integrate actual state in next phase
+              isLiked={item.isLikedByMe}
               isBookmarked={bookmarks.has(item.id)}
               createdAt={item.createdAt}
               onBookmark={() => toggleBookmark(item.id)}

@@ -17,9 +17,10 @@ const isValidUrl = (url) => {
  * Transforms a nested CompletedCourse document into a flat, standardized v1 JSON.
  * High-resiliency: always returns a value for required keys.
  */
-export const formatCourse = (item = {}) => {
+export const formatCourse = (item = {}, currentUserId = null) => {
   const course = item.course || {};
   const user = item.user || {};
+  const likes = Array.isArray(item.likes) ? item.likes : [];
 
   return {
     version: API_VERSION,
@@ -35,7 +36,12 @@ export const formatCourse = (item = {}) => {
     // Enrollments/Ratings context
     rating: item.rating ?? 0,
     review: item.review ?? "",
+    // User context
     authorName: user.name || "Anonymous",
-    likesCount: Array.isArray(item.likes) ? item.likes.length : 0,
+    userId: user._id?.toString() || "",
+
+    likesCount: likes.length,
+    isLikedByMe: currentUserId ? likes.some(id => id.toString() === currentUserId.toString()) : false,
+    likes: likes, // Temporary inclusion to prevent frontend crashes during refactor
   };
 };

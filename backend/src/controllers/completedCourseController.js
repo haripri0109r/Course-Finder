@@ -212,7 +212,7 @@ const getMyCompletedCourses = async (req, res) => {
     })
     .sort({ createdAt: -1 });
 
-  const data = completedCourses.map(formatCourse);
+  const data = completedCourses.map(item => formatCourse(item, req.user._id));
 
   return res.status(200).json({
     success: true,
@@ -339,7 +339,7 @@ const getRecentActivity = async (req, res) => {
     .skip(skip)
     .limit(PAGINATION_LIMIT);
 
-  const data = items.map(formatCourse);
+  const data = items.map(item => formatCourse(item, req.user._id));
 
   return res.status(200).json({
     success: true,
@@ -360,7 +360,7 @@ const getUserCompletions = async (req, res) => {
     .populate('course', 'title platform url tags level averageRating totalCompletions image')
     .sort({ createdAt: -1 });
 
-  const data = activity.map(formatCourse);
+  const data = activity.map(item => formatCourse(item, req.user?._id));
 
   return res.status(200).json({
     success: true,
@@ -390,7 +390,7 @@ const getCompletedCourseById = async (req, res) => {
     });
   }
 
-  const data = formatCourse(post);
+  const data = formatCourse(post, req.user?._id);
 
   return res.status(200).json({
     success: true,

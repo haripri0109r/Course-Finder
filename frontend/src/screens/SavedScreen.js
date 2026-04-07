@@ -78,7 +78,7 @@ export default function SavedScreen({ navigation }) {
         reviewSnippet={item.review}
         likesCount={item.likesCount}
         commentsCount={0}
-        isLiked={false} // Will integrate in next pass
+        isLiked={item.isLikedByMe}
         isBookmarked={true}
         createdAt={item.createdAt}
         onBookmark={() => handleBookmarkToggle(item.id)}

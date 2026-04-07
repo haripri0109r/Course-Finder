@@ -61,7 +61,7 @@ const getBookmarks = async (req, res) => {
     ]
   });
 
-  const data = (user.bookmarks || []).map(formatCourse);
+  const data = (user.bookmarks || []).map(item => formatCourse(item, req.user._id));
 
   return res.status(200).json({
     success: true,

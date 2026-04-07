@@ -206,7 +206,7 @@ export default function ProfileScreen({ route, navigation }) {
     <View style={styles.container}>
       <FlatList
         data={loading ? [1, 2, 3] : completed}
-        keyExtractor={(item, index) => loading ? `skel-${index}` : item._id}
+        keyExtractor={(item, index) => loading ? `skel-${index}` : item.id}
         renderItem={renderItem}
         ListHeaderComponent={<ProfileHeader />}
         contentContainerStyle={styles.list}
