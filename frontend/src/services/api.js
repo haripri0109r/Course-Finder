@@ -2,19 +2,19 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-const LOCAL_IP = 'http://172.17.1.42:5000/api/v1';
-const ANDROID_EMULATOR = 'http://10.0.2.2:5000/api/v1';
-const PRODUCTION = 'https://course-finder-fnxs.onrender.com/api/v1';
+// 1. Find Your Local IP Address
+// Run 'ipconfig' in your terminal and look for IPv4 Address: 192.168.X.X
+// Use that IP here for mobile/emulator connectivity:
+const API_URL = 'http://172.17.1.42:5000/api/v1';
 
-// Android emulators cannot use localhost to reach the backend.
-// If you are testing on a physical Android device, switch this to LOCAL_IP.
-const API_URL = __DEV__
-  ? (Platform.OS === 'android' ? ANDROID_EMULATOR : LOCAL_IP)
-  : PRODUCTION;
+// Production Render URL (Comment out when testing local changes)
+// const API_URL = 'https://course-finder-fnxs.onrender.com';
+
+console.log('🚀 API URL:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 30000, // 30 seconds for cold starts
 });
 
 api.interceptors.request.use(
