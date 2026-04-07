@@ -30,7 +30,7 @@ const uploadLimiter = rateLimit({
 });
 
 // All completed-course routes are protected
-router.use(protect);
+router.use(authenticate);
 // Logs
 router.post('/', authenticate, upload.single('file'), sanitizeImage, addCompletedCourse);
 router.post('/upload-certificate', authenticate, upload.single('file'), uploadCertificate);

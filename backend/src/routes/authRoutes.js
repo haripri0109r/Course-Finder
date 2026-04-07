@@ -5,9 +5,6 @@ import { authenticate } from '../middleware/authMiddleware.js';
 
 const router = Router();
 
-// All bookmark routes require authentication
-router.use(authenticate);
-
 // Auth
 router.post('/register', registerUser);
 router.post('/login', loginUser);
