@@ -20,7 +20,7 @@ import { timeAgo } from '../utils/format';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 
 export default function CompletionDetailScreen({ route, navigation }) {
-  const { completionId } = route.params;
+  const { id } = route.params;
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
   
   const [completion, setCompletion] = useState(null);
@@ -33,21 +33,34 @@ export default function CompletionDetailScreen({ route, navigation }) {
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
 
-  const fetchData = async (isRefresh = false) => {
+  const fetchData = async (isRefresh = false, signal = null) => {
     try {
       setError(null);
       if (!isRefresh && !completion) setLoading(true);
+      const startTime = Date.now();
       
       const [compRes, commRes] = await Promise.all([
-        api.get(`/api/completed/${completionId}`),
-        api.getComments(completionId)
+        api.getCompletedCourse(id, { signal }),
+        api.getComments(id, { signal })
       ]);
 
-      if (compRes.data.success) setCompletion(compRes.data.data);
+      if (compRes.data.success) {
+        console.log("API Response:", compRes.data);
+        setCompletion(compRes.data.data);
+      }
       if (commRes.data.success) setComments(commRes.data.data);
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 300) await new Promise(r => setTimeout(r, 300 - elapsed));
     } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
+      
       setError(err);
-      showToast('Could not load discussion', 'error');
+      if (err.response?.status === 404) {
+        showToast('This post has been removed', 'error');
+      } else {
+        showToast('Could not load discussion', 'error');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -55,8 +68,11 @@ export default function CompletionDetailScreen({ route, navigation }) {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [completionId]);
+    const controller = new AbortController();
+    console.log("Clicked ID:", id);
+    fetchData(false, controller.signal);
+    return () => controller.abort();
+  }, [id]);
 
   const onRefresh = () => {
     setRefreshing(true);

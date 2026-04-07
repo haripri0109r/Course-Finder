@@ -1,4 +1,6 @@
+import mongoose from 'mongoose';
 import { Course } from '../models/index.js';
+import { API_VERSION, DEFAULT_IMAGE } from '../config/constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   GET /api/courses/search
@@ -53,16 +55,26 @@ const searchCourses = async (req, res) => {
       .sort({ averageRating: -1, totalCompletions: -1 })
       .skip(skip)
       .limit(limitNum)
-      .select('title platform url tags level averageRating totalRatings totalCompletions'),
+      .select('title platform url tags level averageRating totalRatings totalCompletions image'),
     Course.countDocuments(filter),
   ]);
 
+  // Ensure every course has a valid image fallback URL in memory
+  const processedCourses = courses.map(c => {
+    const course = c.toObject();
+    return {
+      ...course,
+      image: course.image || DEFAULT_IMAGE
+    };
+  });
+
   return res.status(200).json({
     success: true,
+    version: API_VERSION,
     page: pageNum,
     totalPages: Math.ceil(totalResults / limitNum),
     totalResults,
-    courses,
+    courses: processedCourses,
   });
 };
 
@@ -97,14 +109,21 @@ const getRecommendedCourses = async (req, res) => {
         averageRating: 1,
         totalRatings: 1,
         totalCompletions: 1,
+        image: 1,
         score: 1
       }
     }
   ]);
 
+  const processedCourses = courses.map(c => ({
+    ...c,
+    image: c.image || DEFAULT_IMAGE
+  }));
+
   return res.status(200).json({
     success: true,
-    courses,
+    version: API_VERSION,
+    courses: processedCourses,
   });
 };
 
@@ -117,11 +136,17 @@ const getTrendingCourses = async (req, res) => {
   const courses = await Course.find()
     .sort({ totalCompletions: -1, updatedAt: -1 })
     .limit(10)
-    .select('title platform url tags level averageRating totalRatings totalCompletions');
+    .select('title platform url tags level averageRating totalRatings totalCompletions image');
+
+  const processedCourses = courses.map(c => ({
+    ...c.toObject(),
+    image: c.image || DEFAULT_IMAGE
+  }));
 
   return res.status(200).json({
     success: true,
-    courses,
+    version: API_VERSION,
+    courses: processedCourses,
   });
 };
 
@@ -130,6 +155,10 @@ const getTrendingCourses = async (req, res) => {
 // @access  Public
 // ─────────────────────────────────────────────────────────────────────────────
 const getCourseById = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ success: false, message: 'Invalid Course ID format' });
+  }
+
   const course = await Course.findById(req.params.id);
 
   if (!course) {
@@ -150,6 +179,10 @@ const getCourseById = async (req, res) => {
 // @access  Public
 // ─────────────────────────────────────────────────────────────────────────────
 const getCourseReviews = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ success: false, message: 'Invalid Course ID format' });
+  }
+
   const { CompletedCourse } = await import('../models/index.js');
 
   const reviews = await CompletedCourse.find({

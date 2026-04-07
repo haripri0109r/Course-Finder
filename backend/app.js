@@ -48,13 +48,13 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('combined'));
 }
 
-// ─── Routes (Strict Alignment with /api prefix) ───────────────────────────────
-app.use('/api/health', healthRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/completed', completedRoutes);
-app.use('/api/bookmarks', bookmarkRoutes);
-app.use('/api/notifications', notificationRoutes);
+// ─── Routes (Strict Alignment with /api/v1 prefix) ───────────────────────────
+app.use('/api/health', healthRoutes); // Keep health check at /api/health for internal monitoring
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/courses', courseRoutes);
+app.use('/api/v1/completed', completedRoutes);
+app.use('/api/v1/bookmarks', bookmarkRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // ─── 404 Handler (JSON for consistency) ──────────────────────────────────────
 app.use((req, res) => {

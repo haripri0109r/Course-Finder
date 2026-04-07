@@ -7,6 +7,7 @@ import CourseCard from '../components/CourseCard';
 import SkeletonCard from '../components/SkeletonCard';
 import RetryBox from '../components/RetryBox';
 import { showToast } from '../components/Toast';
+import { prefetchImages } from '../utils/prefetch';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 
 export default function SavedScreen({ navigation }) {
@@ -16,16 +17,23 @@ export default function SavedScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchBookmarks = async (isRefresh = false) => {
+  const fetchBookmarks = async (isRefresh = false, signal = null) => {
     try {
       setError(null);
       if (!isRefresh && savedItems.length === 0) setLoading(true);
+      const startTime = Date.now();
       
-      const response = await api.getSavedCompletions();
+      const response = await api.getSavedCompletions({ signal });
       if (response.data.success) {
-        setSavedItems(response.data.data);
+        const flatData = response.data.data;
+        setSavedItems(flatData);
+        prefetchImages(flatData);
       }
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 300) await new Promise(r => setTimeout(r, 300 - elapsed));
     } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       setError(err);
       showToast('Could not sync your library', 'error');
     } finally {
@@ -36,7 +44,9 @@ export default function SavedScreen({ navigation }) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchBookmarks();
+      const controller = new AbortController();
+      fetchBookmarks(false, controller.signal);
+      return () => controller.abort();
     }, [])
   );
 
@@ -49,7 +59,7 @@ export default function SavedScreen({ navigation }) {
     try {
       await toggleBookmark(id);
       // Immediately filter out if we just unbookmarked it
-      setSavedItems(prev => prev.filter(item => item._id !== id));
+      setSavedItems(prev => prev.filter(item => item.id !== id));
     } catch (err) {
       showToast('Interaction failed', 'error');
     }
@@ -57,22 +67,25 @@ export default function SavedScreen({ navigation }) {
 
   const renderItem = ({ item }) => {
     if (loading) return <SkeletonCard />;
-    if (!item.course || !item.user) return null;
     
+    // v1 Standardized Flat structure
     return (
       <CourseCard
-        title={item.course.title}
-        platform={item.course.platform}
+        title={item.title}
+        platform={item.platform}
         rating={item.rating}
-        authorName={item.user.name}
+        authorName={item.authorName}
         reviewSnippet={item.review}
-        likesCount={item.likes?.length || 0}
+        likesCount={item.likesCount}
         commentsCount={0}
-        isLiked={item.likes?.includes(currentUser._id)}
+        isLiked={false} // Will integrate in next pass
         isBookmarked={true}
         createdAt={item.createdAt}
-        onBookmark={() => handleBookmarkToggle(item._id)}
-        onPress={() => navigation.navigate('CompletionDetail', { completionId: item._id })}
+        onBookmark={() => handleBookmarkToggle(item.id)}
+        image={item.image}
+        onPress={() => {
+          navigation.navigate('CompletionDetail', { id: item.id });
+        }}
       />
     );
   };
@@ -90,7 +103,7 @@ export default function SavedScreen({ navigation }) {
 
       <FlatList
         data={loading ? [1, 2, 3] : savedItems}
-        keyExtractor={(item, index) => loading ? `skel-${index}` : item._id}
+        keyExtractor={(item, index) => loading ? `skel-${index}` : item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}

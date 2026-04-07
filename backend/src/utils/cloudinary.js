@@ -1,4 +1,6 @@
 import { v2 as cloudinary } from 'cloudinary';
+import { logImageError } from './logger.js';
+import { DEFAULT_IMAGE } from '../config/constants.js';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -8,55 +10,91 @@ cloudinary.config({
 });
 
 /**
- * Uploads a buffer to Cloudinary via upload_stream
- * @param {Buffer} buffer - The image buffer to upload
- * @param {String} mimetype - File mimetype
- * @param {String} folder - Cloudinary folder name
- * @returns {Promise<Object>} - Resolves with the Cloudinary response object
+ * Uploads a buffer to Cloudinary with production-grade transformations.
+ * Optimizes for mobile performance (WebP, scale, and auto-quality).
  */
 export const uploadBufferToCloudinary = (buffer, mimetype, folder = 'course-finder/certificates') => {
   return new Promise((resolve, reject) => {
     const isPdf = mimetype === 'application/pdf';
     
-    const options = { folder };
-    
-    if (isPdf) {
-      options.resource_type = 'raw';
-    } else {
-      options.resource_type = 'image';
-      options.format = 'webp';
-      options.quality = 'auto';
-      options.width = 800; // Optimize for web/mobile
-      options.crop = 'limit';
-    }
+    const options = { 
+      folder,
+      resource_type: isPdf ? 'raw' : 'image',
+      transformation: isPdf ? [] : [
+        { width: 400, crop: "scale" },
+        { quality: "auto", fetch_format: "auto" }
+      ]
+    };
 
     const uploadStream = cloudinary.uploader.upload_stream(
       options,
       (error, result) => {
-        if (error) return reject(error);
+        if (error) {
+          logImageError({ message: 'Cloudinary upload failed', event: 'UPLOAD_FAILURE' });
+          return reject(error);
+        }
         resolve(result);
       }
     );
 
-    // End the buffer write stream
     uploadStream.end(buffer);
   });
 };
 
 /**
+ * PRODUCTION-GRADE SAFE FLUX: 
+ * 1. Upload new image with transformation.
+ * 2. Update MongoDB (persisting secure_url).
+ * 3. Delete old asset ONLY if successful.
+ */
+export const updateCourseImage = async (courseDoc, buffer, mimetype) => {
+  try {
+    const oldPublicId = courseDoc.publicId;
+
+    // 1. Upload new
+    const result = await uploadBufferToCloudinary(buffer, mimetype, 'course-finder/courses');
+
+    // 2. Persist to DB
+    courseDoc.image = result.secure_url || DEFAULT_IMAGE;
+    courseDoc.publicId = result.public_id; // Store for future cleanup
+    await courseDoc.save();
+
+    // 3. Clean up old asset safely (don't crash if delete fails)
+    if (oldPublicId) {
+      try {
+        await cloudinary.uploader.destroy(oldPublicId);
+      } catch (err) {
+        logImageError({ 
+          message: `Cleanup failed for ${oldPublicId}`, 
+          event: 'CLEANUP_WARN',
+          url: oldPublicId 
+        });
+      }
+    }
+
+    return courseDoc;
+  } catch (error) {
+    logImageError({ message: error.message, event: 'UPDATE_COURSE_IMG_FAILURE' });
+    throw new Error("Failed to update course image. Please try again.");
+  }
+};
+
+/**
  * Safely deletes a file from Cloudinary 
- * @param {String} publicId - The public ID of the asset
- * @param {String} resourceType - 'image' or 'raw'
  */
 export const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
   if (!publicId) return;
   try {
     const result = await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
     if (result.result !== 'ok' && result.result !== 'not found') {
-      console.warn(`[Cloudinary Cleanup Warning]: Failed to delete ${publicId} - ${JSON.stringify(result)}`);
+      logImageError({ 
+        message: `Delete result not ok: ${result.result}`, 
+        event: 'DELETE_WARN',
+        url: publicId 
+      });
     }
   } catch (error) {
-    console.warn(`[Cloudinary Cleanup Error]: ${error.message}`);
+    logImageError({ message: error.message, event: 'DELETE_ERR', url: publicId });
   }
 };
 

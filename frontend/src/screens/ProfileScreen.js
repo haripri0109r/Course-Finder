@@ -6,7 +6,9 @@ import api from '../services/api';
 import SkeletonCard from '../components/SkeletonCard';
 import RetryBox from '../components/RetryBox';
 import AnimatedPressable from '../components/AnimatedPressable';
+import CourseImage from '../components/CourseImage';
 import { showToast } from '../components/Toast';
+import { prefetchImages } from '../utils/prefetch';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 
 export default function ProfileScreen({ route, navigation }) {
@@ -20,21 +22,31 @@ export default function ProfileScreen({ route, navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchProfileData = async (isRefresh = false) => {
+  const fetchProfileData = async (isRefresh = false, signal = null) => {
     try {
       setError(null);
       if (!isRefresh && completed.length === 0) setLoading(true);
+      const startTime = Date.now();
       
       const idToFetch = targetUserId || currentUser._id;
       
       const [userRes, courseRes] = await Promise.all([
-        isOwnProfile ? api.get('/api/auth/me') : api.getUserProfile(idToFetch),
-        api.get(isOwnProfile ? '/api/completed/me' : `/api/completed/user/${idToFetch}`)
+        isOwnProfile ? api.get('/api/v1/auth/me', { signal }) : api.getUserProfile(idToFetch, { signal }),
+        api.get(isOwnProfile ? '/api/v1/completed/me' : `/api/v1/completed/user/${idToFetch}`, { signal })
       ]);
 
       if (userRes.data.success) setDisplayUser(userRes.data.data);
-      if (courseRes.data.success) setCompleted(courseRes.data.data);
+      
+      if (courseRes.data.success) {
+        const flatData = courseRes.data.data;
+        setCompleted(flatData);
+        prefetchImages(flatData);
+      }
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 300) await new Promise(r => setTimeout(r, 300 - elapsed));
     } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       setError(err);
       showToast('Error loading profile content', 'error');
     } finally {
@@ -43,7 +55,11 @@ export default function ProfileScreen({ route, navigation }) {
     }
   };
 
-  useFocusEffect(useCallback(() => { fetchProfileData(); }, [targetUserId]));
+  useFocusEffect(useCallback(() => { 
+    const controller = new AbortController();
+    fetchProfileData(false, controller.signal); 
+    return () => controller.abort();
+  }, [targetUserId]));
   
   const onRefresh = () => { setRefreshing(true); fetchProfileData(true); };
 
@@ -81,6 +97,7 @@ export default function ProfileScreen({ route, navigation }) {
   };
 
   const totalCourses = completed.length;
+  // Standardized formatter property access
   const avgRating = totalCourses > 0
     ? (completed.reduce((s, c) => s + (c.rating || 0), 0) / totalCourses).toFixed(1)
     : '0.0';
@@ -152,14 +169,22 @@ export default function ProfileScreen({ route, navigation }) {
 
   const renderItem = ({ item }) => {
     if (loading) return <SkeletonCard />;
-    if (!item.course) return null;
     
+    // v1 Flat structure access
     return (
-      <View style={styles.historyCard}>
+      <AnimatedPressable 
+        style={styles.historyCard}
+        onPress={() => {
+          navigation.navigate('CompletionDetail', { id: item.id });
+        }}
+      >
         <View style={[styles.historyAccent, { backgroundColor: COLORS.secondary }]} />
+        <View style={styles.historyImgContainer}>
+          <CourseImage uri={item.image} style={styles.historyThumb} />
+        </View>
         <View style={styles.historyContent}>
-          <Text style={styles.historyTitle} numberOfLines={2}>{item.course.title}</Text>
-          <Text style={styles.historyPlatform}>{item.course.platform}</Text>
+          <Text style={styles.historyTitle} numberOfLines={2}>{item.title}</Text>
+          <Text style={styles.historyPlatform}>{item.platform}</Text>
           <Text style={styles.historyRating}>
             {item.rating ? '⭐'.repeat(Math.round(item.rating)) : 'No rating'}
           </Text>
@@ -169,7 +194,7 @@ export default function ProfileScreen({ route, navigation }) {
             </View>
           ) : null}
         </View>
-      </View>
+      </AnimatedPressable>
     );
   };
 
@@ -290,6 +315,8 @@ const styles = StyleSheet.create({
     ...SHADOW.sm,
   },
   historyAccent: { width: 5 },
+  historyImgContainer: { width: 80, height: '100%', backgroundColor: COLORS.borderLight },
+  historyThumb: { width: 80, height: 80 },
   historyContent: { flex: 1, padding: SPACING.lg },
   historyTitle: { ...FONTS.bodyBold, marginBottom: SPACING.xs },
   historyPlatform: { ...FONTS.small, color: COLORS.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: SPACING.sm },

@@ -1,10 +1,17 @@
 import React, { memo, useState } from 'react';
-import { View, Text, StyleSheet, Image, Linking, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Linking, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { COLORS, RADIUS, SHADOW, SPACING, FONTS } from '../utils/theme';
 import { timeAgo } from '../utils/format';
 import { showToast } from './Toast';
 import AnimatedPressable from './AnimatedPressable';
+import CourseImage from './CourseImage';
+import api from '../services/api';
 
+/**
+ * PRODUCTION-GRADE CourseCard
+ * Consumes flattened v1 API structure.
+ * Media handling is delegated to the resilient <CourseImage /> component.
+ */
 const CourseCard = memo(({ 
   title, 
   platform, 
@@ -24,8 +31,6 @@ const CourseCard = memo(({
 }) => {
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
-  const [imgLoading, setImgLoading] = useState(true);
-  const [imgError, setImgError] = useState(false);
 
   const platformColor = {
     Udemy: '#A435F0',
@@ -63,106 +68,89 @@ const CourseCard = memo(({
       scaleTo={0.98}
       haptic="impactLight"
     >
-      {/* Platform Accent Strip */}
       <View style={[styles.accent, { backgroundColor: platformColor[platform] || COLORS.primary }]} />
 
       <View style={styles.cardInner}>
         <View style={styles.imageContainer}>
-          {imgLoading && (
-            <View style={styles.skeletonContainer}>
-              <ActivityIndicator color={COLORS.primary} />
-            </View>
-          )}
-          <Image 
-            source={{ uri: imgError ? `https://placehold.co/800x400/e2e8f0/64748b?text=${encodeURIComponent(platform || 'Course')}` : (image || `https://placehold.co/800x400/e2e8f0/64748b?text=${encodeURIComponent(platform || 'Course')}`) }} 
-            style={styles.thumbnail} 
-            resizeMode="cover"
-            onLoadStart={() => setImgLoading(true)}
-            onLoadEnd={() => setImgLoading(false)}
-            onError={() => {
-              setImgError(true);
-              setImgLoading(false);
-            }}
-          />
+          <CourseImage uri={image} style={styles.thumbnail} />
         </View>
 
         <View style={styles.content}>
-        <View style={styles.headerRow}>
-          {authorName && (
-            <Text style={styles.authorTag}>Logged by <Text style={styles.authorName}>{authorName}</Text></Text>
-          )}
-          {createdAt && <Text style={styles.timeText}>{timeAgo(createdAt)}</Text>}
-        </View>
+          <View style={styles.headerRow}>
+            {authorName && (
+              <Text style={styles.authorTag}>Logged by <Text style={styles.authorName}>{authorName}</Text></Text>
+            )}
+            {createdAt && <Text style={styles.timeText}>{timeAgo(createdAt)}</Text>}
+          </View>
 
-        <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={2}>{title}</Text>
-          <AnimatedPressable 
-            style={[styles.bookmarkBtn, isBookmarked && styles.bookmarkBtnActive]} 
-            onPress={handleBookmark}
-            disabled={isBookmarkLoading}
-            scaleTo={0.8}
-            haptic="impactMedium"
-          >
-            <Text style={{ fontSize: 18 }}>{isBookmarked ? '🔖' : '🔖'}</Text>
-            {!isBookmarked && <View style={styles.bookmarkOverlay} />}
-          </AnimatedPressable>
-        </View>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={2}>{title}</Text>
+            <AnimatedPressable 
+              style={[styles.bookmarkBtn, isBookmarked && styles.bookmarkBtnActive]} 
+              onPress={handleBookmark}
+              disabled={isBookmarkLoading}
+              scaleTo={0.8}
+              haptic="impactMedium"
+            >
+              <Text style={{ fontSize: 18 }}>{isBookmarked ? '🔖' : '🔖'}</Text>
+              {!isBookmarked && <View style={styles.bookmarkOverlay} />}
+            </AnimatedPressable>
+          </View>
 
-        <View style={styles.platformBadge}>
-          <Text style={[styles.platformText, { color: platformColor[platform] || COLORS.primary }]}>
-            {platform}
-          </Text>
-        </View>
-
-        {reviewSnippet && (
-          <Text style={styles.reviewSnippet} numberOfLines={2}>"{reviewSnippet}"</Text>
-        )}
-
-        {certificateUrl ? (
-          <TouchableOpacity 
-            style={styles.certificateBtn} 
-            onPress={() => {
-              // Basic analytics hook execution
-              api.post('/api/analytics/cert-view', { url: certificateUrl }).catch(() => {});
-              
-              Linking.openURL(certificateUrl).catch(() => {
-                showToast('Unable to open certificate link', 'error');
-              });
-            }}
-          >
-            <Text style={styles.certificateText}>
-              {isPdfCert ? '📄 View Certificate [PDF]' : '🖼️ View Certificate [Image]'}
+          <View style={styles.platformBadge}>
+            <Text style={[styles.platformText, { color: platformColor[platform] || COLORS.primary }]}>
+              {platform}
             </Text>
-          </TouchableOpacity>
-        ) : null}
-
-        <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Text style={styles.statEmoji}>⭐</Text>
-            <Text style={styles.statValue}>{rating ? rating.toFixed(1) : '0.0'}</Text>
           </View>
-          
-          <View style={styles.divider} />
-          
-          <AnimatedPressable 
-            onPress={handleLike} 
-            disabled={isLikeLoading}
-            style={styles.stat}
-            scaleTo={0.85}
-            haptic="impactMedium"
-          >
-            <Text style={styles.statEmoji}>{isLiked ? '❤️' : '🤍'}</Text>
-            <Text style={styles.statValue}>{likesCount}</Text>
-          </AnimatedPressable>
 
-          <View style={styles.divider} />
-          
-          <View style={styles.stat}>
-            <Text style={styles.statEmoji}>💬</Text>
-            <Text style={styles.statValue}>{commentsCount || 0}</Text>
+          {reviewSnippet && (
+            <Text style={styles.reviewSnippet} numberOfLines={2}>"{reviewSnippet}"</Text>
+          )}
+
+          {certificateUrl ? (
+            <TouchableOpacity 
+              style={styles.certificateBtn} 
+              onPress={() => {
+                api.post('/api/v1/completed/analytics/cert-view', { url: certificateUrl }).catch(() => {});
+                
+                Linking.openURL(certificateUrl).catch(() => {
+                  showToast('Unable to open certificate link', 'error');
+                });
+              }}
+            >
+              <Text style={styles.certificateText}>
+                {isPdfCert ? '📄 View Certificate [PDF]' : '🖼️ View Certificate [Image]'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <View style={styles.statsRow}>
+            <View style={styles.stat}>
+              <Text style={styles.statEmoji}>⭐</Text>
+              <Text style={styles.statValue}>{rating ? rating.toFixed(1) : '0.0'}</Text>
+            </View>
+            
+            <View style={styles.divider} />
+            
+            <AnimatedPressable 
+              onPress={handleLike} 
+              disabled={isLikeLoading}
+              style={styles.stat}
+              scaleTo={0.85}
+              haptic="impactMedium"
+            >
+              <Text style={styles.statEmoji}>{isLiked ? '❤️' : '🤍'}</Text>
+              <Text style={styles.statValue}>{likesCount}</Text>
+            </AnimatedPressable>
+
+            <View style={styles.divider} />
+            
+            <View style={styles.stat}>
+              <Text style={styles.statEmoji}>💬</Text>
+              <Text style={styles.statValue}>{commentsCount || 0}</Text>
+            </View>
           </View>
         </View>
-      </View>
       </View>
     </AnimatedPressable>
   );
@@ -187,19 +175,10 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: '100%',
     height: 150,
-    backgroundColor: '#e1e4e8', // Standard skeleton backplate
-    position: 'relative',
-  },
-  skeletonContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
   },
   thumbnail: {
     width: '100%',
     height: 150,
-    zIndex: 2,
   },
   content: {
     flex: 1,

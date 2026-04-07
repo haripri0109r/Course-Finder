@@ -42,7 +42,7 @@ export default function AddCourseScreen() {
   const handlePickCertificate = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/jpeg', 'image/png', 'application/pdf'],
+        type: ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
       });
 
@@ -124,7 +124,7 @@ export default function AddCourseScreen() {
 
     try {
       setLoading(true);
-      await api.post('/api/completed', {
+      const response = await api.post('/api/completed', {
         title, platform, url,
         image,
         certificateUrl,

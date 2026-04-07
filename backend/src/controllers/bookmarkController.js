@@ -1,5 +1,7 @@
 import User from '../models/User.js';
 import CompletedCourse from '../models/CompletedCourse.js';
+import { formatCourse } from '../utils/formatter.js';
+import { API_VERSION } from '../config/constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/bookmarks/:id
@@ -54,15 +56,18 @@ const getBookmarks = async (req, res) => {
   const user = await User.findById(req.user._id).populate({
     path: 'bookmarks',
     populate: [
-      { path: 'course', select: 'title platform url tags level averageRating totalCompletions' },
+      { path: 'course', select: 'title platform url tags level averageRating totalCompletions image' },
       { path: 'user', select: 'name profilePicture' }
     ]
   });
 
+  const data = (user.bookmarks || []).map(formatCourse);
+
   return res.status(200).json({
     success: true,
-    count: user.bookmarks.length,
-    data: user.bookmarks,
+    version: API_VERSION,
+    count: data.length,
+    data,
   });
 };
 

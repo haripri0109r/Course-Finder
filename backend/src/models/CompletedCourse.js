@@ -62,6 +62,10 @@ const completedCourseSchema = new mongoose.Schema(
 // ─── Unique constraint: one user can log the same course only once ─────────
 completedCourseSchema.index({ user: 1, course: 1 }, { unique: true });
 
+// ─── Performance Indexes ──────────────────────────────────────────────────────
+completedCourseSchema.index({ createdAt: -1 });              // Global Feed Sorting
+completedCourseSchema.index({ user: 1, createdAt: -1 });     // User Profile Feed Sorting (Compound)
+
 // ─── After saving, update the Course's averageRating + totalRatings ───────────
 completedCourseSchema.post('save', async function () {
   const CompletedCourse = this.constructor;

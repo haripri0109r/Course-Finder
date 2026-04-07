@@ -12,21 +12,32 @@ export default function SearchScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const handleSearch = async () => {
+  const handleSearch = async (signal = null) => {
     if (!query.trim()) return;
     try {
       setLoading(true);
       setHasSearched(true);
-      const response = await api.get(`/api/courses/search?q=${encodeURIComponent(query)}`);
+      const startTime = Date.now();
+
+      const response = await api.get(`/api/courses/search?q=${encodeURIComponent(query)}`, { signal });
       if (response.data.success) {
         setResults(response.data.courses);
       }
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 300) await new Promise(r => setTimeout(r, 300 - elapsed));
     } catch (error) {
+      if (error.name === 'CanceledError' || error.name === 'AbortError') return;
       showToast('Could not fetch results. Please try again.', 'error');
     } finally {
       setLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    return () => controller.abort();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -68,6 +79,7 @@ export default function SearchScreen({ navigation }) {
               platform={item.platform}
               rating={item.averageRating}
               completions={item.totalCompletions}
+              image={item.image}
               onPress={() => navigation.navigate('CourseDetail', { courseId: item._id })}
             />
           )}

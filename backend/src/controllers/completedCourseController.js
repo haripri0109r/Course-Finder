@@ -1,6 +1,9 @@
+import mongoose from 'mongoose';
 import { Course, CompletedCourse } from '../models/index.js';
 import { createNotification } from '../services/notificationService.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
+import { formatCourse } from '../utils/formatter.js';
+import { PAGINATION_LIMIT, API_VERSION } from '../config/constants.js';
 
 // ─── Helper: recalculate and persist course stats ─────────────────────────────
 const syncCourseStats = async (courseId) => {
@@ -64,10 +67,13 @@ const addCompletedCourse = async (req, res) => {
       tags: tags || [],
       level: level || 'beginner',
     });
+    console.log("New Course Created:", course);
   } else if (image && !course.image) {
-    // Optionally update image if the course existed but had no image
     course.image = image.trim();
     await course.save();
+    console.log("Existing Course Image Updated:", course);
+  } else {
+    console.log("Existing Course Found:", course);
   }
 
   // 3. Check for duplicate (unique index on user + course will throw 11000)
@@ -128,8 +134,12 @@ const addCompletedCourse = async (req, res) => {
   // 6. Return populated response
   const populated = await completed.populate({
     path: 'course',
-    select: 'title platform url tags level averageRating totalCompletions',
+    select: 'title platform url tags level averageRating totalCompletions image',
   });
+
+  if (populated.course && !populated.course.image) {
+    populated.course.image = 'https://via.placeholder.com/300';
+  }
 
   return res.status(201).json({
     success: true,
@@ -198,14 +208,17 @@ const getMyCompletedCourses = async (req, res) => {
   const completedCourses = await CompletedCourse.find({ user: req.user._id })
     .populate({
       path: 'course',
-      select: 'title platform url tags level averageRating totalCompletions totalRatings',
+      select: 'title platform url tags level averageRating totalCompletions totalRatings image',
     })
-    .sort({ createdAt: -1 }); // latest first
+    .sort({ createdAt: -1 });
+
+  const data = completedCourses.map(formatCourse);
 
   return res.status(200).json({
     success: true,
-    count: completedCourses.length,
-    data: completedCourses,
+    version: API_VERSION,
+    count: data.length,
+    data,
   });
 };
 
@@ -249,6 +262,10 @@ const deleteCompletedCourse = async (req, res) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const likeCompletion = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ success: false, message: 'Invalid ID format' });
+  }
+
   const completion = await CompletedCourse.findById(req.params.id);
 
   if (!completion) {
@@ -270,7 +287,7 @@ const likeCompletion = async (req, res) => {
     req.params.id,
     { $push: { likes: req.user._id } },
     { new: true }
-  ).populate('course', 'title');
+  ).populate('course', 'title image');
 
   // Trigger Notification
   await createNotification({
@@ -310,16 +327,27 @@ const unlikeCompletion = async (req, res) => {
 // @access  Private (or Public, but we have protect on the router)
 // ─────────────────────────────────────────────────────────────────────────────
 const getRecentActivity = async (req, res) => {
-  const activity = await CompletedCourse.find({ isPublic: true })
+  const page = parseInt(req.query.page) || 1;
+  const skip = (page - 1) * PAGINATION_LIMIT;
+
+  const total = await CompletedCourse.countDocuments({ isPublic: true });
+
+  const items = await CompletedCourse.find({ isPublic: true })
     .populate('user', 'name profilePicture')
-    .populate('course', 'title platform url tags level averageRating totalCompletions')
+    .populate('course', 'title platform url tags level averageRating totalCompletions image')
     .sort({ createdAt: -1 })
-    .limit(30);
+    .skip(skip)
+    .limit(PAGINATION_LIMIT);
+
+  const data = items.map(formatCourse);
 
   return res.status(200).json({
     success: true,
-    count: activity.length,
-    data: activity,
+    version: API_VERSION,
+    data,
+    page,
+    totalPages: Math.ceil(total / PAGINATION_LIMIT),
+    hasMore: page * PAGINATION_LIMIT < total,
   });
 };
 
@@ -329,13 +357,45 @@ const getRecentActivity = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const getUserCompletions = async (req, res) => {
   const activity = await CompletedCourse.find({ user: req.params.userId, isPublic: true })
-    .populate('course', 'title platform url tags level averageRating totalCompletions')
+    .populate('course', 'title platform url tags level averageRating totalCompletions image')
     .sort({ createdAt: -1 });
+
+  const data = activity.map(formatCourse);
 
   return res.status(200).json({
     success: true,
-    count: activity.length,
-    data: activity,
+    version: API_VERSION,
+    count: data.length,
+    data,
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/completed/:id
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const getCompletedCourseById = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ success: false, message: 'Invalid ID format' });
+  }
+
+  const post = await CompletedCourse.findById(req.params.id)
+    .populate('user', 'name profilePicture')
+    .populate('course', 'title platform url tags level averageRating totalCompletions totalRatings image');
+
+  if (!post) {
+    return res.status(404).json({
+      success: false,
+      message: 'Post not found',
+    });
+  }
+
+  const data = formatCourse(post);
+
+  return res.status(200).json({
+    success: true,
+    version: API_VERSION,
+    data,
   });
 };
 
@@ -357,5 +417,6 @@ export {
   unlikeCompletion,
   getRecentActivity,
   getUserCompletions,
+  getCompletedCourseById,
   trackCertView
 };

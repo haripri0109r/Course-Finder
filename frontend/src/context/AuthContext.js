@@ -48,6 +48,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    // Register global auto-logout handler for 401 errors
+    api.onUnauthorized(async () => {
+      await logout();
+    });
+    
     loadUser();
   }, []);
 

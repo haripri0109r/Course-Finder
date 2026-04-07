@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { User } from '../models/index.js';
 import generateToken from '../utils/generateToken.js';
 
@@ -125,6 +126,10 @@ const getMe = async (req, res) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const getUserProfile = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ success: false, message: 'Invalid User ID format' });
+  }
+
   const user = await User.findById(req.params.id)
     .select('-password -email')
     .populate('followers', 'name profilePicture')
