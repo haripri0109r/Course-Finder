@@ -31,8 +31,8 @@ export default function ProfileScreen({ route, navigation }) {
       const idToFetch = targetUserId || currentUser._id;
       
       const [userRes, courseRes] = await Promise.all([
-        isOwnProfile ? api.get('/api/v1/auth/me', { signal }) : api.getUserProfile(idToFetch, { signal }),
-        api.get(isOwnProfile ? '/api/v1/completed/me' : `/api/v1/completed/user/${idToFetch}`, { signal })
+        isOwnProfile ? api.get('/auth/me', { signal }) : api.getUserProfile(idToFetch, { signal }),
+        api.get(isOwnProfile ? '/completed/me' : `/completed/user/${idToFetch}`, { signal })
       ]);
 
       if (userRes.data.success) setDisplayUser(userRes.data.data);

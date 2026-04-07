@@ -22,6 +22,10 @@ const courseSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    duration: {
+      type: String,
+      default: 'N/A',
+    },
     image: {
       type: String,
       trim: true,
@@ -52,6 +56,11 @@ const courseSchema = new mongoose.Schema(
       min: 0,
     },
     totalCompletions: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    viewsCount: {
       type: Number,
       default: 0,
       min: 0,

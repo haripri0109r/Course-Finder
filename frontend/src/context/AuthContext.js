@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (token) {
-        const response = await api.get('/api/auth/me');
+        const response = await api.get('/auth/me');
         if (response.data.success) {
           const userData = response.data.data;
           setUser({ ...userData, token });

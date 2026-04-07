@@ -45,7 +45,7 @@ const syncCourseStats = async (courseId) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const addCompletedCourse = async (req, res) => {
-  const { title, platform, url, tags, level, rating, review, image, certificateUrl, certificatePublicId } = req.body;
+  const { title, platform, url, tags, level, rating, review, image, duration, certificateUrl, certificatePublicId } = req.body;
 
   // 1. Validate required fields
   if (!title || !platform || !url) {
@@ -124,6 +124,7 @@ const addCompletedCourse = async (req, res) => {
     course: course._id,
     rating: rating || undefined,
     review: review || '',
+    duration: duration || '',
     certificateUrl: certificateUrl ? certificateUrl.trim() : '',
     certificatePublicId: certificatePublicId ? certificatePublicId.trim() : null,
   });

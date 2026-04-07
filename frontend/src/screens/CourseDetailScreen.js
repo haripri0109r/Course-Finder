@@ -29,8 +29,8 @@ export default function CourseDetailScreen({ route, navigation }) {
       if (!isRefresh && !course) setLoading(true);
       
       const [courseRes, reviewsRes] = await Promise.all([
-        api.get(`/api/courses/${courseId}`),
-        api.get(`/api/courses/${courseId}/reviews`)
+        api.get(`/courses/${courseId}`),
+        api.get(`/courses/${courseId}/reviews`)
       ]);
 
       if (courseRes.data.success) setCourse(courseRes.data.data);

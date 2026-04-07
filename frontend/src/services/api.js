@@ -1,15 +1,22 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-// Production Render URL - Set to domain root for absolute path handling
-const API_URL = 'https://course-finder-fnxs.onrender.com';
+const LOCAL_IP = 'http://172.17.1.42:5000/api/v1';
+const ANDROID_EMULATOR = 'http://10.0.2.2:5000/api/v1';
+const PRODUCTION = 'https://course-finder-fnxs.onrender.com/api/v1';
+
+// Android emulators cannot use localhost to reach the backend.
+// If you are testing on a physical Android device, switch this to LOCAL_IP.
+const API_URL = __DEV__
+  ? (Platform.OS === 'android' ? ANDROID_EMULATOR : LOCAL_IP)
+  : PRODUCTION;
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000, // 30 seconds for cold starts
+  timeout: 30000,
 });
 
-// Request interceptor: add tokens
 api.interceptors.request.use(
   async (config) => {
     const token = await AsyncStorage.getItem('userToken');
@@ -27,20 +34,17 @@ api.onUnauthorized = (cb) => {
   logoutCallback = cb;
 };
 
-// Response interceptor: handles retries for Render cold starts and global errors
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error.config;
 
-    // Handle 401 Unauthorized (Auto-Logout)
     if (error.response?.status === 401 && logoutCallback) {
       console.log('Centralized Auth: Session expired. Logging out...');
       await logoutCallback();
       return Promise.reject(error);
     }
 
-    // Handle 503 Service Unavailable (Render Cold Start or Maintenance)
     if (error.response?.status === 503 && !config.__retry) {
       config.__retry = true;
       console.log('Server waking up... retrying in 3s');
@@ -48,7 +52,6 @@ api.interceptors.response.use(
       return api(config);
     }
 
-    // Handle Network Errors (Offline)
     if (!error.response && error.message === 'Network Error') {
       console.log('Network Error: Please check your internet connection.');
     }
@@ -57,36 +60,31 @@ api.interceptors.response.use(
   }
 );
 
-// AUTH
-api.login = (email, password) => api.post('/api/v1/auth/login', { email, password });
-api.register = (payload) => api.post('/api/v1/auth/register', payload);
-api.getMe = () => api.get('/api/v1/auth/me');
-api.getUserProfile = (userId) => api.get(`/api/v1/auth/profile/${userId}`);
+api.login = (email, password) => api.post('/auth/login', { email, password });
+api.register = (payload) => api.post('/auth/register', payload);
+api.getMe = () => api.get('/auth/me');
+api.getUserProfile = (userId) => api.get(`/auth/profile/${userId}`);
 
-// SOCIAL FEED & ACTIVITY
-api.getRecentActivity = (page = 1) => api.get(`/api/v1/completed/recent?page=${page}`);
-api.getCompletedCourse = (id) => api.get(`/api/v1/completed/${id}`);
+api.getRecentActivity = (page = 1) => api.get(`/completed/recent?page=${page}`);
+api.getCompletedCourse = (id) => api.get(`/completed/${id}`);
+api.fetchMetadata = (url) => api.post('/courses/fetch-metadata', { url });
+api.incrementViewCount = (id) => api.post(`/courses/${id}/view`);
 
-// LIKES
-api.likeCompletion = (id) => api.post(`/api/v1/completed/${id}/like`);
-api.unlikeCompletion = (id) => api.post(`/api/v1/completed/${id}/unlike`);
+api.likeCompletion = (id) => api.post(`/completed/${id}/like`);
+api.unlikeCompletion = (id) => api.post(`/completed/${id}/unlike`);
 
-// COMMENTS
-api.addComment = (id, text) => api.post(`/api/v1/completed/${id}/comments`, { text });
-api.getComments = (id) => api.get(`/api/v1/completed/${id}/comments`);
+api.addComment = (id, text) => api.post(`/completed/${id}/comments`, { text });
+api.getComments = (id) => api.get(`/completed/${id}/comments`);
 
-// FOLLOWS
-api.followUser = (id) => api.post(`/api/v1/auth/follow/${id}`);
-api.unfollowUser = (id) => api.post(`/api/v1/auth/unfollow/${id}`);
+api.followUser = (id) => api.post(`/auth/follow/${id}`);
+api.unfollowUser = (id) => api.post(`/auth/unfollow/${id}`);
 
-// BOOKMARKS
-api.getSavedCompletions = () => api.get('/api/v1/bookmarks');
-api.addBookmark = (id) => api.post(`/api/v1/bookmarks/${id}`);
-api.removeBookmark = (id) => api.delete(`/api/v1/bookmarks/${id}`);
+api.getSavedCompletions = () => api.get('/bookmarks');
+api.addBookmark = (id) => api.post(`/bookmarks/${id}`);
+api.removeBookmark = (id) => api.delete(`/bookmarks/${id}`);
 
-// NOTIFICATIONS
-api.getNotifications = () => api.get('/api/v1/notifications');
-api.markNotificationRead = (id) => api.patch(`/api/v1/notifications/${id}/read`);
-api.getUnreadCount = () => api.get('/api/v1/notifications/unread-count');
+api.getNotifications = () => api.get('/notifications');
+api.markNotificationRead = (id) => api.patch(`/notifications/${id}/read`);
+api.getUnreadCount = () => api.get('/notifications/unread-count');
 
 export default api;

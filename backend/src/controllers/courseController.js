@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { Course } from '../models/index.js';
 import { API_VERSION, DEFAULT_IMAGE } from '../config/constants.js';
+import * as metadataService from '../services/metadataService.js';
+import { extractYouTubeId } from '../utils/extractYouTubeId.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   GET /api/courses/search
@@ -201,10 +203,97 @@ const getCourseReviews = async (req, res) => {
   });
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/v1/courses/fetch-metadata
+// @access  Private (Authenticated users only)
+// ─────────────────────────────────────────────────────────────────────────────
+const fetchMetadata = async (req, res) => {
+  const { url } = req.body;
+
+  // 7. Debug Backend
+  console.log("FETCH METADATA HIT:", url);
+
+  if (!url) {
+    return res.status(400).json({ success: false, message: 'URL is required' });
+  }
+
+  // 1. Strict URL Validation
+  try {
+    new URL(url);
+  } catch (err) {
+    return res.status(400).json({ success: false, message: 'Invalid URL format' });
+  }
+
+  try {
+    const data = await metadataService.getMetadata(url);
+
+    return res.status(200).json({
+      success: true,
+      version: API_VERSION,
+      data,
+    });
+  } catch (error) {
+    console.error('Metadata fetch error in controller:', error.message);
+    return res.status(502).json({ 
+      success: false, 
+      message: 'Failed to fetch course metadata. Please enter details manually.',
+      error: error.message 
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/courses/:id/view
+// @access  Public
+// ─────────────────────────────────────────────────────────────────────────────
+const incrementViewCount = async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ success: false, message: 'Invalid Course ID format' });
+  }
+
+  try {
+    // 1. Atomic increment (Scalable & Concurrency safe)
+    const course = await Course.findByIdAndUpdate(
+      id,
+      { $inc: { viewsCount: 1 } },
+      { new: true }
+    );
+
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Course not found' });
+    }
+
+    // 2. Deterministic Analytics Sampling (30% Load reduction)
+    // Using simple additive hash of ID to ensure consistency
+    const hash = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 10;
+    
+    if (hash < 3) {
+      const { AnalyticsEvent } = await import('../models/index.js');
+      // Async (non-blocking)
+      setImmediate(() => {
+        AnalyticsEvent.create({
+          event: 'view_course_clicked',
+          courseId: id,
+          userId: req.user?._id || null, // Optional if authenticated
+          metadata: { platform: course.platform }
+        }).catch(() => {});
+      });
+    }
+
+    return res.status(200).json({ success: true, viewsCount: course.viewsCount });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export {
   searchCourses,
   getRecommendedCourses,
   getTrendingCourses,
   getCourseById,
   getCourseReviews,
+  fetchMetadata,
+  incrementViewCount,
 };

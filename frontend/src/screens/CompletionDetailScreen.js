@@ -182,7 +182,14 @@ export default function CompletionDetailScreen({ route, navigation }) {
 
         <View style={styles.contentCard}>
           <Text style={styles.courseTitle}>{completion.title}</Text>
-          <Text style={styles.platform}>{completion.platform}</Text>
+          <View style={styles.courseHeaderRow}>
+            <Text style={styles.platform}>{completion.platform}</Text>
+            {completion.duration && completion.duration !== 'N/A' && (
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>⌛ {completion.duration}</Text>
+              </View>
+            )}
+          </View>
           
           <View style={styles.ratingRow}>
             <Text style={styles.stars}>{'⭐'.repeat(Math.round(completion.rating || 0))}</Text>
@@ -275,7 +282,25 @@ const styles = StyleSheet.create({
 
   contentCard: { backgroundColor: COLORS.card, padding: SPACING.xl, borderRadius: RADIUS.lg, ...SHADOW.md, marginBottom: SPACING.xxxl },
   courseTitle: { ...FONTS.h2, fontSize: 22, marginBottom: 4 },
-  platform: { ...FONTS.caption, color: COLORS.primary, fontWeight: '800', textTransform: 'uppercase', marginBottom: SPACING.md, letterSpacing: 1 },
+  courseHeaderRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: SPACING.md 
+  },
+  platform: { ...FONTS.caption, color: COLORS.primary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  durationBadge: {
+    backgroundColor: `${COLORS.secondary}15`,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+    marginLeft: SPACING.md,
+  },
+  durationText: {
+    ...FONTS.small,
+    fontSize: 11,
+    color: COLORS.secondary,
+    fontWeight: '700',
+  },
   ratingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg },
   stars: { fontSize: 20, marginRight: 8 },
   ratingVal: { ...FONTS.caption, fontWeight: '700', color: COLORS.textPrimary },

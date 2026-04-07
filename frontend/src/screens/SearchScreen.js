@@ -19,7 +19,7 @@ export default function SearchScreen({ navigation }) {
       setHasSearched(true);
       const startTime = Date.now();
 
-      const response = await api.get(`/api/courses/search?q=${encodeURIComponent(query)}`, { signal });
+      const response = await api.get(`/courses/search?q=${encodeURIComponent(query)}`, { signal });
       if (response.data.success) {
         setResults(response.data.courses);
       }
@@ -72,15 +72,10 @@ export default function SearchScreen({ navigation }) {
       ) : (
         <FlatList
           data={results}
-          keyExtractor={(item) => item._id}
+          keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <CourseCard
-              title={item.title}
-              platform={item.platform}
-              rating={item.averageRating}
-              completions={item.totalCompletions}
-              image={item.image}
-              onPress={() => navigation.navigate('CourseDetail', { courseId: item._id })}
+              item={item}
             />
           )}
           contentContainerStyle={styles.list}

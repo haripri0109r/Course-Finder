@@ -42,6 +42,7 @@ export const formatCourse = (item = {}, currentUserId = null) => {
 
     likesCount: likes.length,
     isLikedByMe: currentUserId ? likes.some(id => id.toString() === currentUserId.toString()) : false,
+    duration: item.duration || course.duration || "N/A",
     likes: likes, // Temporary inclusion to prevent frontend crashes during refactor
   };
 };

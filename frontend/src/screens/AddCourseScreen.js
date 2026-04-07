@@ -1,14 +1,36 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import NetInfo from '@react-native-community/netinfo';
 import api from '../services/api';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
+import SkeletonPreview from '../components/SkeletonPreview';
+import CoursePreview from '../components/CoursePreview';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import { showToast } from '../components/Toast';
 
 const PLATFORMS = ['Udemy', 'Coursera', 'YouTube', 'Other'];
+
+/**
+ * Normalizes URL similarly to the backend for consistency.
+ */
+const normalizeUrl = (url) => {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('youtube.com')) {
+      const v = u.searchParams.get('v');
+      u.search = v ? `?v=${v}` : '';
+    } else if (u.hostname.includes('youtu.be')) {
+      u.search = '';
+    } else {
+      u.search = '';
+    }
+    return u.toString();
+  } catch {
+    return url;
+  }
+};
 
 export default function AddCourseScreen() {
   const [title, setTitle] = useState('');
@@ -17,6 +39,7 @@ export default function AddCourseScreen() {
   const [rating, setRating] = useState('');
   const [review, setReview] = useState('');
   const [image, setImage] = useState('');
+  const [duration, setDuration] = useState('');
   const [certificateUrl, setCertificateUrl] = useState('');
   const [certificatePublicId, setCertificatePublicId] = useState('');
   const [certificatePreviewUri, setCertificatePreviewUri] = useState('');
@@ -26,6 +49,67 @@ export default function AddCourseScreen() {
   const [uploadFailed, setUploadFailed] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
+
+  const lastUrlRef = useRef('');
+
+  // ─── Auto-Metadata Fetching (Debounced) ───────────────────────────────────
+  useEffect(() => {
+    if (!url || url === lastUrlRef.current) return;
+
+    // 3. Prevent Fetch on Empty / Invalid URL
+    if (url.length < 10 || !url.startsWith("http")) return;
+
+    lastUrlRef.current = url;
+    setFetchError(null);
+
+    const timer = setTimeout(() => {
+      fetchMetadata(url);
+    }, 800); // 800ms debounce
+
+    return () => clearTimeout(timer);
+  }, [url]);
+
+  const fetchMetadata = async (targetUrl) => {
+    try {
+      setIsFetchingMetadata(true);
+      setFetchError(null);
+      
+      const response = await api.fetchMetadata(targetUrl);
+      
+      if (response.data.success) {
+        const { title: fetchedTitle, image: fetchedImage, provider, duration: fetchedDuration } = response.data.data;
+        
+        // Auto-fill logic
+        if (fetchedTitle && !title) setTitle(fetchedTitle);
+        if (fetchedImage && !image) {
+          setImage(fetchedImage);
+          if (fetchedImage.startsWith('http')) {
+            Image.prefetch(fetchedImage).catch(() => {});
+          }
+        }
+        if (fetchedDuration && !duration) setDuration(fetchedDuration);
+        if (provider && !platform) {
+          const matched = PLATFORMS.find(p => p.toLowerCase() === provider.toLowerCase());
+          setPlatform(matched || 'Other');
+        }
+        
+        showToast('Course metadata fetched! ✨', 'success');
+      }
+    } catch (err) {
+      if (err.response?.status === 404) {
+        // 6. Handle 404 Gracefully
+        console.warn("Metadata API route not found");
+        setFetchError('Metadata service endpoint not found (404). Contact support or fill manually.');
+      } else {
+        console.warn("Metadata fetch failed:", err.message);
+        setFetchError('Metadata not found. Please fill manually.');
+      }
+    } finally {
+      setIsFetchingMetadata(false);
+    }
+  };
 
   const validate = () => {
     const newErrors = {};
@@ -86,7 +170,7 @@ export default function AddCourseScreen() {
         formData.append('oldResourceType', certificateUrl.endsWith('.pdf') ? 'raw' : 'image');
       }
 
-      const response = await api.post('/api/completed/upload-certificate', formData, {
+      const response = await api.post('/completed/upload-certificate', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -124,16 +208,17 @@ export default function AddCourseScreen() {
 
     try {
       setLoading(true);
-      const response = await api.post('/api/completed', {
+      const response = await api.post('/completed', {
         title, platform, url,
         image,
+        duration,
         certificateUrl,
         certificatePublicId,
         rating: rating ? Number(rating) : undefined,
         review,
       });
       showToast(response.data.message || 'Course logged successfully!', 'success');
-      setTitle(''); setPlatform(''); setUrl(''); setRating(''); setReview(''); setImage(''); setCertificateUrl(''); setCertificatePublicId(''); setCertificatePreviewUri(''); setStagedAsset(null); setUploadFailed(false);
+      setTitle(''); setPlatform(''); setUrl(''); setRating(''); setReview(''); setImage(''); setDuration(''); setCertificateUrl(''); setCertificatePublicId(''); setCertificatePreviewUri(''); setStagedAsset(null); setUploadFailed(false);
       setErrors({});
     } catch (error) {
       showToast(error.response?.data?.message || 'Failed to add course', 'error');
@@ -187,6 +272,24 @@ export default function AddCourseScreen() {
           keyboardType="url"
           error={errors.url}
         />
+
+        {isFetchingMetadata && <SkeletonPreview />}
+
+        {!isFetchingMetadata && (title || image || platform) ? (
+          <CoursePreview 
+            title={title}
+            image={image}
+            platform={platform}
+            duration={duration}
+          />
+        ) : null}
+
+        {fetchError && (
+          <TouchableOpacity style={styles.retryRow} onPress={() => fetchMetadata(url)}>
+            <Text style={styles.errorTextSmall}>{fetchError}</Text>
+            <Text style={styles.retryText}> - Tap to Retry</Text>
+          </TouchableOpacity>
+        )}
 
         <InputField
           label="Course Thumbnail URL (optional)"
@@ -249,6 +352,29 @@ const styles = StyleSheet.create({
   headline: { ...FONTS.h1, paddingTop: 56, marginBottom: SPACING.xs },
   subline: { ...FONTS.caption, fontSize: 15, marginBottom: SPACING.xxl },
   label: { ...FONTS.caption, fontWeight: '600', color: COLORS.textPrimary, marginBottom: SPACING.sm, marginLeft: SPACING.xs },
+
+  inlineLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+    marginLeft: SPACING.xs,
+  },
+  fetchingText: {
+    ...FONTS.small,
+    color: COLORS.primary,
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  retryRow: {
+    flexDirection: 'row',
+    marginBottom: SPACING.md,
+    marginLeft: SPACING.xs,
+  },
+  retryText: {
+    ...FONTS.small,
+    color: COLORS.secondary,
+    fontWeight: 'bold',
+  },
 
   platformRow: {
     flexDirection: 'row',

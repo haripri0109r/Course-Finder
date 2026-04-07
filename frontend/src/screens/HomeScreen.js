@@ -26,7 +26,7 @@ export default function HomeScreen({ navigation }) {
       const startTime = Date.now();
       
       const [recRes, actRes] = await Promise.all([
-        api.get('/api/v1/courses/recommended', { signal }),
+        api.get('/courses/recommended', { signal }),
         api.getRecentActivity(1) // Page 1 for freshness
       ]);
 
@@ -102,8 +102,9 @@ export default function HomeScreen({ navigation }) {
             onPress={() => navigation.navigate('CourseDetail', { courseId: item._id })}
             scaleTo={0.95}
           >
-            <Text style={styles.recTitle} numberOfLines={2}>{item.title}</Text>
-            <Text style={styles.recPlatform}>{item.platform}</Text>
+            <CourseCard
+              item={item}
+            />
           </AnimatedPressable>
         )}
         contentContainerStyle={styles.horizontalList}
@@ -127,22 +128,10 @@ export default function HomeScreen({ navigation }) {
             <SkeletonCard />
           ) : (
             <CourseCard
-              title={item.title}
-              platform={item.platform}
-              rating={item.rating}
-              authorName={item.authorName}
-              reviewSnippet={item.review}
-              likesCount={item.likesCount}
-              commentsCount={0} 
-              isLiked={item.isLikedByMe}
-              isBookmarked={bookmarks.has(item.id)}
-              createdAt={item.createdAt}
+              item={item}
               onBookmark={() => toggleBookmark(item.id)}
               onLike={() => handleLike(item)}
-              image={item.image}
-              onPress={() => {
-                navigation.navigate('CompletionDetail', { id: item.id });
-              }}
+              isBookmarked={bookmarks.has(item.id)}
             />
           )
         }

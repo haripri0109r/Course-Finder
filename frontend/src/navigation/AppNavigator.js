@@ -16,6 +16,7 @@ import RegisterScreen from '../screens/RegisterScreen';
 import CourseDetailScreen from '../screens/CourseDetailScreen';
 import CompletionDetailScreen from '../screens/CompletionDetailScreen';
 import NotificationScreen from '../screens/NotificationScreen';
+import CourseViewerScreen from '../screens/CourseViewerScreen';
 
 // Context & Theme
 import { AuthContext } from '../context/AuthContext';
@@ -108,6 +109,7 @@ export default function AppNavigator() {
             <Stack.Screen name="CompletionDetail" component={CompletionDetailScreen} />
             <Stack.Screen name="Notifications" component={NotificationScreen} />
             <Stack.Screen name="UserProfile" component={ProfileScreen} />
+            <Stack.Screen name="CourseViewer" component={CourseViewerScreen} />
           </>
         ) : (
           <>

@@ -49,6 +49,10 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // ─── Routes (Strict Alignment with /api/v1 prefix) ───────────────────────────
+app.get('/health', (req, res) => {
+  res.send('Backend running');
+});
+
 app.use('/api/health', healthRoutes); // Keep health check at /api/health for internal monitoring
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/courses', courseRoutes);

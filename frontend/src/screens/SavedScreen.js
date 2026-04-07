@@ -71,21 +71,9 @@ export default function SavedScreen({ navigation }) {
     // v1 Standardized Flat structure
     return (
       <CourseCard
-        title={item.title}
-        platform={item.platform}
-        rating={item.rating}
-        authorName={item.authorName}
-        reviewSnippet={item.review}
-        likesCount={item.likesCount}
-        commentsCount={0}
-        isLiked={item.isLikedByMe}
-        isBookmarked={true}
-        createdAt={item.createdAt}
+        item={item}
         onBookmark={() => handleBookmarkToggle(item.id)}
-        image={item.image}
-        onPress={() => {
-          navigation.navigate('CompletionDetail', { id: item.id });
-        }}
+        isBookmarked={true}
       />
     );
   };

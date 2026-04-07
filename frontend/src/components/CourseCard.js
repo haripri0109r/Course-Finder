@@ -5,7 +5,9 @@ import { timeAgo } from '../utils/format';
 import { showToast } from './Toast';
 import AnimatedPressable from './AnimatedPressable';
 import CourseImage from './CourseImage';
+import PrimaryButton from './PrimaryButton';
 import api from '../services/api';
+import { useNavigation } from '@react-navigation/native';
 
 /**
  * PRODUCTION-GRADE CourseCard
@@ -13,24 +15,30 @@ import api from '../services/api';
  * Media handling is delegated to the resilient <CourseImage /> component.
  */
 const CourseCard = memo(({ 
-  title, 
-  platform, 
-  rating, 
-  authorName,
-  reviewSnippet,
-  likesCount,
-  commentsCount,
-  isLiked,
-  isBookmarked,
+  item = {},
   onLike,
   onBookmark,
-  onPress,
-  createdAt,
-  image,
-  certificateUrl
+  isBookmarked
 }) => {
+  const navigation = useNavigation();
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
+
+  const handlePress = () => {
+    // 1. CourseCard (FINAL CORRECT VERSION)
+    console.log("COURSE ITEM:", item);
+
+    if (!item?.url) {
+      console.warn("No URL found");
+      return;
+    }
+
+    navigation.navigate("CourseViewer", {
+      url: item.url,
+      title: item.title,
+      id: item.id,
+    });
+  };
 
   const platformColor = {
     Udemy: '#A435F0',
@@ -59,32 +67,32 @@ const CourseCard = memo(({
     }
   };
 
-  const isPdfCert = certificateUrl && (certificateUrl.endsWith('.pdf') || certificateUrl.includes('/raw/'));
+  const isPdfCert = item?.certificateUrl && (item.certificateUrl.endsWith('.pdf') || item.certificateUrl.includes('/raw/'));
 
   return (
     <AnimatedPressable
       style={styles.card}
-      onPress={onPress}
+      onPress={handlePress}
       scaleTo={0.98}
       haptic="impactLight"
     >
-      <View style={[styles.accent, { backgroundColor: platformColor[platform] || COLORS.primary }]} />
+      <View style={[styles.accent, { backgroundColor: platformColor[item?.platform] || COLORS.primary }]} />
 
       <View style={styles.cardInner}>
         <View style={styles.imageContainer}>
-          <CourseImage uri={image} style={styles.thumbnail} />
+          <CourseImage uri={item?.image} style={styles.thumbnail} />
         </View>
 
         <View style={styles.content}>
           <View style={styles.headerRow}>
-            {authorName && (
-              <Text style={styles.authorTag}>Logged by <Text style={styles.authorName}>{authorName}</Text></Text>
+            {item?.authorName && (
+              <Text style={styles.authorTag}>Logged by <Text style={styles.authorName}>{item.authorName}</Text></Text>
             )}
-            {createdAt && <Text style={styles.timeText}>{timeAgo(createdAt)}</Text>}
+            {item?.createdAt && <Text style={styles.timeText}>{timeAgo(item.createdAt)}</Text>}
           </View>
 
           <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={2}>{title}</Text>
+            <Text style={styles.title} numberOfLines={2}>{item?.title}</Text>
             <AnimatedPressable 
               style={[styles.bookmarkBtn, isBookmarked && styles.bookmarkBtnActive]} 
               onPress={handleBookmark}
@@ -98,22 +106,22 @@ const CourseCard = memo(({
           </View>
 
           <View style={styles.platformBadge}>
-            <Text style={[styles.platformText, { color: platformColor[platform] || COLORS.primary }]}>
-              {platform}
+            <Text style={[styles.platformText, { color: platformColor[item?.platform] || COLORS.primary }]}>
+              {item?.platform}
             </Text>
           </View>
 
-          {reviewSnippet && (
-            <Text style={styles.reviewSnippet} numberOfLines={2}>"{reviewSnippet}"</Text>
+          {item?.reviewSnippet && (
+            <Text style={styles.reviewSnippet} numberOfLines={2}>"{item.reviewSnippet}"</Text>
           )}
 
-          {certificateUrl ? (
+          {item?.certificateUrl ? (
             <TouchableOpacity 
               style={styles.certificateBtn} 
               onPress={() => {
-                api.post('/api/v1/completed/analytics/cert-view', { url: certificateUrl }).catch(() => {});
+                api.post('/completed/analytics/cert-view', { url: item.certificateUrl }).catch(() => {});
                 
-                Linking.openURL(certificateUrl).catch(() => {
+                Linking.openURL(item.certificateUrl).catch(() => {
                   showToast('Unable to open certificate link', 'error');
                 });
               }}
@@ -127,7 +135,7 @@ const CourseCard = memo(({
           <View style={styles.statsRow}>
             <View style={styles.stat}>
               <Text style={styles.statEmoji}>⭐</Text>
-              <Text style={styles.statValue}>{rating ? rating.toFixed(1) : '0.0'}</Text>
+              <Text style={styles.statValue}>{item?.rating ? item.rating.toFixed(1) : '0.0'}</Text>
             </View>
             
             <View style={styles.divider} />
@@ -139,17 +147,36 @@ const CourseCard = memo(({
               scaleTo={0.85}
               haptic="impactMedium"
             >
-              <Text style={styles.statEmoji}>{isLiked ? '❤️' : '🤍'}</Text>
-              <Text style={styles.statValue}>{likesCount}</Text>
+              <Text style={styles.statEmoji}>{item?.isLiked ? '❤️' : '🤍'}</Text>
+              <Text style={styles.statValue}>{item?.likesCount}</Text>
             </AnimatedPressable>
 
             <View style={styles.divider} />
             
             <View style={styles.stat}>
               <Text style={styles.statEmoji}>💬</Text>
-              <Text style={styles.statValue}>{commentsCount || 0}</Text>
+              <Text style={styles.statValue}>{item?.commentsCount || 0}</Text>
             </View>
+            
+            {item?.duration && item.duration !== 'N/A' && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.stat}>
+                  <Text style={styles.statEmoji}>⌛</Text>
+                  <Text style={styles.statValue}>{item.duration}</Text>
+                </View>
+              </>
+            )}
           </View>
+
+          <PrimaryButton 
+            title="View Course" 
+            onPress={handlePress}
+            disabled={!item?.url}
+            variant="outline"
+            style={styles.viewBtn}
+            textStyle={{ fontSize: 12 }}
+          />
         </View>
       </View>
     </AnimatedPressable>
@@ -291,6 +318,11 @@ const styles = StyleSheet.create({
     height: 14,
     backgroundColor: COLORS.border,
     marginHorizontal: SPACING.md,
+  },
+  viewBtn: {
+    marginTop: SPACING.lg,
+    paddingVertical: 8,
+    minHeight: 36,
   },
 });
 
