@@ -1,20 +1,14 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+// 1. Production Render URL (Recommended for restricted networks)
+const API_URL = 'https://course-finder-fnxs.onrender.com/api/v1';
 
-// 1. Find Your Local IP Address
-// Run 'ipconfig' in your terminal and look for IPv4 Address: 192.168.X.X
-// Use that IP here for mobile/emulator connectivity:
-const API_URL = 'http://172.17.1.42:5000/api/v1';
+// 2. Development Tunnels (Comment out if failing)
+// const API_URL = 'http://172.17.1.42:5000/api/v1';
 
-// Production Render URL (Comment out when testing local changes)
-// const API_URL = 'https://course-finder-fnxs.onrender.com';
-
-console.log('🚀 API URL:', API_URL);
+console.log('🚀 [GATEWAY] Attempting connection to:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000, // 30 seconds for cold starts
+  timeout: 45000, // 45 seconds for Render cold starts
 });
 
 api.interceptors.request.use(
