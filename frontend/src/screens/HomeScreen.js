@@ -36,6 +36,7 @@ export default function HomeScreen({ navigation }) {
       });
 
       console.log("Feed API Response:", res.data);
+      console.log("FULL RESPONSE:", res.data);
 
       const newPosts = res.data?.posts || [];
 
@@ -51,9 +52,7 @@ export default function HomeScreen({ navigation }) {
       prefetchImages(newPosts);
 
     } catch (error) {
-      console.log("Feed fetch error:", error);
-      setError(error);
-      showToast('Could not sync latest activity', 'error');
+      console.log("Feed fetch error:", error.response?.status);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -78,11 +77,9 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   const onRefresh = async () => {
-    setRefreshing(true);
     setCursor(null);
     setPosts([]); 
     await fetchPosts();
-    setRefreshing(false);
   };
 
   const handleLike = async (item) => {

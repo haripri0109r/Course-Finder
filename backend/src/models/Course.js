@@ -12,8 +12,8 @@ const courseSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Platform is required'],
       enum: {
-        values: ['Udemy', 'Coursera', 'YouTube', 'Other'],
-        message: 'Platform must be Udemy, Coursera, YouTube, or Other',
+        values: ['Udemy', 'Coursera', 'YouTube', 'Skillshare', 'Other'],
+        message: 'Platform must be Udemy, Coursera, YouTube, Skillshare, or Other',
       },
     },
     url: {

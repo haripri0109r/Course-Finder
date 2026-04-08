@@ -7,6 +7,20 @@ import { MetadataCache, AnalyticsEvent } from '../models/index.js';
 const inFlightRequests = new Map();
 
 /**
+ * 🔍 Platform detection
+ */
+export const detectPlatform = (url = "") => {
+  const u = url.toLowerCase();
+
+  if (u.includes("youtube.com") || u.includes("youtu.be")) return "YouTube";
+  if (u.includes("udemy.com")) return "Udemy";
+  if (u.includes("coursera.org")) return "Coursera";
+  if (u.includes("skillshare.com")) return "Skillshare";
+
+  return "Other";
+};
+
+/**
  * Smart URL Normalization: Preserves 'v=' for YouTube, strips query for others.
  */
 const normalizeUrl = (url) => {
@@ -85,9 +99,9 @@ export const fetchYouTubeMetadata = async (videoId) => {
  */
 export const scrapeGenericMetadata = async (url) => {
   const { data } = await axios.get(url, {
-    timeout: 5000,
+    timeout: 8000,
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0',
     },
   });
 
@@ -158,11 +172,14 @@ export const getMetadata = async (url) => {
           data = await scrapeGenericMetadata(url);
         }
 
+        const provider = detectPlatform(url);
+
         // Standardize
         return {
           ...data,
           image: data.image || DEFAULT_IMAGE,
           url: normalized,
+          provider,
         };
       };
 

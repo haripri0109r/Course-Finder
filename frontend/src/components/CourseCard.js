@@ -45,9 +45,10 @@ const CourseCard = memo(({
 
   const platformColor = {
     Udemy: '#A435F0',
-    Coursera: '#0056D2',
+    Coursera: '#2A73CC',
     YouTube: '#FF0000',
-    Other: COLORS.textMuted,
+    Skillshare: '#00FF84',
+    Other: '#888',
   };
 
   const handleLike = async () => {

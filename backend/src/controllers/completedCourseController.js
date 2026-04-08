@@ -53,8 +53,26 @@ const addCompletedCourse = async (req, res) => {
     description, learnings, tags 
   } = req.query.api_mode === 'v1' ? req.body : req.body; // Unified for now
 
-  // 1. Validate required fields
-  if (!title || !platform || !url) {
+  // 1. Backend Safety Fallback (Critical)
+  let finalTitle = title;
+  let finalImage = image;
+  let finalPlatform = platform;
+
+  if (!finalTitle || !finalImage || !finalPlatform) {
+    try {
+      const { getMetadata } = await import('../services/metadataService.js');
+      const metadata = await getMetadata(url);
+      
+      finalTitle = finalTitle || metadata.title;
+      finalImage = finalImage || metadata.image;
+      finalPlatform = finalPlatform || metadata.provider;
+    } catch (err) {
+      console.warn("Metadata safety valve failed:", err.message);
+    }
+  }
+
+  // 2. Validate required fields
+  if (!finalTitle || !finalPlatform || !url) {
     return res.status(400).json({
       success: false,
       message: 'title, platform, and url are required',
@@ -66,10 +84,10 @@ const addCompletedCourse = async (req, res) => {
 
   if (!course) {
     course = await Course.create({
-      title: title.trim(),
-      platform,
+      title: finalTitle.trim(),
+      platform: finalPlatform,
       url: url.trim(),
-      image: image ? image.trim() : '',
+      image: finalImage ? finalImage.trim() : '',
       tags: tags || [],
       level: level || 'beginner',
     });
