@@ -34,24 +34,24 @@ const uploadLimiter = rateLimit({
 // All completed-course routes are protected
 router.use(authenticate);
 // Logs
-router.post('/', authenticate, upload.single('file'), sanitizeImage, addCompletedCourse);
-router.post('/upload-certificate', authenticate, upload.single('file'), uploadCertificate);
-router.post('/analytics/cert-view', authenticate, trackCertView);
-router.get('/me', authenticate, cacheHeaders, getMyCompletedCourses);
+router.post('/completed', authenticate, upload.single('file'), sanitizeImage, addCompletedCourse);
+router.post('/completed/upload-certificate', authenticate, upload.single('file'), uploadCertificate);
+router.post('/completed/analytics/cert-view', authenticate, trackCertView);
+router.get('/completed/me', authenticate, cacheHeaders, getMyCompletedCourses);
 router.get('/posts/feed', authenticate, getRecentActivity);
 router.get('/recent', authenticate, getRecentActivity);
-router.get('/trending', authenticate, getTrendingCompletions);
-router.get('/user/:userId', authenticate, getUserCompletions);
-router.get('/:id', authenticate, getCompletedCourseById);
-router.delete('/:id', authenticate, deleteCompletedCourse);
+router.get('/completed/trending', authenticate, getTrendingCompletions);
+router.get('/completed/user/:userId', authenticate, getUserCompletions);
+router.get('/completed/:id', authenticate, getCompletedCourseById);
+router.delete('/completed/:id', authenticate, deleteCompletedCourse);
 
 // Social (Like/Unlike/View)
-router.post('/:id/like', authenticate, likeCompletion);
-router.post('/:id/unlike', authenticate, unlikeCompletion);
-router.post('/:id/view', authenticate, incrementViewCount);
+router.post('/completed/:id/like', authenticate, likeCompletion);
+router.post('/completed/:id/unlike', authenticate, unlikeCompletion);
+router.post('/completed/:id/view', authenticate, incrementViewCount);
 
 // Comments
-router.post('/:id/comments', authenticate, addComment);
-router.get('/:id/comments', getCompletionComments);
+router.post('/completed/:id/comments', authenticate, addComment);
+router.get('/completed/:id/comments', getCompletionComments);
 
 export default router;

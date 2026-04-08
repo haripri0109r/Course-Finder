@@ -56,7 +56,7 @@ app.get('/health', (req, res) => {
 app.use('/api/health', healthRoutes); // Keep health check at /api/health for internal monitoring
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/courses', courseRoutes);
-app.use('/api/v1/completed', completedRoutes);
+app.use('/api/v1', completedRoutes);
 app.use('/api/v1/bookmarks', bookmarkRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 
