@@ -1,3 +1,7 @@
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
 // 1. Production Render URL (Recommended for restricted networks)
 const API_URL = 'https://course-finder-fnxs.onrender.com/api/v1';
 
