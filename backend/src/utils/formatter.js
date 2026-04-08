@@ -24,6 +24,7 @@ export const formatCourse = (item = {}, currentUserId = null) => {
 
   return {
     version: API_VERSION,
+    _id: item._id, // Required for frontend FlatList keyExtractor
     id: item._id?.toString() || "",
     courseId: course._id?.toString() || "",
     title: course.title || "Untitled Course",
@@ -43,6 +44,11 @@ export const formatCourse = (item = {}, currentUserId = null) => {
     likesCount: likes.length,
     isLikedByMe: currentUserId ? likes.some(id => id.toString() === currentUserId.toString()) : false,
     duration: item.duration || course.duration || "N/A",
+
+    // Learning Post Metadata
+    description: item.description || "",
+    learnings: Array.isArray(item.learnings) ? item.learnings : [],
+    tags: Array.isArray(item.tags) ? item.tags : [],
     likes: likes, // Temporary inclusion to prevent frontend crashes during refactor
   };
 };

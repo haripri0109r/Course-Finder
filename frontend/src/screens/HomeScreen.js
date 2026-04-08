@@ -15,84 +15,81 @@ import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 export default function HomeScreen({ navigation }) {
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
   const [recommended, setRecommended] = useState([]);
-  const [activity, setActivity] = useState([]);
+  const [cursor, setCursor] = useState(null);
+  const [posts, setPosts] = useState([]);
   const [trending, setTrending] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchData = async (isRefresh = false, signal) => {
+  const fetchPosts = async () => {
+    if (loading) return;
+
+    setLoading(true);
+
     try {
-      setError(null);
-      
-      const currentCursor = isRefresh ? null : nextCursor;
+      const res = await api.get("/posts/feed", {
+        params: {
+          cursor,
+          limit: 10
+        }
+      });
 
-      if (!isRefresh && activity.length === 0) setLoading(true);
-      if (!isRefresh && currentCursor) setLoadingMore(true);
+      console.log("Feed API Response:", res.data);
 
-      const [actRes, trendRes] = await Promise.all([
-        api.getRecentActivity(currentCursor, { signal }),
-        (isRefresh || !currentCursor) ? api.getTrending({ signal }) : Promise.resolve({ data: { success: true, data: trending } })
-      ]);
-      
-      if (actRes.data.success) {
-        const newData = actRes.data.data;
-        setActivity(prev => isRefresh ? newData : [...prev, ...newData]);
-        setNextCursor(actRes.data.nextCursor);
-        setHasMore(actRes.data.hasMore);
-        prefetchImages(newData);
+      const newPosts = res.data?.posts || [];
+
+      if (!Array.isArray(newPosts)) {
+        console.error("Invalid posts format");
+        return;
       }
 
-      if (trendRes?.data?.success) {
-        setTrending(trendRes.data.data);
-      }
+      setPosts(prev => [...prev, ...newPosts]);
+      setCursor(res.data?.nextCursor || null);
+      
+      // Prefetch images for smoother scrolling
+      prefetchImages(newPosts);
 
-    } catch (err) {
-      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
-      setError(err);
+    } catch (error) {
+      console.log("Feed fetch error:", error);
+      setError(error);
       showToast('Could not sync latest activity', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
-      setLoadingMore(false);
     }
   };
 
-  const loadMore = () => {
-    if (!loadingMore && !loading && hasMore && nextCursor) {
-      fetchData(false);
-    }
-  };
+  // 🚀 Cursors are now handled via loadMore -> fetchData(false)
 
   useEffect(() => {
-    if (page > 1) {
-      fetchData(false);
-    }
-  }, [page]);
+    fetchPosts();
+    
+    // Periodically sync trending completions independently
+    const syncTrending = async () => {
+      try {
+        const trendRes = await api.getTrending();
+        if (trendRes?.data?.success) setTrending(trendRes.data.data);
+      } catch (e) {
+        console.log("Trending sync failed", e);
+      }
+    };
+    syncTrending();
+  }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      const controller = new AbortController();
-      fetchData(false, controller.signal);
-      return () => controller.abort();
-    }, [])
-  );
-
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setNextCursor(null);
-    setHasMore(true);
-    fetchData(true);
+    setCursor(null);
+    setPosts([]); 
+    await fetchPosts();
+    setRefreshing(false);
   };
 
   const handleLike = async (item) => {
     const isLiked = item.isLikedByMe;
     
     // Optimistic UI update
-    setActivity(prev => prev.map(a => 
+    setPosts(prev => prev.map(a => 
       a.id === item.id 
         ? { ...a, isLikedByMe: !isLiked, likesCount: isLiked ? a.likesCount - 1 : a.likesCount + 1 }
         : a
@@ -103,7 +100,7 @@ export default function HomeScreen({ navigation }) {
       else await api.likeCompletion(item.id);
     } catch (err) {
       // Revert if silent refresh or error handling is needed
-      fetchData(true); 
+      fetchPosts(true); 
       showToast('Interaction failed', 'error');
     }
   };
@@ -147,7 +144,7 @@ export default function HomeScreen({ navigation }) {
   );
 
   const Footer = () => {
-    if (!loadingMore) return <View style={{ height: 40 }} />;
+    if (!loading || (loading && posts.length === 0)) return <View style={{ height: 40 }} />;
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator color={COLORS.primary} size="small" />
@@ -155,15 +152,15 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
-  if (error && activity.length === 0) {
-    return <RetryBox message="Unable to load your feed" error={error} onRetry={() => fetchData(false)} />;
+  if (error && posts.length === 0) {
+    return <RetryBox message="Unable to load your feed" error={error} onRetry={() => fetchPosts(true)} />;
   }
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={loading ? [1, 2, 3] : activity}
-        keyExtractor={(item, index) => loading ? `skel-${index}` : item.id}
+        data={loading && posts.length === 0 ? [1, 2, 3] : posts}
+        keyExtractor={(item) => (loading && posts.length === 0) ? `skel-${Math.random()}` : item._id}
         renderItem={({ item }) => 
           loading ? (
             <SkeletonCard />
@@ -180,7 +177,7 @@ export default function HomeScreen({ navigation }) {
         ListFooterComponent={<Footer />}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        onEndReached={loadMore}
+        onEndReached={fetchPosts}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl 
@@ -195,7 +192,7 @@ export default function HomeScreen({ navigation }) {
         maxToRenderPerBatch={10}
         windowSize={10}
         ListEmptyComponent={
-          !loading && (
+          !loading && posts.length === 0 && (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyEmoji}>📬</Text>
               <Text style={styles.emptyTitle}>Nothing here yet</Text>

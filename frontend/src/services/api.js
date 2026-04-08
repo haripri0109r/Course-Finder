@@ -63,7 +63,7 @@ api.register = (payload) => api.post('/auth/register', payload);
 api.getMe = () => api.get('/auth/me');
 api.getUserProfile = (userId) => api.get(`/auth/profile/${userId}`);
 
-api.getRecentActivity = (cursor = null) => api.get('/completed/recent', { params: { cursor, limit: 10 } });
+api.getRecentActivity = (cursor = null) => api.get('/posts/feed', { params: { cursor, limit: 10 } });
 api.getTrending = () => api.get('/completed/trending');
 api.getCompletedCourse = (id) => api.get(`/completed/${id}`);
 api.fetchMetadata = (url) => api.post('/courses/fetch-metadata', { url });

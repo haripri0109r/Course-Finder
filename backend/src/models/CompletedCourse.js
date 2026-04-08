@@ -67,6 +67,21 @@ const completedCourseSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    description: {
+      type: String,
+      maxlength: [300, 'Description cannot exceed 300 characters'],
+      default: '',
+      trim: true,
+    },
+    learnings: {
+      type: [String],
+      default: [],
+    },
+    tags: {
+      type: [String],
+      default: [],
+      index: true,
+    },
   },
   {
     timestamps: true,

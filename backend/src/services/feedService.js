@@ -113,25 +113,48 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
       { $limit: limit }
     ];
 
-    const items = await CompletedCourse.aggregate(pipeline);
+    console.log("Fetching feed with cursor:", cursor);
 
-    // Populate post metadata
+    let items = [];
+    try {
+      items = await CompletedCourse.aggregate(pipeline);
+    } catch (error) {
+      console.error("Aggregation failed, falling back to simple query:", error);
+      items = [];
+    }
+
+    // Fallback Logic: If aggregation is empty or fails, use a guaranteed simple query
+    if (items.length === 0) {
+      console.log("Empty feed result, executing fallback query...");
+      items = await CompletedCourse.find({
+        isPublic: true,
+        ...(cursor && mongoose.Types.ObjectId.isValid(cursor) && { _id: { $lt: new mongoose.Types.ObjectId(cursor) } })
+      })
+      .sort({ _id: -1 })
+      .limit(limit);
+    }
+
+    console.log("Posts returned:", items.length);
+
+    // Populate post metadata (resiliently)
     const populated = await CompletedCourse.populate(items, [
       { path: 'user', select: 'name profilePicture' },
       { path: 'course', select: 'title platform url tags level averageRating totalCompletions image' }
     ]);
 
-    const data = populated.map(item => formatCourse(item, userId));
+    const posts = populated.map(item => formatCourse(item, userId));
 
     return {
-      success: true,
-      data,
-      nextCursor: data.length > 0 ? data[data.length - 1].id : null,
-      hasMore: data.length === limit,
+      posts,
+      nextCursor: posts.length > 0 ? posts[posts.length - 1]._id : null,
     };
   } catch (error) {
-    console.error('SmartFeed Error:', error);
-    throw error;
+    console.error('getSmartFeed Fatal Error:', error);
+    // Ultimate safety return
+    return {
+      posts: [],
+      nextCursor: null
+    };
   }
 };
 

@@ -38,6 +38,7 @@ router.post('/', authenticate, upload.single('file'), sanitizeImage, addComplete
 router.post('/upload-certificate', authenticate, upload.single('file'), uploadCertificate);
 router.post('/analytics/cert-view', authenticate, trackCertView);
 router.get('/me', authenticate, cacheHeaders, getMyCompletedCourses);
+router.get('/posts/feed', authenticate, getRecentActivity);
 router.get('/recent', authenticate, getRecentActivity);
 router.get('/trending', authenticate, getTrendingCompletions);
 router.get('/user/:userId', authenticate, getUserCompletions);

@@ -23,6 +23,7 @@ const CourseCard = memo(({
   const navigation = useNavigation();
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   const handlePress = () => {
     console.log("COURSE ITEM VIEW:", item.id);
@@ -115,6 +116,45 @@ const CourseCard = memo(({
 
           {item?.reviewSnippet && (
             <Text style={styles.reviewSnippet} numberOfLines={2}>"{item.reviewSnippet}"</Text>
+          )}
+
+          {/* Learning Post Features */}
+          {item?.description && (
+            <View style={styles.descriptionContainer}>
+              <Text 
+                style={styles.description} 
+                numberOfLines={isDescriptionExpanded ? undefined : 3}
+              >
+                {item.description}
+              </Text>
+              {item.description.length > 100 && (
+                <TouchableOpacity onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}>
+                  <Text style={styles.seeMoreText}>
+                    {isDescriptionExpanded ? 'Show less' : 'See more...'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {item?.learnings && item.learnings.length > 0 && (
+            <View style={styles.learningsContainer}>
+              <Text style={styles.learningsHeader}>💡 What I learned:</Text>
+              {item.learnings.map((learning, index) => (
+                <View key={index} style={styles.learningItem}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.learningText}>{learning}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {item?.tags && item.tags.length > 0 && (
+            <View style={styles.tagsContainer}>
+              {item.tags.map((tag, index) => (
+                <Text key={index} style={styles.tagText}>#{tag}</Text>
+              ))}
+            </View>
           )}
 
           {item?.certificateUrl ? (
@@ -325,6 +365,63 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     paddingVertical: 8,
     minHeight: 36,
+  },
+  
+  // Learning Post Styles
+  descriptionContainer: {
+    marginBottom: SPACING.md,
+  },
+  description: {
+    ...FONTS.body,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    lineHeight: 20,
+  },
+  seeMoreText: {
+    ...FONTS.small,
+    color: COLORS.primary,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  learningsContainer: {
+    backgroundColor: `${COLORS.background}50`,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.md,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.secondary,
+  },
+  learningsHeader: {
+    ...FONTS.caption,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  learningItem: {
+    flexDirection: 'row',
+    marginBottom: 2,
+  },
+  bullet: {
+    color: COLORS.secondary,
+    marginRight: 6,
+    fontWeight: 'bold',
+  },
+  learningText: {
+    ...FONTS.caption,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: SPACING.sm,
+  },
+  tagText: {
+    ...FONTS.small,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginRight: 10,
+    fontSize: 12,
   },
 });
 

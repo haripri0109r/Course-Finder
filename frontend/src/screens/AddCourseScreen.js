@@ -42,6 +42,9 @@ export default function AddCourseScreen() {
   const [duration, setDuration] = useState('');
   const [certificateUrl, setCertificateUrl] = useState('');
   const [certificatePublicId, setCertificatePublicId] = useState('');
+  const [description, setDescription] = useState('');
+  const [learnings, setLearnings] = useState('');
+  const [postTags, setPostTags] = useState('');
   const [certificatePreviewUri, setCertificatePreviewUri] = useState('');
   const [stagedAsset, setStagedAsset] = useState(null);
   const [uploadingCert, setUploadingCert] = useState(false);
@@ -216,9 +219,13 @@ export default function AddCourseScreen() {
         certificatePublicId,
         rating: rating ? Number(rating) : undefined,
         review,
+        description,
+        learnings: learnings.split(',').map(i => i.trim()).filter(Boolean),
+        tags: postTags.split(',').map(i => i.trim().toLowerCase()).filter(Boolean),
       });
       showToast(response.data.message || 'Course logged successfully!', 'success');
       setTitle(''); setPlatform(''); setUrl(''); setRating(''); setReview(''); setImage(''); setDuration(''); setCertificateUrl(''); setCertificatePublicId(''); setCertificatePreviewUri(''); setStagedAsset(null); setUploadFailed(false);
+      setDescription(''); setLearnings(''); setPostTags('');
       setErrors({});
     } catch (error) {
       showToast(error.response?.data?.message || 'Failed to add course', 'error');
@@ -340,6 +347,28 @@ export default function AddCourseScreen() {
 
         <InputField label="Review (optional)" placeholder="What did you like about this course?" value={review} onChangeText={setReview} multiline />
 
+        <Text style={styles.sectionHeader}>Social: Learning Post 🚀</Text>
+        <InputField 
+          label="Learning Insight / Caption" 
+          placeholder="e.g. Mastered React Hooks today! The course was super clear on useEffect." 
+          value={description} 
+          onChangeText={setDescription} 
+          multiline 
+        />
+        <InputField 
+          label="Top Learnings (comma separated, max 5)" 
+          placeholder="State mgmt, Custom hooks, Optimization" 
+          value={learnings} 
+          onChangeText={setLearnings} 
+        />
+        <InputField 
+          label="Hashtags (comma separated)" 
+          placeholder="react, frontend, hooks" 
+          value={postTags} 
+          onChangeText={setPostTags} 
+          autoCapitalize="none"
+        />
+
         <PrimaryButton title="Submit Course" onPress={handleSubmit} loading={loading} style={{ marginTop: SPACING.sm }} />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -447,5 +476,14 @@ const styles = StyleSheet.create({
   },
   starActive: {
     color: '#FBBF24',
+  },
+  sectionHeader: {
+    ...FONTS.bodyBold,
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.sm,
+    color: COLORS.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    paddingBottom: 4,
   },
 });

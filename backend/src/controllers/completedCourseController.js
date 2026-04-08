@@ -47,7 +47,11 @@ const syncCourseStats = async (courseId) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const addCompletedCourse = async (req, res) => {
-  const { title, platform, url, tags, level, rating, review, image, duration, certificateUrl, certificatePublicId } = req.body;
+  const { 
+    title, platform, url, level, rating, review, image, duration, 
+    certificateUrl, certificatePublicId,
+    description, learnings, tags 
+  } = req.query.api_mode === 'v1' ? req.body : req.body; // Unified for now
 
   // 1. Validate required fields
   if (!title || !platform || !url) {
@@ -120,7 +124,22 @@ const addCompletedCourse = async (req, res) => {
     });
   }
 
-  // 4. Create the CompletedCourse entry
+  // 4. Normalize and handle Learning Post metadata
+  const TECH_KEYWORDS = ["react", "javascript", "python", "ai", "node", "mongodb", "frontend", "backend", "fullstack", "ui", "ux"];
+  
+  let finalTags = Array.isArray(tags) ? tags : [];
+  if (finalTags.length === 0) {
+    // Auto-tagging fallback
+    const corpus = (title + " " + (description || "")).toLowerCase();
+    finalTags = TECH_KEYWORDS.filter(word => corpus.includes(word));
+  }
+  // Sanitize tags
+  finalTags = finalTags.map(t => t.trim().toLowerCase().replace(/[^a-z0-9]/g, "")).filter(Boolean);
+
+  const finalDescription = description || "Completed this course and gained valuable insights 🚀";
+  const finalLearnings = Array.isArray(learnings) ? learnings.slice(0, 5) : [];
+
+  // 5. Create the CompletedCourse entry
   const completed = await CompletedCourse.create({
     user: req.user._id,
     course: course._id,
@@ -129,6 +148,9 @@ const addCompletedCourse = async (req, res) => {
     duration: duration || '',
     certificateUrl: certificateUrl ? certificateUrl.trim() : '',
     certificatePublicId: certificatePublicId ? certificatePublicId.trim() : null,
+    description: finalDescription,
+    learnings: finalLearnings,
+    tags: finalTags,
   });
 
   // 5. Sync aggregated stats on the Course document
@@ -340,13 +362,13 @@ const unlikeCompletion = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const getRecentActivity = async (req, res) => {
   const { cursor, limit } = req.query;
-  const result = await feedService.getSmartFeed(
+  const { posts, nextCursor } = await feedService.getSmartFeed(
     req.user._id, 
     cursor, 
     limit ? parseInt(limit) : PAGINATION_LIMIT
   );
 
-  return res.status(200).json(result);
+  return res.status(200).json({ posts, nextCursor });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
