@@ -16,6 +16,12 @@ const analyticsEventSchema = new mongoose.Schema({
     ref: 'Course',
     default: null,
   },
+  relatedPostId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'CompletedCourse',
+    default: null,
+    index: true,
+  },
   metadata: {
     type: mongoose.Schema.Types.Mixed,
     default: {},

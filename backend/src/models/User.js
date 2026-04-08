@@ -53,6 +53,18 @@ const userSchema = new mongoose.Schema(
         ref: 'CompletedCourse',
       },
     ],
+    interests: {
+      type: [String],
+      default: [],
+    },
+    likedTags: {
+      type: [String],
+      default: [],
+    },
+    viewedTags: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true, // adds createdAt and updatedAt automatically

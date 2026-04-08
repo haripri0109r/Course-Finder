@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { Course, CompletedCourse } from '../models/index.js';
 import { createNotification } from '../services/notificationService.js';
+import * as feedService from '../services/feedService.js';
+import * as userService from '../services/userService.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
 import { formatCourse } from '../utils/formatter.js';
 import { PAGINATION_LIMIT, API_VERSION } from '../config/constants.js';
@@ -300,6 +302,11 @@ const likeCompletion = async (req, res) => {
     postTitle: updated.course?.title,
   });
 
+  // Track Interest (Async)
+  if (updated.course?.tags) {
+    userService.trackUserInterests(req.user._id, updated.course.tags, 'like');
+  }
+
   return res.status(200).json({
     success: true,
     data: updated,
@@ -325,31 +332,21 @@ const unlikeCompletion = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   GET /api/completed/recent
-// @access  Private (or Public, but we have protect on the router)
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/completed/recent
+// @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const getRecentActivity = async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const skip = (page - 1) * PAGINATION_LIMIT;
+  const { cursor, limit } = req.query;
+  const result = await feedService.getSmartFeed(
+    req.user._id, 
+    cursor, 
+    limit ? parseInt(limit) : PAGINATION_LIMIT
+  );
 
-  const total = await CompletedCourse.countDocuments({ isPublic: true });
-
-  const items = await CompletedCourse.find({ isPublic: true })
-    .populate('user', 'name profilePicture')
-    .populate('course', 'title platform url tags level averageRating totalCompletions image')
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(PAGINATION_LIMIT);
-
-  const data = items.map(item => formatCourse(item, req.user._id));
-
-  return res.status(200).json({
-    success: true,
-    version: API_VERSION,
-    data,
-    page,
-    totalPages: Math.ceil(total / PAGINATION_LIMIT),
-    hasMore: page * PAGINATION_LIMIT < total,
-  });
+  return res.status(200).json(result);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -409,6 +406,28 @@ const trackCertView = async (req, res) => {
   return res.status(200).json({ success: true });
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/completed/:id/view
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const incrementViewCount = async (req, res) => {
+  try {
+    const result = await feedService.trackUniqueView(req.user._id, req.params.id);
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(404).json({ success: false, message: error.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/completed/trending
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const getTrendingCompletions = async (req, res) => {
+  const result = await feedService.getTrendingCompletions(req.user._id);
+  return res.status(200).json(result);
+};
+
 export { 
   addCompletedCourse, 
   uploadCertificate,
@@ -419,5 +438,7 @@ export {
   getRecentActivity,
   getUserCompletions,
   getCompletedCourseById,
-  trackCertView
+  trackCertView,
+  incrementViewCount,
+  getTrendingCompletions
 };

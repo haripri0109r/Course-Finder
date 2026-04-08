@@ -9,7 +9,9 @@ import {
   getUserCompletions,
   getCompletedCourseById,
   uploadCertificate,
-  trackCertView
+  trackCertView,
+  incrementViewCount,
+  getTrendingCompletions
 } from '../controllers/completedCourseController.js';
 import { addComment, getCompletionComments } from '../controllers/commentController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
@@ -37,13 +39,15 @@ router.post('/upload-certificate', authenticate, upload.single('file'), uploadCe
 router.post('/analytics/cert-view', authenticate, trackCertView);
 router.get('/me', authenticate, cacheHeaders, getMyCompletedCourses);
 router.get('/recent', authenticate, getRecentActivity);
+router.get('/trending', authenticate, getTrendingCompletions);
 router.get('/user/:userId', authenticate, getUserCompletions);
 router.get('/:id', authenticate, getCompletedCourseById);
 router.delete('/:id', authenticate, deleteCompletedCourse);
 
-// Social (Like/Unlike)
+// Social (Like/Unlike/View)
 router.post('/:id/like', authenticate, likeCompletion);
 router.post('/:id/unlike', authenticate, unlikeCompletion);
+router.post('/:id/view', authenticate, incrementViewCount);
 
 // Comments
 router.post('/:id/comments', authenticate, addComment);

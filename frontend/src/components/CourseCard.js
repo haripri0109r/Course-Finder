@@ -25,13 +25,15 @@ const CourseCard = memo(({
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
 
   const handlePress = () => {
-    // 1. CourseCard (FINAL CORRECT VERSION)
-    console.log("COURSE ITEM:", item);
+    console.log("COURSE ITEM VIEW:", item.id);
 
     if (!item?.url) {
       console.warn("No URL found");
       return;
     }
+
+    // Trigger View Tracking (Async, non-blocking)
+    api.incrementViewCount(item.id).catch(() => {});
 
     navigation.navigate("CourseViewer", {
       url: item.url,

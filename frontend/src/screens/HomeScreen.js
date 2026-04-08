@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useContext } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl } from 'react-native';
+import React, { useState, useCallback, useContext, useEffect } from 'react';
+import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
@@ -8,6 +8,7 @@ import SkeletonCard from '../components/SkeletonCard';
 import RetryBox from '../components/RetryBox';
 import AnimatedPressable from '../components/AnimatedPressable';
 import { showToast } from '../components/Toast';
+import CourseImage from '../components/CourseImage';
 import { prefetchImages } from '../utils/prefetch';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 
@@ -15,32 +16,39 @@ export default function HomeScreen({ navigation }) {
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
   const [recommended, setRecommended] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [trending, setTrending] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchData = async (isRefresh = false, signal) => {
     try {
       setError(null);
-      if (!isRefresh && activity.length === 0) setLoading(true);
-      const startTime = Date.now();
       
-      const [recRes, actRes] = await Promise.all([
-        api.get('/courses/recommended', { signal }),
-        api.getRecentActivity(1) // Page 1 for freshness
-      ]);
+      const currentCursor = isRefresh ? null : nextCursor;
 
-      if (recRes.data.success) setRecommended(recRes.data.courses);
+      if (!isRefresh && activity.length === 0) setLoading(true);
+      if (!isRefresh && currentCursor) setLoadingMore(true);
+
+      const [actRes, trendRes] = await Promise.all([
+        api.getRecentActivity(currentCursor, { signal }),
+        (isRefresh || !currentCursor) ? api.getTrending({ signal }) : Promise.resolve({ data: { success: true, data: trending } })
+      ]);
       
       if (actRes.data.success) {
-        const flatData = actRes.data.data;
-        setActivity(flatData);
-        // Optimize UX: Prefetch images in background
-        prefetchImages(flatData);
+        const newData = actRes.data.data;
+        setActivity(prev => isRefresh ? newData : [...prev, ...newData]);
+        setNextCursor(actRes.data.nextCursor);
+        setHasMore(actRes.data.hasMore);
+        prefetchImages(newData);
       }
 
-      const elapsed = Date.now() - startTime;
-      if (elapsed < 300) await new Promise(r => setTimeout(r, 300 - elapsed));
+      if (trendRes?.data?.success) {
+        setTrending(trendRes.data.data);
+      }
 
     } catch (err) {
       if (err.name === 'CanceledError' || err.name === 'AbortError') return;
@@ -49,8 +57,21 @@ export default function HomeScreen({ navigation }) {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   };
+
+  const loadMore = () => {
+    if (!loadingMore && !loading && hasMore && nextCursor) {
+      fetchData(false);
+    }
+  };
+
+  useEffect(() => {
+    if (page > 1) {
+      fetchData(false);
+    }
+  }, [page]);
 
   useFocusEffect(
     useCallback(() => {
@@ -62,6 +83,8 @@ export default function HomeScreen({ navigation }) {
 
   const onRefresh = () => {
     setRefreshing(true);
+    setNextCursor(null);
+    setHasMore(true);
     fetchData(true);
   };
 
@@ -90,29 +113,47 @@ export default function HomeScreen({ navigation }) {
       <Text style={styles.greeting}>Good day 👋</Text>
       <Text style={styles.headline}>Learning Feed</Text>
       
-      <Text style={styles.sectionTitle}>Pick a New Course</Text>
-      <FlatList
-        horizontal
-        data={recommended}
-        keyExtractor={item => item._id}
-        showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <AnimatedPressable 
-            style={styles.recCard} 
-            onPress={() => navigation.navigate('CourseDetail', { courseId: item._id })}
-            scaleTo={0.95}
-          >
-            <CourseCard
-              item={item}
-            />
-          </AnimatedPressable>
-        )}
-        contentContainerStyle={styles.horizontalList}
-      />
+      {trending.length > 0 && (
+        <>
+          <View style={styles.trendHeader}>
+            <Text style={styles.sectionTitle}>🔥 Trending Now</Text>
+            <View style={styles.trendLive} />
+          </View>
+          <FlatList
+            horizontal
+            data={trending}
+            keyExtractor={item => `trend-${item.id}`}
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <AnimatedPressable 
+                style={styles.trendCard} 
+                onPress={() => navigation.navigate('CompletionDetail', { id: item.id })}
+                scaleTo={0.95}
+              >
+                <CourseImage uri={item.image} style={styles.trendThumb} />
+                <View style={styles.trendOverlay}>
+                  <Text style={styles.trendTitle} numberOfLines={1}>{item.title}</Text>
+                  <Text style={styles.trendMeta}>{item.viewsCount} views</Text>
+                </View>
+              </AnimatedPressable>
+            )}
+            contentContainerStyle={styles.horizontalList}
+          />
+        </>
+      )}
 
       <Text style={[styles.sectionTitle, { marginTop: SPACING.xl }]}>Community Activity</Text>
     </View>
   );
+
+  const Footer = () => {
+    if (!loadingMore) return <View style={{ height: 40 }} />;
+    return (
+      <View style={styles.footerLoader}>
+        <ActivityIndicator color={COLORS.primary} size="small" />
+      </View>
+    );
+  };
 
   if (error && activity.length === 0) {
     return <RetryBox message="Unable to load your feed" error={error} onRetry={() => fetchData(false)} />;
@@ -136,8 +177,11 @@ export default function HomeScreen({ navigation }) {
           )
         }
         ListHeaderComponent={<Header />}
+        ListFooterComponent={<Footer />}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
@@ -172,18 +216,28 @@ const styles = StyleSheet.create({
   headline: { ...FONTS.h1, marginBottom: SPACING.xl },
   sectionTitle: { ...FONTS.h3, marginBottom: SPACING.md },
   horizontalList: { paddingRight: SPACING.xl, marginBottom: SPACING.md },
-  recCard: {
-    backgroundColor: COLORS.card,
-    width: 200,
-    padding: SPACING.lg,
+  trendHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md },
+  trendLive: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.danger, marginLeft: 8 },
+  trendCard: {
+    width: 240,
+    height: 140,
     borderRadius: RADIUS.lg,
     marginRight: SPACING.md,
+    overflow: 'hidden',
     ...SHADOW.sm,
-    borderTopWidth: 4,
-    borderTopColor: COLORS.secondary,
   },
-  recTitle: { ...FONTS.bodyBold, fontSize: 15, marginBottom: 4 },
-  recPlatform: { ...FONTS.small, color: COLORS.primary, fontWeight: '700', textTransform: 'uppercase' },
+  trendThumb: { width: '100%', height: '100%' },
+  trendOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: SPACING.md,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  trendTitle: { color: COLORS.white, ...FONTS.bodyBold, fontSize: 14 },
+  trendMeta: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 2 },
+  footerLoader: { paddingVertical: SPACING.xxl, alignItems: 'center' },
   emptyBox: { alignItems: 'center', paddingVertical: 80 },
   emptyEmoji: { fontSize: 60, marginBottom: SPACING.md, opacity: 0.5 },
   emptyTitle: { ...FONTS.h3, marginBottom: SPACING.xs },
