@@ -11,9 +11,10 @@ import {
   uploadCertificate,
   trackCertView,
   incrementViewCount,
-  getTrendingCompletions
+  getTrendingCompletions,
+  getPostById
 } from '../controllers/completedCourseController.js';
-import { addComment, getCompletionComments } from '../controllers/commentController.js';
+import { addComment, getComments } from '../controllers/commentController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { sanitizeImage } from '../middleware/sanitizeImage.js';
 import { cacheHeaders } from '../middleware/cacheHeaders.js';
@@ -50,9 +51,5 @@ router.delete('/completed/:id', authenticate, deleteCompletedCourse);
 router.post('/completed/:id/like', authenticate, likeCompletion);
 router.post('/completed/:id/unlike', authenticate, unlikeCompletion);
 router.post('/completed/:id/view', authenticate, incrementViewCount);
-
-// Comments
-router.post('/completed/:id/comments', authenticate, addComment);
-router.get('/completed/:id/comments', getCompletionComments);
 
 export default router;
