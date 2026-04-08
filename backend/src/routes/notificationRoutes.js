@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { 
   getNotifications, 
   markAsRead, 
-  getUnreadCount 
+  getUnreadCount,
+  markAllAsRead 
 } from '../controllers/notificationController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 
