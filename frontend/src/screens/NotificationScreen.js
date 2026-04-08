@@ -37,7 +37,8 @@ const NotificationScreen = ({ navigation }) => {
       if (!cache.current) setLoading(true);
       
       const res = await api.getNotifications();
-      const newData = res.data.data;
+      // Safe check: handle both {data: []} and direct array []
+      const newData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
 
       // Zero-Flicker Identity Check
       if (!isSame(notifications, newData)) {
@@ -46,6 +47,7 @@ const NotificationScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Fetch notifications error:', err);
+      setNotifications(prev => prev || []); // Prevent crash
       // Fallback to cache on network failure
       if (cache.current) {
         setNotifications(cache.current);
