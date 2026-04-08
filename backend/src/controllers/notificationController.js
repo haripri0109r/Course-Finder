@@ -27,15 +27,17 @@ export const markAllAsRead = async (req, res) => {
 
 // 🔢 Get Unread Count (Optimized)
 export const getUnreadCount = async (req, res) => {
-  const count = await Notification.countDocuments({
-    userId: req.user._id,
-    isRead: false,
-  });
+  try {
+    const count = await Notification.countDocuments({
+      userId: req.user._id,
+      isRead: false,
+    });
 
-  return res.status(200).json({
-    success: true,
-    unreadCount: count,
-  });
+    return res.status(200).json({ count });
+  } catch (error) {
+    console.error("Unread count error:", error);
+    return res.status(500).json({ message: "Failed to fetch unread count" });
+  }
 };
 
 // 🗑️ Mark Single as Read

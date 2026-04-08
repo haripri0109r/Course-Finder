@@ -19,8 +19,9 @@ import PrimaryButton from '../components/PrimaryButton';
 import AnimatedPressable from '../components/AnimatedPressable';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
-import { timeAgo } from '../utils/format';
+import { timeAgo } from '../utils/formatter';
 import { showToast } from '../components/Toast';
+import CourseImage from '../components/CourseImage';
 
 const PostDetailScreen = ({ route, navigation }) => {
   const { postId } = route.params;
