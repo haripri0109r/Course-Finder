@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { Course, CompletedCourse } from '../models/index.js';
-import { createNotification } from '../services/notificationService.js';
+import { createNotification, removeNotification } from '../services/notificationService.js';
 import * as feedService from '../services/feedService.js';
 import * as userService from '../services/userService.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
@@ -358,11 +358,22 @@ const likeCompletion = async (req, res) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const unlikeCompletion = async (req, res) => {
+  const completion = await CompletedCourse.findById(req.params.id);
+  if (!completion) return res.status(404).json({ message: 'Post not found' });
+
   const updated = await CompletedCourse.findByIdAndUpdate(
     req.params.id,
     { $pull: { likes: req.user._id } },
     { new: true }
   );
+
+  // 🗑️ Cleanup Notification
+  await removeNotification({
+    recipientId: completion.user,
+    senderId: req.user._id,
+    type: 'post_like',
+    relatedPostId: req.params.id
+  });
 
   return res.status(200).json({
     success: true,
@@ -437,6 +448,26 @@ const getCompletedCourseById = async (req, res) => {
   });
 };
 
+/**
+ * 🔒 RAW Post Access for PostDetail (No wrappers)
+ */
+const getPostById = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: 'Invalid ID format' });
+  }
+
+  const post = await CompletedCourse.findById(req.params.id)
+    .populate('user', 'name profilePicture')
+    .populate('course', 'title platform url tags level averageRating totalCompletions totalRatings image');
+
+  if (!post) {
+    return res.status(404).json({ message: 'Post not found' });
+  }
+
+  const data = formatCourse(post, req.user?._id);
+  return res.json(data); // RAW RESPONSE
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 const trackCertView = async (req, res) => {
   const { url } = req.body;
@@ -478,6 +509,7 @@ export {
   getRecentActivity,
   getUserCompletions,
   getCompletedCourseById,
+  getPostById,
   trackCertView,
   incrementViewCount,
   getTrendingCompletions

@@ -2,25 +2,34 @@ import mongoose from 'mongoose';
 
 const notificationSchema = new mongoose.Schema(
   {
-    recipient: {
+    userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
       index: true,
     },
-    sender: {
+    actorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
     type: {
       type: String,
-      enum: ['follow', 'like', 'comment'],
+      enum: ['follow', 'post_like', 'comment', 'reply', 'comment_like'],
       required: true,
     },
-    relatedPost: {
+    targetType: {
+      type: String,
+      enum: ['post', 'comment', 'user'],
+      required: true,
+    },
+    postId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'CompletedCourse',
+    },
+    commentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Comment',
     },
     message: {
       type: String,
@@ -29,10 +38,33 @@ const notificationSchema = new mongoose.Schema(
     isRead: {
       type: Boolean,
       default: false,
+      index: true,
     },
   },
   {
     timestamps: true,
+  }
+);
+
+// Performance Indexes
+notificationSchema.index({ userId: 1, updatedAt: -1 });
+
+// Anti-Spam / Deduplication Index (Partial & Compound)
+// Prevents duplicate notifications from the same actor for the same target/type.
+notificationSchema.index(
+  {
+    userId: 1,
+    actorId: 1,
+    postId: 1,
+    commentId: 1,
+    type: 1
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      userId: { $exists: true },
+      actorId: { $exists: true }
+    }
   }
 );
 

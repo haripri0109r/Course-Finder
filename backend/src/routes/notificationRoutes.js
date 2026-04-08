@@ -13,6 +13,7 @@ router.use(authenticate);
 
 router.get('/', getNotifications);
 router.get('/unread-count', getUnreadCount);
+router.post('/mark-all-read', markAllAsRead);
 router.patch('/:id/read', markAsRead);
 
 export default router;

@@ -23,7 +23,7 @@ import rateLimit from 'express-rate-limit';
 const router = Router();
 
 const uploadLimiter = rateLimit({
-  windowMs: 60 * 1000, 
+  windowMs: 60 * 1000,
   max: 10,
   message: {
     success: false,
@@ -39,6 +39,7 @@ router.post('/completed/upload-certificate', authenticate, upload.single('file')
 router.post('/completed/analytics/cert-view', authenticate, trackCertView);
 router.get('/completed/me', authenticate, cacheHeaders, getMyCompletedCourses);
 router.get('/posts/feed', authenticate, getRecentActivity);
+router.get('/posts/:id', authenticate, getPostById);
 router.get('/recent', authenticate, getRecentActivity);
 router.get('/completed/trending', authenticate, getTrendingCompletions);
 router.get('/completed/user/:userId', authenticate, getUserCompletions);

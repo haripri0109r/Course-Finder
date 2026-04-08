@@ -1,206 +1,188 @@
-import React, { useState, useContext, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
+import React, { useState, useCallback, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  SafeAreaView,
   RefreshControl,
-  ActivityIndicator
+  Image
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import api from '../services/api';
-import { AuthContext } from '../context/AuthContext';
-import { showToast } from '../components/Toast';
-import AnimatedPressable from '../components/AnimatedPressable';
-import RetryBox from '../components/RetryBox';
-import { timeAgo } from '../utils/format';
-import { COLORS, SPACING, FONTS, RADIUS } from '../utils/theme';
+import { timeAgo } from '../utils/formatter';
 
-const NotificationItem = ({ notification, onPress }) => {
-  const isRead = notification.isRead;
-
-  return (
-    <AnimatedPressable 
-      style={[styles.notificationCard, !isRead && styles.unreadCard]} 
-      onPress={() => onPress(notification)}
-      scaleTo={0.98}
-      haptic="impactLight"
-    >
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
-          {(notification.sender?.name || 'U').charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <View style={styles.content}>
-        <Text style={[styles.message, !isRead && styles.unreadMessage]}>
-          {notification.message}
-        </Text>
-        <Text style={styles.time}>
-          {timeAgo(notification.createdAt)}
-        </Text>
-      </View>
-      {!isRead && <View style={styles.unreadDot} />}
-    </AnimatedPressable>
-  );
-};
-
-export default function NotificationScreen({ navigation }) {
-  const { refreshUnreadCount } = useContext(AuthContext);
+const NotificationScreen = ({ navigation }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
+  const cache = useRef(null);
 
-  const fetchNotifications = async (isRefresh = false) => {
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+    }, [])
+  );
+
+  const isSame = (a, b) => {
+    if (a.length !== b.length) return false;
+    return a.every((item, i) => item._id === b[i]._id && item.isRead === b[i].isRead);
+  };
+
+  const fetchNotifications = async () => {
     try {
-      setError(null);
-      if (!isRefresh && notifications.length === 0) setLoading(true);
+      if (!cache.current) setLoading(true);
+      
       const res = await api.getNotifications();
-      if (res.data.success) {
-        setNotifications(res.data.data);
+      const newData = res.data.data;
+
+      // Zero-Flicker Identity Check
+      if (!isSame(notifications, newData)) {
+        setNotifications(newData);
+        cache.current = newData;
       }
     } catch (err) {
-      setError(err);
-      showToast('Failed to load notifications', 'error');
+      console.error('Fetch notifications error:', err);
+      // Fallback to cache on network failure
+      if (cache.current) {
+        setNotifications(cache.current);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchNotifications();
-      refreshUnreadCount();
-    }, [])
-  );
+  const handleMarkAllRead = async () => {
+    // Optimistic UI Update
+    const original = [...notifications];
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchNotifications(true);
+    try {
+      await api.markAllAsRead();
+    } catch (err) {
+      setNotifications(original);
+      console.error('Mark all read error:', err);
+    }
   };
 
-  const handleNotificationPress = async (notif) => {
-    if (!notif.isRead) {
+  const handlePress = async (item) => {
+    // Navigate logic
+    if (item.targetType === 'post' && item.postId) {
+      navigation.navigate("PostDetail", { postId: item.postId });
+    }
+
+    // Mark single as read
+    if (!item.isRead) {
+      setNotifications(prev => prev.map(n => n._id === item._id ? { ...n, isRead: true } : n));
       try {
-        await api.markNotificationRead(notif._id);
-        setNotifications(prev => prev.map(n => 
-          n._id === notif._id ? { ...n, isRead: true } : n
-        ));
-        refreshUnreadCount();
+        await api.markAsRead(item._id);
       } catch (err) {
-        console.error('Failed to mark as read', err);
+        console.error('Mark read error:', err);
       }
     }
-
-    if (notif.type === 'follow' && notif.sender?._id) {
-      navigation.navigate('UserProfile', { userId: notif.sender._id });
-    } else if ((notif.type === 'like' || notif.type === 'comment') && notif.relatedPost) {
-      navigation.navigate('CompletionDetail', { completionId: notif.relatedPost._id || notif.relatedPost });
-    }
   };
 
-  if (error && notifications.length === 0) {
-    return <RetryBox message="Unable to load notifications" error={error} onRetry={() => fetchNotifications(false)} />;
-  }
+  const renderItem = ({ item }) => (
+    <TouchableOpacity
+      style={[styles.notificationItem, !item.isRead && styles.unreadItem]}
+      onPress={() => handlePress(item)}
+    >
+      <View style={styles.avatarContainer}>
+        {item.actorId?.profilePicture ? (
+          <Image source={{ uri: item.actorId.profilePicture }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarText}>{(item.actorId?.name || 'U')[0].toUpperCase()}</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.content}>
+        <Text style={[styles.message, !item.isRead && styles.unreadMessage]}>
+          {item.message}
+        </Text>
+        <Text style={styles.time}>{timeAgo(item.createdAt)}</Text>
+      </View>
+      {!item.isRead && <View style={styles.unreadDot} />}
+    </TouchableOpacity>
+  );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <AnimatedPressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backIcon}>←</Text>
-        </AnimatedPressable>
-        <Text style={styles.headerTitle}>Activity Feed</Text>
-        <View style={{ width: 40 }} />
+        <Text style={styles.headerTitle}>Notifications</Text>
+        {notifications.some(n => !n.isRead) && (
+          <TouchableOpacity onPress={handleMarkAllRead}>
+            <Text style={styles.markReadBtn}>Mark all as read</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 50 }} color={COLORS.primary} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
       ) : (
         <FlatList
           data={notifications}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item }) => (
-            <NotificationItem 
-              notification={item} 
-              onPress={handleNotificationPress} 
-            />
-          )}
+          keyExtractor={item => item._id}
+          renderItem={renderItem}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={onRefresh} 
-              tintColor={COLORS.primary}
-              colors={[COLORS.primary]}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchNotifications(); }} />
           }
           ListEmptyComponent={
-            <View style={styles.emptyBox}>
+            <View style={styles.emptyContainer}>
               <Text style={styles.emptyEmoji}>🔔</Text>
-              <Text style={styles.emptyTitle}>All caught up!</Text>
-              <Text style={styles.emptySubtitle}>
-                When classmates follow you or like your posts, you'll see them here.
-              </Text>
+              <Text style={styles.emptyText}>You're all caught up!</Text>
+              <Text style={styles.emptySub}>Notifications about your courses and social activity will appear here.</Text>
             </View>
           }
         />
       )}
-    </View>
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: { 
-    height: 110, paddingTop: 60, flexDirection: 'row', alignItems: 'center', 
-    justifyContent: 'space-between', paddingHorizontal: SPACING.lg, 
-    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight 
-  },
-  backBtn: { width: 40, alignItems: 'center' },
-  backIcon: { fontSize: 24, fontWeight: 'bold' },
-  headerTitle: { ...FONTS.h3 },
-
-  list: { paddingVertical: SPACING.md },
-  notificationCard: {
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.lg,
+    padding: SPACING.xl,
     backgroundColor: COLORS.white,
-    marginHorizontal: SPACING.md,
-    marginBottom: SPACING.sm,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    ...SHADOW.sm,
   },
-  unreadCard: {
-    backgroundColor: '#F0F7FF',
-    borderColor: '#D0E7FF',
+  headerTitle: { ...FONTS.h2 },
+  markReadBtn: { color: COLORS.primary, fontWeight: 'bold' },
+  list: { paddingBottom: 100 },
+  notificationItem: {
+    flexDirection: 'row',
+    padding: SPACING.xl,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    alignItems: 'center'
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: SPACING.md,
-  },
-  avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
+  unreadItem: { backgroundColor: '#F0F7FF' }, // Light blue for unread
+  avatarContainer: { marginRight: SPACING.lg },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  avatarPlaceholder: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.secondary, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: COLORS.white, fontWeight: 'bold', fontSize: 18 },
   content: { flex: 1 },
-  message: { ...FONTS.body, fontSize: 15, color: COLORS.textPrimary },
-  unreadMessage: { fontWeight: '700' },
+  message: { ...FONTS.body, fontSize: 15, color: COLORS.textPrimary, lineHeight: 20 },
+  unreadMessage: { fontWeight: '600' },
   time: { ...FONTS.small, color: COLORS.textMuted, marginTop: 4 },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF3B30',
-    marginLeft: SPACING.sm,
-  },
-
-  emptyBox: { alignSelf: 'center', marginTop: 100, alignItems: 'center', paddingHorizontal: 40 },
-  emptyEmoji: { fontSize: 60, marginBottom: 16, opacity: 0.3 },
-  emptyTitle: { ...FONTS.h3, color: COLORS.textPrimary },
-  emptySubtitle: { ...FONTS.caption, textAlign: 'center', marginTop: 8, color: COLORS.textSecondary, fontSize: 15 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginLeft: 8 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100, padding: 40 },
+  emptyEmoji: { fontSize: 50, marginBottom: 20 },
+  emptyText: { ...FONTS.h3, marginBottom: 8 },
+  emptySub: { ...FONTS.body, color: COLORS.textMuted, textAlign: 'center' }
 });
+
+export default NotificationScreen;

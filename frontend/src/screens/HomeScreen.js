@@ -23,30 +23,36 @@ export default function HomeScreen({ navigation }) {
   const [error, setError] = useState(null);
 
   const fetchPosts = async () => {
-    if (loading) return;
-
-    setLoading(true);
-
     try {
-      const res = await api.get("/posts/feed", {
-        params: {
-          cursor,
-          limit: 10
-        }
-      });
+      // 🚨 STOP if no more data
+      if (cursor === null && posts.length > 0) {
+        console.log("🛑 No more posts to fetch");
+        return;
+      }
 
-      console.log("Feed API Response:", res.data);
+      if (loading) return;
+      setLoading(true);
+
+      const res = await api.get(`/posts/feed?cursor=${cursor || ""}`);
+
       console.log("FULL RESPONSE:", res.data);
 
       const newPosts = res.data?.posts || [];
+      const nextCursor = res.data?.nextCursor || null;
 
       if (!Array.isArray(newPosts)) {
         console.error("Invalid posts format");
         return;
       }
 
-      setPosts(prev => [...prev, ...newPosts]);
-      setCursor(res.data?.nextCursor || null);
+      // ✅ DEDUPLICATION Logic
+      setPosts(prev => {
+        const existingIds = new Set(prev.map(p => p._id));
+        const filtered = newPosts.filter(p => !existingIds.has(p._id));
+        return [...prev, ...filtered];
+      });
+
+      setCursor(nextCursor);
       
       // Prefetch images for smoother scrolling
       prefetchImages(newPosts);
@@ -75,6 +81,12 @@ export default function HomeScreen({ navigation }) {
     };
     syncTrending();
   }, []);
+
+  const handleLoadMore = () => {
+    if (!loading && cursor !== null) {
+      fetchPosts();
+    }
+  };
 
   const onRefresh = async () => {
     setCursor(null);
@@ -174,7 +186,7 @@ export default function HomeScreen({ navigation }) {
         ListFooterComponent={<Footer />}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        onEndReached={fetchPosts}
+        onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl 

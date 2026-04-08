@@ -2,35 +2,46 @@ import mongoose from 'mongoose';
 
 const commentSchema = new mongoose.Schema(
   {
-    user: {
+    postId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CompletedCourse',
+      required: true,
+      index: true,
+    },
+    userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
     },
-    completedCourse: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'CompletedCourse',
-      required: true,
-    },
     text: {
       type: String,
-      required: [true, 'Comment text is required'],
+      required: true,
       trim: true,
-      maxlength: [500, 'Comment cannot exceed 500 characters'],
+      maxlength: 500,
+    },
+    parentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Comment',
+      default: null,
+      index: true,
+    },
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    likesCount: {
+      type: Number,
+      default: 0,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// Populate user info by default if needed, or leave it to controllers
-commentSchema.set('toJSON', {
-  transform: (_doc, ret) => {
-    delete ret.__v;
-    return ret;
-  },
-});
+// Optimize for depth-1 threading and feed retrieval
+commentSchema.index({ postId: 1, createdAt: -1 });
+commentSchema.index({ parentId: 1 });
 
 const Comment = mongoose.model('Comment', commentSchema);
 

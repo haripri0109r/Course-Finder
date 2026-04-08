@@ -12,6 +12,7 @@ import courseRoutes from './src/routes/courseRoutes.js';
 import completedRoutes from './src/routes/completedRoutes.js';
 import bookmarkRoutes from './src/routes/bookmarkRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
+import commentRoutes from './src/routes/commentRoutes.js';
 
 // Middleware
 import errorHandler from './middleware/errorHandler.js';
@@ -59,6 +60,7 @@ app.use('/api/v1/courses', courseRoutes);
 app.use('/api/v1', completedRoutes);
 app.use('/api/v1/bookmarks', bookmarkRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/comments', commentRoutes);
 
 // ─── 404 Handler (JSON for consistency) ──────────────────────────────────────
 app.use((req, res) => {

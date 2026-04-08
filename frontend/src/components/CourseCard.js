@@ -24,23 +24,20 @@ const CourseCard = memo(({
   const [isLikeLoading, setIsLikeLoading] = useState(false);
   const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const handlePress = () => {
-    console.log("COURSE ITEM VIEW:", item.id);
+    if (isNavigating) return;
+    setIsNavigating(true);
 
-    if (!item?.url) {
-      console.warn("No URL found");
-      return;
+    try {
+      navigation.navigate("PostDetail", {
+        postId: item._id,
+      });
+    } finally {
+      // Reset safety latch after short delay
+      setTimeout(() => setIsNavigating(false), 500);
     }
-
-    // Trigger View Tracking (Async, non-blocking)
-    api.incrementViewCount(item.id).catch(() => {});
-
-    navigation.navigate("CourseViewer", {
-      url: item.url,
-      title: item.title,
-      id: item.id,
-    });
   };
 
   const platformColor = {

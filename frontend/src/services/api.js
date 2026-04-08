@@ -64,6 +64,10 @@ api.getMe = () => api.get('/auth/me');
 api.getUserProfile = (userId) => api.get(`/auth/profile/${userId}`);
 
 api.getRecentActivity = (cursor = null) => api.get('/posts/feed', { params: { cursor, limit: 10 } });
+api.getPost = async (id) => {
+  const res = await api.get(`/posts/${id}`);
+  return res.data;
+};
 api.getTrending = () => api.get('/completed/trending');
 api.getCompletedCourse = (id) => api.get(`/completed/${id}`);
 api.fetchMetadata = (url) => api.post('/courses/fetch-metadata', { url });
@@ -72,8 +76,20 @@ api.incrementViewCount = (id) => api.post(`/completed/${id}/view`);
 api.likeCompletion = (id) => api.post(`/completed/${id}/like`);
 api.unlikeCompletion = (id) => api.post(`/completed/${id}/unlike`);
 
-api.addComment = (id, text) => api.post(`/completed/${id}/comments`, { text });
-api.getComments = (id) => api.get(`/completed/${id}/comments`);
+api.getComments = async (postId) => {
+  const res = await api.get(`/comments/${postId}`);
+  return res.data;
+};
+
+api.addComment = async (data) => {
+  const res = await api.post('/comments', data);
+  return res.data;
+};
+
+api.likeComment = async (id) => {
+  const res = await api.post(`/comments/${id}/like`);
+  return res.data;
+};
 
 api.followUser = (id) => api.post(`/auth/follow/${id}`);
 api.unfollowUser = (id) => api.post(`/auth/unfollow/${id}`);
@@ -83,7 +99,8 @@ api.addBookmark = (id) => api.post(`/bookmarks/${id}`);
 api.removeBookmark = (id) => api.delete(`/bookmarks/${id}`);
 
 api.getNotifications = () => api.get('/notifications');
-api.markNotificationRead = (id) => api.patch(`/notifications/${id}/read`);
 api.getUnreadCount = () => api.get('/notifications/unread-count');
+api.markAllAsRead = () => api.post('/notifications/mark-all-read');
+api.markAsRead = (id) => api.patch(`/notifications/${id}/read`);
 
 export default api;

@@ -1,18 +1,9 @@
-import { Notification } from '../models/index.js';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// @route   GET /api/notifications
-// @access  Private
-// ─────────────────────────────────────────────────────────────────────────────
-const getNotifications = async (req, res) => {
-  const notifications = await Notification.find({ recipient: req.user._id })
-    .populate('sender', 'name profilePicture')
-    .populate({
-      path: 'relatedPost',
-      populate: { path: 'course', select: 'title' }
-    })
-    .sort({ createdAt: -1 })
-    .limit(50);
+export const getNotifications = async (req, res) => {
+  const notifications = await Notification.find({ userId: req.user._id })
+    .populate('actorId', 'name profilePicture')
+    .sort({ updatedAt: -1, _id: -1 })
+    .limit(50)
+    .lean();
 
   return res.status(200).json({
     success: true,
@@ -21,13 +12,36 @@ const getNotifications = async (req, res) => {
   });
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// @route   PATCH /api/notifications/:id/read
-// @access  Private
-// ─────────────────────────────────────────────────────────────────────────────
-const markAsRead = async (req, res) => {
+// ✅ Mark All as Read (Batch Operation)
+export const markAllAsRead = async (req, res) => {
+  await Notification.updateMany(
+    { userId: req.user._id, isRead: false },
+    { $set: { isRead: true } }
+  );
+
+  return res.status(200).json({
+    success: true,
+    message: 'All notifications marked as read',
+  });
+};
+
+// 🔢 Get Unread Count (Optimized)
+export const getUnreadCount = async (req, res) => {
+  const count = await Notification.countDocuments({
+    userId: req.user._id,
+    isRead: false,
+  });
+
+  return res.status(200).json({
+    success: true,
+    unreadCount: count,
+  });
+};
+
+// 🗑️ Mark Single as Read
+export const markAsRead = async (req, res) => {
   const notification = await Notification.findOneAndUpdate(
-    { _id: req.params.id, recipient: req.user._id },
+    { _id: req.params.id, userId: req.user._id },
     { isRead: true },
     { new: true }
   );
@@ -44,21 +58,3 @@ const markAsRead = async (req, res) => {
     data: notification,
   });
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// @route   GET /api/notifications/unread-count
-// @access  Private
-// ─────────────────────────────────────────────────────────────────────────────
-const getUnreadCount = async (req, res) => {
-  const count = await Notification.countDocuments({
-    recipient: req.user._id,
-    isRead: false,
-  });
-
-  return res.status(200).json({
-    success: true,
-    unreadCount: count,
-  });
-};
-
-export { getNotifications, markAsRead, getUnreadCount };
