@@ -37,7 +37,7 @@ const NotificationScreen = ({ navigation }) => {
       if (!cache.current) setLoading(true);
       
       const res = await api.getNotifications();
-      // Safe check: handle both {data: []} and direct array []
+      // Safe check: handles both direct array and object-wrapped data
       const newData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
 
       // Zero-Flicker Identity Check
@@ -47,14 +47,34 @@ const NotificationScreen = ({ navigation }) => {
       }
     } catch (err) {
       console.error('Fetch notifications error:', err);
-      setNotifications(prev => prev || []); // Prevent crash
       // Fallback to cache on network failure
       if (cache.current) {
         setNotifications(cache.current);
+      } else {
+        setNotifications([]);
       }
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const getMessage = (type, actorName = 'Someone') => {
+    const name = actorName || 'Someone';
+    switch (type) {
+      case 'like':
+      case 'post_like':
+        return `${name} liked your post ❤️`;
+      case 'comment':
+        return `${name} commented on your post 💬`;
+      case 'reply':
+        return `${name} replied to your comment 💬`;
+      case 'comment_like':
+        return `${name} liked your comment ❤️`;
+      case 'follow':
+        return `${name} started following you 👤`;
+      default:
+        return `${name} interacted with your post`;
     }
   };
 
@@ -72,8 +92,8 @@ const NotificationScreen = ({ navigation }) => {
   };
 
   const handlePress = async (item) => {
-    // Navigate logic
-    if (item.targetType === 'post' && item.postId) {
+    // Navigate logic (Inferred from presence of postId/commentId)
+    if (item.postId) {
       navigation.navigate("PostDetail", { postId: item.postId });
     }
 
@@ -104,7 +124,7 @@ const NotificationScreen = ({ navigation }) => {
       </View>
       <View style={styles.content}>
         <Text style={[styles.message, !item.isRead && styles.unreadMessage]}>
-          {item.message}
+          {getMessage(item.type, item.actorId?.name)}
         </Text>
         <Text style={styles.time}>{timeAgo(item.createdAt)}</Text>
       </View>
