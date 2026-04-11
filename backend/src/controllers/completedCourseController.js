@@ -327,9 +327,10 @@ const likeCompletion = async (req, res) => {
     });
   }
 
+  // $addToSet prevents duplicates even under race conditions
   const updated = await CompletedCourse.findByIdAndUpdate(
     req.params.id,
-    { $push: { likes: req.user._id } },
+    { $addToSet: { likes: req.user._id } },
     { new: true }
   ).populate('course', 'title image');
 
@@ -366,13 +367,20 @@ const unlikeCompletion = async (req, res) => {
     { new: true }
   );
 
-  // 🗑️ Cleanup Notification (Anti-Spam)
-  await Notification.deleteOne({
-    userId: completion.user,
-    actorId: req.user.id,
-    postId: req.params.id,
-    type: "post_like"
-  });
+  // 🗑️ Soft-dismiss notification (prevents spam loop on like/unlike/like)
+  try {
+    await Notification.updateOne(
+      {
+        userId: completion.user,
+        actorId: req.user.id,
+        postId: req.params.id,
+        type: "post_like"
+      },
+      { isRead: true }
+    );
+  } catch (err) {
+    console.log("Notification cleanup failed:", err.message);
+  }
 
   return res.status(200).json({
     success: true,

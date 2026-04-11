@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import app from './app.js';
 import connectDB from './config/db.js';
+import Notification from './src/models/Notification.js';
 
 const PORT = process.env.PORT || 5000;
 
@@ -9,6 +10,12 @@ const startServer = async () => {
   try {
     // 1. Connect to MongoDB
     await connectDB();
+
+    // 2. Sync indexes (dev only — production indexes managed via migration)
+    if (process.env.NODE_ENV !== 'production') {
+      await Notification.syncIndexes();
+      console.log('✅ Notification indexes synced');
+    }
 
     // 2. Start HTTP server
     const server = app.listen(PORT, '0.0.0.0', () => {

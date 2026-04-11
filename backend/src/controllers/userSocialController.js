@@ -17,9 +17,7 @@ const followUser = async (req, res) => {
       });
     }
 
-    const user = await User.findById(userId);
     const target = await User.findById(targetId);
-
     if (!target) {
       return res.status(404).json({
         success: false,
@@ -27,6 +25,7 @@ const followUser = async (req, res) => {
       });
     }
 
+    const user = await User.findById(userId);
     if (user.following.includes(targetId)) {
       return res.status(400).json({
         success: false,
@@ -34,13 +33,10 @@ const followUser = async (req, res) => {
       });
     }
 
-    user.following.push(targetId);
-    target.followers.push(userId);
+    // $addToSet — prevents duplicates even under concurrent requests
+    await User.findByIdAndUpdate(userId, { $addToSet: { following: targetId } });
+    await User.findByIdAndUpdate(targetId, { $addToSet: { followers: userId } });
 
-    await user.save();
-    await target.save();
-
-    // ✅ FIXED: correct field names for notification
     await createNotification({
       userId: targetId,
       actorId: userId,
@@ -67,7 +63,6 @@ const unfollowUser = async (req, res) => {
     const userId = req.user.id;
 
     const user = await User.findById(userId);
-
     if (!user.following.includes(targetId)) {
       return res.status(400).json({
         success: false,
@@ -75,13 +70,9 @@ const unfollowUser = async (req, res) => {
       });
     }
 
-    const target = await User.findById(targetId);
-
-    user.following.pull(targetId);
-    target.followers.pull(userId);
-
-    await user.save();
-    await target.save();
+    // Atomic pull — no race condition
+    await User.findByIdAndUpdate(userId, { $pull: { following: targetId } });
+    await User.findByIdAndUpdate(targetId, { $pull: { followers: userId } });
 
     return res.status(200).json({
       success: true,

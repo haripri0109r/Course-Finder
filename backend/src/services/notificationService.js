@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Notification from '../models/Notification.js';
 
 /**
@@ -10,18 +11,36 @@ export const createNotification = async ({
   postId,
   commentId
 }) => {
-  // Prevent self notification
   if (!userId || !actorId) return;
+
+  if (type !== 'follow' && !postId && !commentId) return;
+
   if (userId.toString() === actorId.toString()) return;
+
+  const safePostId = postId && mongoose.Types.ObjectId.isValid(postId)
+    ? postId
+    : undefined;
+
+  const safeCommentId = commentId && mongoose.Types.ObjectId.isValid(commentId)
+    ? commentId
+    : undefined;
+
+  const filter = {
+    userId,
+    actorId,
+    type,
+    ...(safePostId && { postId: safePostId }),
+    ...(safeCommentId && { commentId: safeCommentId }),
+  };
 
   try {
     await Notification.findOneAndUpdate(
-      { userId, actorId, postId, commentId, type },
-      { isRead: false },
+      filter,
+      { ...filter, isRead: false },
       { upsert: true, new: true }
     );
   } catch (err) {
-    console.error("Notification error:", err);
+    console.log("Notification upsert error:", err.message);
   }
 };
 
@@ -30,12 +49,24 @@ export const createNotification = async ({
  */
 export const removeNotification = async ({ userId, actorId, type, postId, commentId }) => {
   try {
-    const filter = { userId, actorId, type };
-    if (postId) filter.postId = postId;
-    if (commentId) filter.commentId = commentId;
+    const safePostId = postId && mongoose.Types.ObjectId.isValid(postId)
+      ? postId
+      : undefined;
+
+    const safeCommentId = commentId && mongoose.Types.ObjectId.isValid(commentId)
+      ? commentId
+      : undefined;
+
+    const filter = {
+      userId,
+      actorId,
+      type,
+      ...(safePostId && { postId: safePostId }),
+      ...(safeCommentId && { commentId: safeCommentId }),
+    };
 
     await Notification.deleteOne(filter);
   } catch (err) {
-    console.error("Notification removal error:", err);
+    console.log("Notification removal error:", err.message);
   }
 };

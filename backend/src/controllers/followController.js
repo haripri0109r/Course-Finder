@@ -10,21 +10,22 @@ export const toggleFollow = async (req, res) => {
       return res.status(400).json({ message: "Cannot follow yourself" });
     }
 
-    const user = await User.findById(userId);
     const target = await User.findById(targetId);
-
     if (!target) {
       return res.status(404).json({ message: "User not found" });
     }
 
+    const user = await User.findById(userId);
     const isFollowing = user.following.includes(targetId);
 
     if (isFollowing) {
-      user.following.pull(targetId);
-      target.followers.pull(userId);
+      // Atomic pull — no race condition
+      await User.findByIdAndUpdate(userId, { $pull: { following: targetId } });
+      await User.findByIdAndUpdate(targetId, { $pull: { followers: userId } });
     } else {
-      user.following.push(targetId);
-      target.followers.push(userId);
+      // $addToSet — prevents duplicates under concurrent requests
+      await User.findByIdAndUpdate(userId, { $addToSet: { following: targetId } });
+      await User.findByIdAndUpdate(targetId, { $addToSet: { followers: userId } });
 
       await createNotification({
         userId: targetId,
@@ -33,12 +34,9 @@ export const toggleFollow = async (req, res) => {
       });
     }
 
-    await user.save();
-    await target.save();
-
     res.json({ success: true, isFollowing: !isFollowing });
   } catch (err) {
-    console.error("Toggle follow error:", err);
+    console.log("Toggle follow error:", err.message);
     res.status(500).json({ message: "Follow action failed" });
   }
 };
