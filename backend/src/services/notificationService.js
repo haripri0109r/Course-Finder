@@ -29,21 +29,15 @@ export const createNotification = async ({
   };
 
   try {
-    await Notification.findOneAndUpdate(
+    const notification = await Notification.findOneAndUpdate(
       filter,
       { ...filter, isRead: false },
       { upsert: true, new: true }
-    );
+    ).populate('actorId', 'name profilePicture');
 
     // ⚡ Real-time push
     if (global.io && userId) {
-      global.io.to(userId.toString()).emit("new_notification", {
-        type,
-        postId: safePostId,
-        commentId: safeCommentId,
-        actorId,
-        createdAt: new Date(),
-      });
+      global.io.to(userId.toString()).emit("new_notification", notification);
 
       const count = await Notification.countDocuments({
         userId,

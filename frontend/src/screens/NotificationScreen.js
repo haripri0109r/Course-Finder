@@ -31,15 +31,25 @@ const NotificationScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const getMessage = (n) => {
-    const name = n.actorId?.name || "Someone";
+  const getMessage = (item) => {
+    const name = item.actorId?.name || "Someone";
 
-    if (n.type === "post_like" || n.type === "like") return `${name} liked your post`;
-    if (n.type === "comment") return `${name} commented on your post`;
-    if (n.type === "reply") return `${name} replied to your comment`;
-    if (n.type === "follow") return `${name} started following you`;
-
-    return "New activity";
+    switch (item.type) {
+      case "post_like":
+        return `${name} liked your post`;
+      case "like": // fallback legacy
+        return `${name} liked your post`;
+      case "comment":
+        return `${name} commented on your post`;
+      case "reply":
+        return `${name} replied to your comment`;
+      case "follow":
+        return `${name} started following you`;
+      case "comment_like":
+        return `${name} liked your comment`;
+      default:
+        return "New activity";
+    }
   };
 
   const handlePress = async (item) => {

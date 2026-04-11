@@ -5,7 +5,7 @@ export const getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ userId: req.user.id })
       .populate('actorId', 'name avatar')
-      .sort({ updatedAt: -1, _id: -1 })
+      .sort({ createdAt: -1 })
       .lean();
 
     res.json(notifications || []);

@@ -367,17 +367,29 @@ const unlikeCompletion = async (req, res) => {
     { new: true }
   );
 
-  // 🗑️ Soft-dismiss notification (prevents spam loop on like/unlike/like)
+  // 🗑️ Soft-dismiss notification
   try {
-    await Notification.updateOne(
-      {
-        userId: completion.user,
-        actorId: req.user.id,
-        postId: req.params.id,
-        type: "post_like"
-      },
-      { isRead: true }
+    const rmFilter = {
+      userId: completion.user,
+      actorId: req.user.id,
+      postId: req.params.id,
+      type: "post_like"
+    };
+
+    const removedNotif = await Notification.findOneAndUpdate(
+      rmFilter,
+      { $set: { isRead: true } }
     );
+
+    if (removedNotif && global.io) {
+      global.io.to(rmFilter.userId.toString()).emit("notification_removed", removedNotif._id);
+
+      const count = await Notification.countDocuments({
+        userId: rmFilter.userId,
+        isRead: false
+      });
+      global.io.to(rmFilter.userId.toString()).emit("unread_count", count);
+    }
   } catch (err) {
     console.log("Notification cleanup failed:", err.message);
   }

@@ -37,7 +37,22 @@ const startServer = async () => {
 
       socket.on("register", (userId) => {
         if (!userId) return;
-        socket.join(userId.toString());
+        socket.userId = userId.toString();
+        socket.join(socket.userId);
+      });
+
+      socket.on("sync_notifications", async () => {
+        if (!socket.userId) return;
+        try {
+          const notifications = await Notification.find({ userId: socket.userId })
+            .populate("actorId", "name avatar profilePicture")
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
+          socket.emit("sync_notifications", notifications);
+        } catch (err) {
+          console.log("Socket sync error:", err.message);
+        }
       });
 
       socket.on("disconnect", () => {

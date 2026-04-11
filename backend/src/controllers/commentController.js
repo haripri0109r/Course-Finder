@@ -1,5 +1,6 @@
 import Comment from '../models/Comment.js';
 import { CompletedCourse } from '../models/index.js';
+import Notification from '../models/Notification.js';
 import { createNotification, removeNotification } from '../services/notificationService.js';
 
 // ➕ Add Comment (Supports Threading)
@@ -118,6 +119,39 @@ export const toggleLikeComment = async (req, res) => {
     ).populate('userId', 'name profilePicture');
 
     if (!updated) return res.status(404).json({ message: 'Comment not found' });
+
+    const liked = updated.likes.map(id => id.toString()).includes(userId.toString());
+    if (liked) {
+      await createNotification({
+        userId: updated.userId._id || updated.userId, // receiver
+        actorId: req.user.id,                         // sender
+        type: "comment_like",
+        commentId: updated._id,
+        postId: updated.postId,
+      });
+    } else {
+      const filter = {
+        userId: updated.userId._id || updated.userId,
+        actorId: req.user.id,
+        type: 'comment_like',
+        commentId: updated._id,
+      };
+      
+      const removedNotif = await Notification.findOneAndUpdate(
+        filter,
+        { $set: { isRead: true } }
+      );
+
+      if (removedNotif && global.io) {
+        global.io.to(filter.userId.toString()).emit("notification_removed", removedNotif._id);
+        
+        const count = await Notification.countDocuments({
+          userId: filter.userId,
+          isRead: false
+        });
+        global.io.to(filter.userId.toString()).emit("unread_count", count);
+      }
+    }
 
     return res.status(200).json(updated);
   } catch (err) {
