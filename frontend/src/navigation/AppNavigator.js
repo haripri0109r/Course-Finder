@@ -21,6 +21,7 @@ import PostDetailScreen from '../screens/PostDetailScreen';
 
 // Context & Theme
 import { AuthContext } from '../context/AuthContext';
+import { NotificationContext } from '../context/NotificationContext';
 import { COLORS, SHADOW, FONTS } from '../utils/theme';
 
 const Stack = createNativeStackNavigator();
@@ -36,7 +37,7 @@ const TAB_ICONS = {
 };
 
 const TabNavigator = () => {
-  const { unreadCount } = useContext(AuthContext);
+  const { unreadCount } = useContext(NotificationContext);
   const navigation = useNavigation();
 
   return (

@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import { NotificationProvider } from './src/context/NotificationContext';
 import Toast from './src/components/Toast';
 import { COLORS, SPACING, FONTS } from './src/utils/theme';
 
@@ -13,13 +14,15 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <AppNavigator />
-        {isConnected === false && (
+        <NotificationProvider>
+          <AppNavigator />
+          {isConnected === false && (
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineText}>📡 No Internet Connection</Text>
           </View>
         )}
-        <Toast />
+          <Toast />
+        </NotificationProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

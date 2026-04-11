@@ -18,11 +18,16 @@ const startServer = async () => {
 
     const server = http.createServer(app);
 
+    // Initialize Socket.io instance with HTTP server
     const io = new Server(server, {
       cors: {
-        origin: "*",
+        origin: "*", // allow frontend access locally and via web
+        methods: ["GET", "POST"],
+        credentials: true,
       },
-      transports: ["websocket"],
+      pingTimeout: 60000,
+      pingInterval: 25000,
+      transports: ["websocket", "polling"], // Allow polling fallback for connection resilience
     });
 
     global.io = io;

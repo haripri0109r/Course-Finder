@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useContext } from 'react';
+import React, { useContext } from 'react';
 import {
   View,
   Text,
@@ -8,145 +8,27 @@ import {
   ActivityIndicator,
   SafeAreaView,
   RefreshControl,
-  Image
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { io } from 'socket.io-client';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
-import api from '../services/api';
 import { timeAgo } from '../utils/formatter';
-import { AuthContext } from '../context/AuthContext';
-
-// True singleton — file-scope const
-const socket = io('https://course-finder-fnxs.onrender.com', {
-  transports: ['websocket'],
-  autoConnect: true,
-});
-
-// Normalize actorId (can be object or string)
-const getActorId = (actor) => {
-  if (!actor) return null;
-  return typeof actor === 'object' ? actor._id : actor;
-};
-
-// Dedup helper
-const isSameNotification = (a, b) => {
-  return (
-    getActorId(a.actorId) === getActorId(b.actorId) &&
-    a.type === b.type &&
-    (
-      (a.postId && b.postId && a.postId === b.postId) ||
-      (a.commentId && b.commentId && a.commentId === b.commentId)
-    )
-  );
-};
+import { NotificationContext } from '../context/NotificationContext';
+import SafeImage from '../components/SafeImage';
 
 const NotificationScreen = ({ navigation }) => {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const cache = useRef(null);
-  const { user } = useContext(AuthContext);
+  const { 
+    notifications, 
+    loading, 
+    fetchNotifications, 
+    markAllAsRead, 
+    markAsRead 
+  } = useContext(NotificationContext);
+  
+  const [refreshing, setRefreshing] = React.useState(false);
 
-  // Stable handler — defined once, referenced by all effects
-  const handleNewNotification = useCallback((data) => {
-    if (!data || !data.type) return;
-
-    if (__DEV__) {
-      console.log('⚡ Realtime notification:', data);
-    }
-
-    setNotifications((prev) => {
-      const exists = prev.some((n) => isSameNotification(n, data));
-      if (exists) return prev;
-
-      return [data, ...prev].sort((a, b) => {
-        const t1 = new Date(a.createdAt || 0);
-        const t2 = new Date(b.createdAt || 0);
-        return t2 - t1;
-      });
-    });
-  }, []);
-
-  // Effect 1: Register user room (no duplicate register)
-  useEffect(() => {
-    if (!user?._id) return;
-
-    const registerUser = () => {
-      socket.emit("register", user._id);
-    };
-
-    if (socket.connected) {
-      registerUser();
-    } else {
-      socket.off("connect", registerUser); // prevent stacking
-      socket.on("connect", registerUser);
-    }
-
-    return () => {
-      socket.off("connect", registerUser);
-    };
-  }, [user?._id]);
-
-  // Effect 2: Bind notification listener (once)
-  useEffect(() => {
-    socket.off('new_notification', handleNewNotification);
-    socket.on('new_notification', handleNewNotification);
-
-    return () => {
-      socket.off('new_notification', handleNewNotification);
-    };
-  }, [handleNewNotification]);
-
-  // Effect 3: Re-register on reconnect
-  useEffect(() => {
-    const handleConnect = () => {
-      if (user?._id) {
-        socket.emit('register', user._id);
-      }
-    };
-
-    socket.on('connect', handleConnect);
-
-    return () => {
-      socket.off('connect', handleConnect);
-    };
-  }, [user?._id]);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchNotifications();
-    }, [])
-  );
-
-  const isSame = (a, b) => {
-    if (a.length !== b.length) return false;
-    return a.every((item, i) => item._id === b[i]._id && item.isRead === b[i].isRead);
-  };
-
-  const fetchNotifications = async () => {
-    try {
-      if (!cache.current) setLoading(true);
-
-      const res = await api.getNotifications();
-      const newData = res.data || [];
-      const safeData = Array.isArray(newData) ? newData : (newData.data || []);
-
-      if (!isSame(notifications, safeData)) {
-        setNotifications(safeData);
-        cache.current = safeData;
-      }
-    } catch (err) {
-      console.error('Fetch notifications error:', err);
-      if (cache.current) {
-        setNotifications(cache.current);
-      } else {
-        setNotifications([]);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchNotifications();
+    setRefreshing(false);
   };
 
   const getMessage = (n) => {
@@ -160,30 +42,13 @@ const NotificationScreen = ({ navigation }) => {
     return "New activity";
   };
 
-  const handleMarkAllRead = async () => {
-    const original = [...notifications];
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-
-    try {
-      await api.markAllAsRead();
-    } catch (err) {
-      setNotifications(original);
-      console.error('Mark all read error:', err);
-    }
-  };
-
   const handlePress = async (item) => {
     if (item.postId) {
       navigation.navigate("PostDetail", { postId: item.postId });
     }
 
     if (!item.isRead) {
-      setNotifications(prev => prev.map(n => n._id === item._id ? { ...n, isRead: true } : n));
-      try {
-        await api.markAsRead(item._id);
-      } catch (err) {
-        console.error('Mark read error:', err);
-      }
+      await markAsRead(item._id);
     }
   };
 
@@ -194,7 +59,7 @@ const NotificationScreen = ({ navigation }) => {
     >
       <View style={styles.avatarContainer}>
         {item.actorId?.profilePicture ? (
-          <Image source={{ uri: item.actorId.profilePicture }} style={styles.avatar} />
+          <SafeImage source={{ uri: item.actorId.profilePicture }} style={styles.avatar} />
         ) : (
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarText}>{(item.actorId?.name || 'U')[0].toUpperCase()}</Text>
@@ -216,7 +81,7 @@ const NotificationScreen = ({ navigation }) => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Notifications</Text>
         {notifications.some(n => !n.isRead) && (
-          <TouchableOpacity onPress={handleMarkAllRead}>
+          <TouchableOpacity onPress={markAllAsRead}>
             <Text style={styles.markReadBtn}>Mark all as read</Text>
           </TouchableOpacity>
         )}
@@ -233,7 +98,7 @@ const NotificationScreen = ({ navigation }) => {
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchNotifications(); }} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
