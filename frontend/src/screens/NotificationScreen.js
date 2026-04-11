@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useContext } from 'react';
 import {
   View,
   Text,
@@ -11,15 +11,107 @@ import {
   Image
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { io } from 'socket.io-client';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import api from '../services/api';
 import { timeAgo } from '../utils/formatter';
+import { AuthContext } from '../context/AuthContext';
+
+// True singleton — file-scope const
+const socket = io('https://course-finder-fnxs.onrender.com', {
+  transports: ['websocket'],
+  autoConnect: true,
+});
+
+// Normalize actorId (can be object or string)
+const getActorId = (actor) => {
+  if (!actor) return null;
+  return typeof actor === 'object' ? actor._id : actor;
+};
+
+// Dedup helper
+const isSameNotification = (a, b) => {
+  return (
+    getActorId(a.actorId) === getActorId(b.actorId) &&
+    a.type === b.type &&
+    (
+      (a.postId && b.postId && a.postId === b.postId) ||
+      (a.commentId && b.commentId && a.commentId === b.commentId)
+    )
+  );
+};
 
 const NotificationScreen = ({ navigation }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const cache = useRef(null);
+  const { user } = useContext(AuthContext);
+
+  // Stable handler — defined once, referenced by all effects
+  const handleNewNotification = useCallback((data) => {
+    if (!data || !data.type) return;
+
+    if (__DEV__) {
+      console.log('⚡ Realtime notification:', data);
+    }
+
+    setNotifications((prev) => {
+      const exists = prev.some((n) => isSameNotification(n, data));
+      if (exists) return prev;
+
+      return [data, ...prev].sort((a, b) => {
+        const t1 = new Date(a.createdAt || 0);
+        const t2 = new Date(b.createdAt || 0);
+        return t2 - t1;
+      });
+    });
+  }, []);
+
+  // Effect 1: Register user room (no duplicate register)
+  useEffect(() => {
+    if (!user?._id) return;
+
+    const registerUser = () => {
+      socket.emit("register", user._id);
+    };
+
+    if (socket.connected) {
+      registerUser();
+    } else {
+      socket.off("connect", registerUser); // prevent stacking
+      socket.on("connect", registerUser);
+    }
+
+    return () => {
+      socket.off("connect", registerUser);
+    };
+  }, [user?._id]);
+
+  // Effect 2: Bind notification listener (once)
+  useEffect(() => {
+    socket.off('new_notification', handleNewNotification);
+    socket.on('new_notification', handleNewNotification);
+
+    return () => {
+      socket.off('new_notification', handleNewNotification);
+    };
+  }, [handleNewNotification]);
+
+  // Effect 3: Re-register on reconnect
+  useEffect(() => {
+    const handleConnect = () => {
+      if (user?._id) {
+        socket.emit('register', user._id);
+      }
+    };
+
+    socket.on('connect', handleConnect);
+
+    return () => {
+      socket.off('connect', handleConnect);
+    };
+  }, [user?._id]);
 
   useFocusEffect(
     useCallback(() => {
