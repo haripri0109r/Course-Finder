@@ -37,13 +37,14 @@ const NotificationScreen = ({ navigation }) => {
       if (!cache.current) setLoading(true);
       
       const res = await api.getNotifications();
-      // Safe check: handles both direct array and object-wrapped data
-      const newData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      // 🧱 PART 5: FRONTEND SAFETY
+      const newData = res.data || [];
+      const safeData = Array.isArray(newData) ? newData : (newData.data || []);
 
       // Zero-Flicker Identity Check
-      if (!isSame(notifications, newData)) {
-        setNotifications(newData);
-        cache.current = newData;
+      if (!isSame(notifications, safeData)) {
+        setNotifications(safeData);
+        cache.current = safeData;
       }
     } catch (err) {
       console.error('Fetch notifications error:', err);
@@ -51,7 +52,7 @@ const NotificationScreen = ({ navigation }) => {
       if (cache.current) {
         setNotifications(cache.current);
       } else {
-        setNotifications([]);
+        setNotifications([]); // ✅ Prevent crash
       }
     } finally {
       setLoading(false);
@@ -59,22 +60,22 @@ const NotificationScreen = ({ navigation }) => {
     }
   };
 
-  const getMessage = (type, actorName = 'Someone') => {
-    const name = actorName || 'Someone';
+  // 🧱 PART 4: FRONTEND MESSAGE GENERATION
+  const getMessage = (type) => {
     switch (type) {
-      case 'like':
-      case 'post_like':
-        return `${name} liked your post ❤️`;
-      case 'comment':
-        return `${name} commented on your post 💬`;
-      case 'reply':
-        return `${name} replied to your comment 💬`;
-      case 'comment_like':
-        return `${name} liked your comment ❤️`;
-      case 'follow':
-        return `${name} started following you 👤`;
+      case "like":
+      case "post_like":
+        return "liked your post";
+      case "comment":
+        return "commented on your post";
+      case "reply":
+        return "replied to your comment";
+      case "comment_like":
+        return "liked your comment";
+      case "follow":
+        return "started following you";
       default:
-        return `${name} interacted with your post`;
+        return "interacted with your post";
     }
   };
 

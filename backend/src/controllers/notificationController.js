@@ -4,14 +4,13 @@ import Notification from '../models/Notification.js';
 export const getNotifications = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
-
     if (!userId) return res.status(200).json([]);
 
-    // Backward compatibility filter: handle both 'userId' and legacy 'user'
+    // 🧱 Shared Filter for Backward Compatibility
     const userFilter = {
       $or: [
         { userId: userId },
-        { user: userId }
+        { user: userId } // support for legacy data (old field name)
       ]
     };
 
@@ -20,31 +19,28 @@ export const getNotifications = async (req, res) => {
       .limit(50)
       .lean();
 
-    return res.status(200).json(notifications || []);
+    res.json(notifications || []);
   } catch (error) {
     console.error("Fetch notifications error:", error.message);
-    return res.status(200).json([]); // NEVER crash frontend
+    res.status(200).json([]); // ✅ Safe fallback: NEVER crash frontend
   }
 };
 
-// 🔢 Get Unread Count (Safe & Accurate)
+// 🔢 Get Unread Count (Compatible & Safe)
 export const getUnreadCount = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
-
-    if (!userId) {
-      return res.status(200).json({ count: 0 });
-    }
+    if (!userId) return res.status(200).json({ count: 0 });
 
     const count = await Notification.countDocuments({
       $or: [{ userId }, { user: userId }],
       isRead: false,
     });
 
-    return res.status(200).json({ count: count || 0 });
+    res.json({ count: count || 0 });
   } catch (error) {
     console.error("Unread count error:", error.message);
-    return res.status(200).json({ count: 0 });
+    res.status(200).json({ count: 0 }); // ✅ Safe fallback
   }
 };
 
@@ -58,13 +54,13 @@ export const markAllAsRead = async (req, res) => {
         $or: [{ userId }, { user: userId }], 
         isRead: false 
       },
-      { $set: { isRead: true } }
+      { isRead: true }
     );
 
-    return res.status(200).json({ success: true });
+    res.json({ success: true });
   } catch (error) {
     console.error("Mark all read error:", error.message);
-    return res.status(200).json({ success: false });
+    res.status(200).json({ success: false }); // ✅ Safe fallback
   }
 };
 
@@ -73,7 +69,7 @@ export const markAsRead = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
     const notification = await Notification.findOneAndUpdate(
-      { _id: req.params.id, userId: userId },
+      { _id: req.params.id, $or: [{ userId }, { user: userId }] },
       { isRead: true },
       { new: true }
     );
@@ -85,6 +81,6 @@ export const markAsRead = async (req, res) => {
     return res.status(200).json({ success: true, data: notification });
   } catch (error) {
     console.error("Mark read error:", error.message);
-    return res.status(200).json({ success: false });
+    res.status(200).json({ success: false });
   }
 };
