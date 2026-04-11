@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { Course, CompletedCourse } from '../models/index.js';
-import { createNotification, removeNotification } from '../services/notificationService.js';
+import Notification from '../models/Notification.js';
+import { createNotification } from '../services/notificationService.js';
 import * as feedService from '../services/feedService.js';
 import * as userService from '../services/userService.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';

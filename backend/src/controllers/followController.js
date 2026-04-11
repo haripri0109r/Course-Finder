@@ -6,8 +6,9 @@ export const toggleFollow = async (req, res) => {
     const userId = req.user.id;
     const targetId = req.params.id;
 
-    if (userId === targetId)
+    if (userId === targetId) {
       return res.status(400).json({ message: "Cannot follow yourself" });
+    }
 
     const user = await User.findById(userId);
     const target = await User.findById(targetId);
@@ -38,6 +39,6 @@ export const toggleFollow = async (req, res) => {
     res.json({ success: true, isFollowing: !isFollowing });
   } catch (err) {
     console.error("Toggle follow error:", err);
-    res.status(500).json({ message: "Interaction failed" });
+    res.status(500).json({ message: "Follow action failed" });
   }
 };

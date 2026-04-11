@@ -35,24 +35,21 @@ const NotificationScreen = ({ navigation }) => {
   const fetchNotifications = async () => {
     try {
       if (!cache.current) setLoading(true);
-      
+
       const res = await api.getNotifications();
-      // 🧱 PART 5: FRONTEND SAFETY
       const newData = res.data || [];
       const safeData = Array.isArray(newData) ? newData : (newData.data || []);
 
-      // Zero-Flicker Identity Check
       if (!isSame(notifications, safeData)) {
         setNotifications(safeData);
         cache.current = safeData;
       }
     } catch (err) {
       console.error('Fetch notifications error:', err);
-      // Fallback to cache on network failure
       if (cache.current) {
         setNotifications(cache.current);
       } else {
-        setNotifications([]); // ✅ Prevent crash
+        setNotifications([]);
       }
     } finally {
       setLoading(false);
@@ -60,7 +57,6 @@ const NotificationScreen = ({ navigation }) => {
     }
   };
 
-  // 🧱 PART 4: FRONTEND MESSAGE GENERATION
   const getMessage = (n) => {
     const name = n.actorId?.name || "Someone";
 
@@ -73,7 +69,6 @@ const NotificationScreen = ({ navigation }) => {
   };
 
   const handleMarkAllRead = async () => {
-    // Optimistic UI Update
     const original = [...notifications];
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
 
@@ -86,12 +81,10 @@ const NotificationScreen = ({ navigation }) => {
   };
 
   const handlePress = async (item) => {
-    // Navigate logic (Inferred from presence of postId/commentId)
     if (item.postId) {
       navigation.navigate("PostDetail", { postId: item.postId });
     }
 
-    // Mark single as read
     if (!item.isRead) {
       setNotifications(prev => prev.map(n => n._id === item._id ? { ...n, isRead: true } : n));
       try {
@@ -184,7 +177,7 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.borderLight,
     alignItems: 'center'
   },
-  unreadItem: { backgroundColor: '#F0F7FF' }, // Light blue for unread
+  unreadItem: { backgroundColor: '#F0F7FF' },
   avatarContainer: { marginRight: SPACING.lg },
   avatar: { width: 48, height: 48, borderRadius: 24 },
   avatarPlaceholder: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.secondary, justifyContent: 'center', alignItems: 'center' },

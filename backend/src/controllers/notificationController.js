@@ -1,6 +1,6 @@
 import Notification from '../models/Notification.js';
 
-// 📥 Get Notifications Feed (Bulletproof & Compatible)
+// 📥 Get Notifications
 export const getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ userId: req.user.id })
@@ -8,14 +8,14 @@ export const getNotifications = async (req, res) => {
       .sort({ updatedAt: -1, _id: -1 })
       .lean();
 
-    res.json(notifications);
+    res.json(notifications || []);
   } catch (err) {
-    console.error(err);
-    res.status(500).json([]);
+    console.error("Fetch notifications error:", err);
+    res.json([]);
   }
 };
 
-// 🔢 Get Unread Count (Compatible & Safe)
+// 🔢 Get Unread Count
 export const getUnreadCount = async (req, res) => {
   try {
     const count = await Notification.countDocuments({
@@ -25,12 +25,12 @@ export const getUnreadCount = async (req, res) => {
 
     res.json({ count });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ count: 0 });
+    console.error("Unread count error:", err);
+    res.json({ count: 0 });
   }
 };
 
-// ✅ Mark All as Read (Batch Operation)
+// ✅ Mark All as Read
 export const markAllAsRead = async (req, res) => {
   try {
     await Notification.updateMany(
@@ -39,9 +39,9 @@ export const markAllAsRead = async (req, res) => {
     );
 
     res.json({ success: true });
-  } catch (error) {
-    console.error("Mark all read error:", error.message);
-    res.status(500).json({ success: false });
+  } catch (err) {
+    console.error("Mark all read error:", err);
+    res.json({ success: false });
   }
 };
 
@@ -58,9 +58,9 @@ export const markAsRead = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Not found' });
     }
 
-    return res.status(200).json({ success: true, data: notification });
-  } catch (error) {
-    console.error("Mark read error:", error.message);
-    res.status(500).json({ success: false });
+    res.json({ success: true, data: notification });
+  } catch (err) {
+    console.error("Mark read error:", err);
+    res.json({ success: false });
   }
 };

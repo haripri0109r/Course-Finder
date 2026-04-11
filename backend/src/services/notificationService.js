@@ -1,7 +1,7 @@
 import Notification from '../models/Notification.js';
 
 /**
- * Standardized createNotification with Atomic Upsert (Prevents Duplicates)
+ * Create notification with atomic upsert (prevents duplicates)
  */
 export const createNotification = async ({
   userId,
@@ -10,7 +10,8 @@ export const createNotification = async ({
   postId,
   commentId
 }) => {
-  // ❌ Prevent self notification
+  // Prevent self notification
+  if (!userId || !actorId) return;
   if (userId.toString() === actorId.toString()) return;
 
   try {
@@ -25,21 +26,16 @@ export const createNotification = async ({
 };
 
 /**
- * Cleanup helper to remove notifications when actions are undone (e.g. Unlike)
+ * Remove notification (e.g. on unlike)
  */
 export const removeNotification = async ({ userId, actorId, type, postId, commentId }) => {
   try {
-    const filter = {
-      userId,
-      actorId,
-      type
-    };
-
+    const filter = { userId, actorId, type };
     if (postId) filter.postId = postId;
     if (commentId) filter.commentId = commentId;
 
     await Notification.deleteOne(filter);
-  } catch (error) {
-    console.error('Notification removal error:', error.message);
+  } catch (err) {
+    console.error("Notification removal error:", err);
   }
 };
