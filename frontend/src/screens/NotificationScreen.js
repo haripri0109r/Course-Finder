@@ -61,22 +61,15 @@ const NotificationScreen = ({ navigation }) => {
   };
 
   // 🧱 PART 4: FRONTEND MESSAGE GENERATION
-  const getMessage = (type) => {
-    switch (type) {
-      case "like":
-      case "post_like":
-        return "liked your post";
-      case "comment":
-        return "commented on your post";
-      case "reply":
-        return "replied to your comment";
-      case "comment_like":
-        return "liked your comment";
-      case "follow":
-        return "started following you";
-      default:
-        return "interacted with your post";
-    }
+  const getMessage = (n) => {
+    const name = n.actorId?.name || "Someone";
+
+    if (n.type === "post_like" || n.type === "like") return `${name} liked your post`;
+    if (n.type === "comment") return `${name} commented on your post`;
+    if (n.type === "reply") return `${name} replied to your comment`;
+    if (n.type === "follow") return `${name} started following you`;
+
+    return "New activity";
   };
 
   const handleMarkAllRead = async () => {
@@ -125,7 +118,7 @@ const NotificationScreen = ({ navigation }) => {
       </View>
       <View style={styles.content}>
         <Text style={[styles.message, !item.isRead && styles.unreadMessage]}>
-          {getMessage(item.type, item.actorId?.name)}
+          {getMessage(item)}
         </Text>
         <Text style={styles.time}>{timeAgo(item.createdAt)}</Text>
       </View>

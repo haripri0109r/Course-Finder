@@ -332,14 +332,12 @@ const likeCompletion = async (req, res) => {
     { new: true }
   ).populate('course', 'title image');
 
-  // Trigger Notification
+  // 🔔 Trigger Notification
   await createNotification({
-    recipientId: completion.user,
-    senderId: req.user._id,
-    senderName: req.user.name,
-    type: 'like',
-    relatedPostId: completion._id,
-    postTitle: updated.course?.title,
+    userId: completion.user,
+    actorId: req.user.id,
+    type: 'post_like',
+    postId: completion._id
   });
 
   // Track Interest (Async)
@@ -367,12 +365,12 @@ const unlikeCompletion = async (req, res) => {
     { new: true }
   );
 
-  // 🗑️ Cleanup Notification
-  await removeNotification({
-    recipientId: completion.user,
-    senderId: req.user._id,
-    type: 'post_like',
-    relatedPostId: req.params.id
+  // 🗑️ Cleanup Notification (Anti-Spam)
+  await Notification.deleteOne({
+    userId: completion.user,
+    actorId: req.user.id,
+    postId: req.params.id,
+    type: "post_like"
   });
 
   return res.status(200).json({

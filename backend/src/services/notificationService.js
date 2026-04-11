@@ -3,46 +3,24 @@ import Notification from '../models/Notification.js';
 /**
  * Standardized createNotification with Atomic Upsert (Prevents Duplicates)
  */
-export const createNotification = async ({ 
-  userId, 
-  actorId, 
-  postId, 
-  commentId, 
-  type 
+export const createNotification = async ({
+  userId,
+  actorId,
+  type,
+  postId,
+  commentId
 }) => {
-  // 1. Validation & Self-filtering
-  if (!userId || !actorId || userId.toString() === actorId.toString()) {
-    return null;
-  }
+  // ❌ Prevent self notification
+  if (userId.toString() === actorId.toString()) return;
 
   try {
-    const filter = {
-      userId,
-      actorId,
-      type,
-      ...(postId && { postId }),
-      ...(commentId && { commentId })
-    };
-
-    const update = {
-      userId,
-      actorId,
-      postId,
-      commentId,
-      type,
-      isRead: false
-    };
-
-    const notification = await Notification.findOneAndUpdate(filter, update, {
-      upsert: true,
-      new: true,
-      setDefaultsOnInsert: true
-    });
-
-    return notification;
-  } catch (error) {
-    console.error('Notification creation error:', error.message);
-    return null;
+    await Notification.findOneAndUpdate(
+      { userId, actorId, postId, commentId, type },
+      { isRead: false },
+      { upsert: true, new: true }
+    );
+  } catch (err) {
+    console.error("Notification error:", err);
   }
 };
 

@@ -35,18 +35,18 @@ export const addComment = async (req, res) => {
 
   // 🔔 Trigger Notification
   try {
-    const recipientId = parentId ? (await Comment.findById(parentId)).userId : completion.user;
-    
+    const isReply = !!parentId;
+    const recipientId = isReply ? (await Comment.findById(parentId)).userId : completion.user;
+
     await createNotification({
-      recipientId,
-      senderId: req.user._id,
-      senderName: req.user.name,
-      type: parentId ? 'reply' : 'comment',
-      relatedPostId: postId,
-      postTitle: completion.course?.title || 'Unknown Post',
+      userId: recipientId,
+      actorId: req.user.id,
+      type: isReply ? 'reply' : 'comment',
+      postId: postId,
+      commentId: isReply ? parentId : undefined
     });
   } catch (err) {
-    console.error("Notification failed:", err);
+    console.error("Notification trigger failed:", err);
   }
 
   return res.status(201).json(populated);
@@ -118,26 +118,6 @@ export const toggleLikeComment = async (req, res) => {
     ).populate('userId', 'name profilePicture');
 
     if (!updated) return res.status(404).json({ message: 'Comment not found' });
-
-    // 🔔 Notification Logic
-    const isLiked = updated.likes.includes(userId);
-    if (isLiked) {
-      await createNotification({
-        recipientId: updated.userId._id || updated.userId,
-        senderId: userId,
-        senderName: req.user.name,
-        type: 'comment_like',
-        relatedCommentId: id,
-        relatedPostId: updated.postId
-      });
-    } else {
-      await removeNotification({
-        recipientId: updated.userId._id || updated.userId,
-        senderId: userId,
-        type: 'comment_like',
-        relatedCommentId: id
-      });
-    }
 
     return res.status(200).json(updated);
   } catch (err) {

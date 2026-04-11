@@ -11,6 +11,7 @@ const notificationSchema = new mongoose.Schema(
     actorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
+      required: true,
     },
     postId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -22,7 +23,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['like', 'comment', 'reply', 'comment_like', 'follow', 'post_like'], // Extended to match social interactions
+      enum: ['post_like', 'comment', 'reply', 'follow'],
       required: true,
     },
     isRead: {
