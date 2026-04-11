@@ -93,6 +93,7 @@ api.likeComment = async (id) => {
 
 api.followUser = (id) => api.post(`/auth/follow/${id}`);
 api.unfollowUser = (id) => api.post(`/auth/unfollow/${id}`);
+api.toggleFollow = (id) => api.post(`/follow/${id}`);
 
 api.getSavedCompletions = () => api.get('/bookmarks');
 api.addBookmark = (id) => api.post(`/bookmarks/${id}`);
