@@ -1,0 +1,34 @@
+# ======================
+# Node / Expo
+# ======================
+node_modules/
+.expo/
+.expo-shared/
+
+# ======================
+# Environment
+# ======================
+.env
+
+# ======================
+# Android
+# ======================
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.cxx/
+android/.kotlin/
+.gradle/
+
+# ======================
+# Security
+# ======================
+*.keystore
+*.jks
+
+# ======================
+# Misc
+# ======================
+.DS_Store
+.vscode/

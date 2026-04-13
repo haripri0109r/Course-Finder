@@ -11,7 +11,8 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.anonymous.frontend"
     },
     "plugins": [
       "expo-asset",

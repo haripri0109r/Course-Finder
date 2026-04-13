@@ -334,10 +334,10 @@ const likeCompletion = async (req, res) => {
     { new: true }
   ).populate('course', 'title image');
 
-  // 🔔 Trigger Notification
+  // 🔔 Trigger Notification (only if liker ≠ post owner)
   await createNotification({
-    userId: completion.user,
-    actorId: req.user.id,
+    userId: completion.user.toString(),
+    actorId: req.user._id.toString(),
     type: 'post_like',
     postId: completion._id
   });
@@ -370,8 +370,8 @@ const unlikeCompletion = async (req, res) => {
   // 🗑️ Soft-dismiss notification
   try {
     const rmFilter = {
-      userId: completion.user,
-      actorId: req.user.id,
+      userId: completion.user.toString(),
+      actorId: req.user._id.toString(),
       postId: req.params.id,
       type: "post_like"
     };

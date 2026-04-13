@@ -37,15 +37,23 @@ export const addComment = async (req, res) => {
   // 🔔 Trigger Notification
   try {
     const isReply = !!parentId;
-    const recipientId = isReply ? (await Comment.findById(parentId)).userId : completion.user;
+    let recipientId;
+    if (isReply) {
+      const parentComment = await Comment.findById(parentId);
+      recipientId = parentComment?.userId?.toString();
+    } else {
+      recipientId = completion.user?.toString();
+    }
 
-    await createNotification({
-      userId: recipientId,
-      actorId: req.user.id,
-      type: isReply ? 'reply' : 'comment',
-      postId: postId,
-      commentId: isReply ? parentId : undefined
-    });
+    if (recipientId) {
+      await createNotification({
+        userId: recipientId,
+        actorId: req.user._id.toString(),
+        type: isReply ? 'reply' : 'comment',
+        postId: postId,
+        commentId: isReply ? parentId : undefined
+      });
+    }
   } catch (err) {
     console.error("Notification trigger failed:", err);
   }
@@ -123,8 +131,8 @@ export const toggleLikeComment = async (req, res) => {
     const liked = updated.likes.map(id => id.toString()).includes(userId.toString());
     if (liked) {
       await createNotification({
-        userId: updated.userId._id || updated.userId, // receiver
-        actorId: req.user.id,                         // sender
+        userId: (updated.userId._id || updated.userId).toString(),
+        actorId: req.user._id.toString(),
         type: "comment_like",
         commentId: updated._id,
         postId: updated.postId,

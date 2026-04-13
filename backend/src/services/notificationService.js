@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 
 export const createNotification = async ({
   userId,
@@ -8,50 +9,38 @@ export const createNotification = async ({
   postId,
   commentId
 }) => {
-  if (!userId || !actorId) return;
-  if (type !== 'follow' && !postId && !commentId) return;
-  if (userId.toString() === actorId.toString()) return;
-
-  const safePostId = postId && mongoose.Types.ObjectId.isValid(postId)
-    ? postId
-    : undefined;
-
-  const safeCommentId = commentId && mongoose.Types.ObjectId.isValid(commentId)
-    ? commentId
-    : undefined;
-
-  const filter = {
-    userId,
-    actorId,
-    type,
-    ...(safePostId && { postId: safePostId }),
-    ...(safeCommentId && { commentId: safeCommentId }),
-  };
-
   try {
-    const notification = await Notification.findOneAndUpdate(
-      filter,
-      { ...filter, isRead: false },
-      { upsert: true, new: true }
-    ).populate('actorId', 'name profilePicture');
+    const notification = await Notification.create({
+      userId,
+      actorId,
+      type,
+      postId,
+      commentId
+    });
 
-    // ⚡ Real-time push
-    if (global.io && userId) {
-      global.io.to(userId.toString()).emit("new_notification", notification);
+    const user = await User.findById(actorId).select("name");
 
-      const count = await Notification.countDocuments({
-        userId,
-        isRead: false
+    if (global.io) {
+      global.io.to(userId.toString()).emit("new_notification", {
+        _id: notification._id,
+        actorName: user?.name || "Someone",
+        postId: notification.postId,
+        type: notification.type,
+        createdAt: notification.createdAt
       });
-      global.io.to(userId.toString()).emit("unread_count", count);
     }
   } catch (err) {
-    console.log("Notification upsert error:", err.message);
+    console.error("❌ Notification create error:", err.message);
   }
 };
 
 export const removeNotification = async ({ userId, actorId, type, postId, commentId }) => {
   try {
+    const recipientStr = userId?.toString?.() || '';
+    const actorStr = actorId?.toString?.() || '';
+
+    if (!recipientStr || !actorStr) return;
+
     const safePostId = postId && mongoose.Types.ObjectId.isValid(postId)
       ? postId
       : undefined;
@@ -61,23 +50,24 @@ export const removeNotification = async ({ userId, actorId, type, postId, commen
       : undefined;
 
     const filter = {
-      userId,
-      actorId,
+      userId: recipientStr,
+      actorId: actorStr,
       type,
       ...(safePostId && { postId: safePostId }),
       ...(safeCommentId && { commentId: safeCommentId }),
     };
 
     await Notification.deleteOne(filter);
+    console.log(`🗑️ NOTIF REMOVED: type=${type} | actor=${actorStr} → recipient=${recipientStr}`);
 
-    if (global.io && userId) {
+    if (global.io && recipientStr) {
       const count = await Notification.countDocuments({
-        userId,
+        userId: recipientStr,
         isRead: false
       });
-      global.io.to(userId.toString()).emit("unread_count", count);
+      global.io.to(recipientStr).emit("unread_count", count);
     }
   } catch (err) {
-    console.log("Notification removal error:", err.message);
+    console.error("❌ Notification removal error:", err.message);
   }
 };

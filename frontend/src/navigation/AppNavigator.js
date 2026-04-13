@@ -96,13 +96,15 @@ const TabNavigator = () => {
   );
 };
 
+import { navigationRef } from './navigationRef';
+
 export default function AppNavigator() {
   const { user, isLoading } = useContext(AuthContext);
 
   if (isLoading) return null;
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
           <>

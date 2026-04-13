@@ -7,9 +7,29 @@ import AppNavigator from './src/navigation/AppNavigator';
 import { NotificationProvider } from './src/context/NotificationContext';
 import Toast from './src/components/Toast';
 import { COLORS, SPACING, FONTS } from './src/utils/theme';
+import * as Notifications from 'expo-notifications';
+import { navigationRef } from './src/navigation/navigationRef';
 
 export default function App() {
   const { isConnected } = useNetInfo();
+
+  React.useEffect(() => {
+    const requestPermission = async () => {
+      const { status } = await Notifications.requestPermissionsAsync();
+      console.log("Permission:", status);
+    };
+
+    requestPermission();
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const postId = response.notification.request.content.data?.postId;
+      if (postId) {
+        navigationRef.current?.navigate("PostDetail", { postId });
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   return (
     <SafeAreaProvider>
@@ -21,8 +41,8 @@ export default function App() {
             <Text style={styles.offlineText}>📡 No Internet Connection</Text>
           </View>
         )}
-          <Toast />
         </NotificationProvider>
+        <Toast />
       </AuthProvider>
     </SafeAreaProvider>
   );

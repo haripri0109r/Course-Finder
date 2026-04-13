@@ -1,6 +1,6 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, RADIUS, SPACING, SHADOW } from '../utils/theme';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Text, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { COLORS, RADIUS, SPACING, SHADOW, FONTS } from '../utils/theme';
 
 let toastRef = null;
 
@@ -8,31 +8,46 @@ export function setToastRef(ref) {
   toastRef = ref;
 }
 
-export function showToast(message, type = 'success', duration = 2500) {
-  if (toastRef) toastRef.show(message, type, duration);
-}
+export const showToast = (data) => {
+  if (!toastRef) {
+    console.log("⚠️ Toast not ready yet");
+    return;
+  }
+  toastRef.show(data);
+};
 
 export default function Toast() {
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const [visible, setVisible] = React.useState(false);
-  const [text, setText] = React.useState('');
-  const [toastType, setToastType] = React.useState('success');
+  const [visible, setVisible] = useState(false);
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [toastType, setToastType] = useState('info');
   const timer = useRef(null);
 
-  const show = (message, type = 'success', duration = 2500) => {
-    setText(message);
-    setToastType(type);
-    setVisible(true);
+  useEffect(() => {
+    console.log("✅ Toast mounted");
+    
+    setToastRef({
+      show: (data) => {
+        setTitle(data.title || '');
+        setMessage(data.message || '');
+        setToastType(data.type || 'info');
+        setVisible(true);
+        
+        Animated.parallel([
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
+          Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        ]).start();
 
-    Animated.parallel([
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-    ]).start();
+        if (timer.current) clearTimeout(timer.current);
+        const duration = data.duration || 3000;
+        timer.current = setTimeout(() => hide(), duration);
+      }
+    });
 
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => hide(), duration);
-  };
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, []);
 
   const hide = () => {
     Animated.parallel([
@@ -40,11 +55,6 @@ export default function Toast() {
       Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
     ]).start(() => setVisible(false));
   };
-
-  useEffect(() => {
-    setToastRef({ show });
-    return () => { if (timer.current) clearTimeout(timer.current); };
-  }, []);
 
   const bg = {
     success: COLORS.secondary,
@@ -62,7 +72,10 @@ export default function Toast() {
         { backgroundColor: bg[toastType] || bg.info, transform: [{ translateY }], opacity },
       ]}
     >
-      <Text style={styles.text}>{text}</Text>
+      <View style={styles.textContainer}>
+        {title ? <Text style={styles.title}>{title}</Text> : null}
+        <Text style={styles.message}>{message}</Text>
+      </View>
       <TouchableOpacity onPress={hide} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={styles.dismiss}>✕</Text>
       </TouchableOpacity>
@@ -85,6 +98,20 @@ const styles = StyleSheet.create({
     zIndex: 9999,
     ...SHADOW.md,
   },
-  text: { color: '#fff', fontWeight: '700', fontSize: 14, flex: 1, marginRight: SPACING.sm },
+  textContainer: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  title: {
+    color: '#fff', 
+    fontWeight: '800', 
+    fontSize: 15,
+    marginBottom: 2,
+  },
+  message: { 
+    color: '#fff', 
+    fontWeight: '500', 
+    fontSize: 13,
+  },
   dismiss: { color: '#fff', fontSize: 16, fontWeight: '900', opacity: 0.8 },
 });

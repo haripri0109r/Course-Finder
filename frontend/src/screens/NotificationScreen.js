@@ -32,7 +32,7 @@ const NotificationScreen = ({ navigation }) => {
   };
 
   const getMessage = (item) => {
-    const name = item.actorId?.name || "Someone";
+    const name = item.actorName || item.actorId?.name || "Someone";
 
     switch (item.type) {
       case "post_like":
@@ -72,7 +72,7 @@ const NotificationScreen = ({ navigation }) => {
           <SafeImage source={{ uri: item.actorId.profilePicture }} style={styles.avatar} />
         ) : (
           <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>{(item.actorId?.name || 'U')[0].toUpperCase()}</Text>
+            <Text style={styles.avatarText}>{(item.actorName || item.actorId?.name || 'U')[0].toUpperCase()}</Text>
           </View>
         )}
       </View>
