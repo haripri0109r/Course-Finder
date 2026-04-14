@@ -12,7 +12,8 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.frontend"
+      "package": "com.anonymous.frontend",
+      "googleServicesFile": "./google-services.json"
     },
     "plugins": [
       "expo-asset",
