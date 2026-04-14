@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { Platform, Button, View, AppState } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications'; // 🔥 FIX 5: SYSTEM NOTIF
+import { navigationRef } from '../navigation/navigationRef';
 import Constants from 'expo-constants';
 import { AuthContext } from "./AuthContext"; 
 import { showToast } from "../components/Toast";
@@ -139,6 +140,47 @@ export const NotificationProvider = ({ children }) => {
       socket.off("unread_count");
       socket.off("notification_removed");
     };
+  }, []);
+
+  // --- 🔥 DEEP LINKING: NAVIGATION HANDLER ---
+  const handleNavigation = (data) => {
+    if (!data) return;
+
+    if (data.type === "like" || data.type === "post_like" || data.type === "comment" || data.type === "reply") {
+      navigationRef.navigate("PostDetail", {
+        postId: data.postId,
+      });
+    }
+
+    if (data.type === "follow") {
+      navigationRef.navigate("UserProfile", {
+        userId: data.actorId,
+      });
+    }
+  };
+
+  // --- 🔥 DEEP LINKING: HANDLE CLICK (BACKGROUND/FOREGROUND) ---
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      console.log("📩 Notification clicked:", data);
+      handleNavigation(data);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  // --- 🔥 DEEP LINKING: HANDLE COLD START (KILLED APP) ---
+  useEffect(() => {
+    const checkInitialNotification = async () => {
+      const response = await Notifications.getLastNotificationResponseAsync();
+      if (response) {
+        const data = response.notification.request.content.data;
+        console.log("🚀 Opened from notification (Cold Start):", data);
+        handleNavigation(data);
+      }
+    };
+    checkInitialNotification();
   }, []);
 
   // --- AUDIO RE-SYNC ON APP ACTIVE ---

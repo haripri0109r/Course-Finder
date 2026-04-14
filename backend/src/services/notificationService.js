@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 
-const sendPushNotification = async (expoPushToken, title, message) => {
+const sendPushNotification = async (expoPushToken, title, message, dataPayload) => {
   try {
     const response = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
@@ -16,6 +16,8 @@ const sendPushNotification = async (expoPushToken, title, message) => {
         sound: "default",
         title: title,
         body: message,
+        android: { channelId: "default" },
+        data: dataPayload
       }),
     });
 
@@ -67,7 +69,12 @@ export const createNotification = async ({
       sendPushNotification(
         recipient.expoPushToken,
         user?.name ? `New from ${user.name}` : 'Course Finder',
-        bodyText
+        bodyText,
+        {
+          type,
+          postId,
+          actorId
+        }
       );
     }
   } catch (err) {
