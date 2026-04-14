@@ -51,11 +51,47 @@ export const NotificationProvider = ({ children }) => {
   useEffect(() => {
     if (user?._id) {
       fetchNotifications();
+      registerForPushNotificationsAsync();
     } else {
       setNotifications([]);
       setUnreadCount(0);
     }
   }, [user?._id, fetchNotifications]);
+
+  // --- 🔥 FIX 1 & 2: GENERATE EXPO PUSH TOKEN OVER-THE-AIR ---
+  const registerForPushNotificationsAsync = async () => {
+    let token;
+    
+    try {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      console.log("DEBUG: Push Permission status:", finalStatus);
+      if (finalStatus !== 'granted') {
+        console.log("DEBUG: Failed to get push token for push notification!");
+        return;
+      }
+
+      // Important: Project ID required for EAS build if app.json missing it.
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: "your-project-id" // ensure app.json has expo.extra.eas.projectId inside EAS configs if necessary
+      });
+      token = tokenData.data;
+      console.log("DEBUG: EXPO PUSH TOKEN ->", token);
+
+      if (user?._id && token) {
+        console.log("DEBUG: Sending EXPO TOKEN to backend for user", user._id);
+        await api.savePushToken(token);
+      }
+    } catch (e) {
+      console.log("DEBUG: Push Token Generation Error ->", e);
+    }
+  };
 
   // --- REGISTER USER TO SOCKET ---
   useEffect(() => {

@@ -19,6 +19,7 @@ export const createNotification = async ({
     });
 
     const user = await User.findById(actorId).select("name");
+    const recipient = await User.findById(userId).select("expoPushToken");
 
     if (global.io) {
       global.io.to(userId.toString()).emit("new_notification", {
@@ -28,6 +29,35 @@ export const createNotification = async ({
         type: notification.type,
         createdAt: notification.createdAt
       });
+    }
+
+    // --- NEW: Send Expo Push Notification ---
+    if (recipient && recipient.expoPushToken) {
+      let bodyText = "New activity detected";
+      if (type === "follow") bodyText = `${user?.name || "Someone"} started following you.`;
+      else if (type === "like" || type === "post_like") bodyText = `${user?.name || "Someone"} liked your post.`;
+      else if (type === "comment") bodyText = `${user?.name || "Someone"} commented on your post.`;
+
+      try {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Accept-encoding': 'gzip, deflate',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: recipient.expoPushToken,
+            title: user?.name ? `New from ${user.name}` : 'Course Finder',
+            body: bodyText,
+            sound: 'default',
+            data: { postId, type, actorId },
+          }),
+        });
+        console.log(`✅ Expo push sent to ${recipient.expoPushToken}`);
+      } catch (pushErr) {
+        console.error("❌ Expo push API error:", pushErr.message);
+      }
     }
   } catch (err) {
     console.error("❌ Notification create error:", err.message);

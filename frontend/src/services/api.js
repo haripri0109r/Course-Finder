@@ -104,4 +104,6 @@ api.getUnreadCount = () => api.get('/notifications/unread-count');
 api.markAllAsRead = () => api.post('/notifications/mark-all-read');
 api.markAsRead = (id) => api.patch(`/notifications/${id}/read`);
 
+api.savePushToken = (pushToken) => api.put('/auth/push-token', { pushToken });
+
 export default api;

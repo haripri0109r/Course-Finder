@@ -148,4 +148,21 @@ const getUserProfile = async (req, res) => {
   });
 };
 
-export { registerUser, loginUser, getMe, getUserProfile };
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   PUT /api/auth/push-token
+// @access  Private (requires valid JWT)
+// ─────────────────────────────────────────────────────────────────────────────
+const savePushToken = async (req, res) => {
+  const { pushToken } = req.body;
+  const userId = req.user._id;
+
+  if (!pushToken) {
+    return res.status(400).json({ success: false, message: 'Push token is required' });
+  }
+
+  await User.findByIdAndUpdate(userId, { expoPushToken: pushToken });
+
+  return res.status(200).json({ success: true, message: 'Push token updated successfully' });
+};
+
+export { registerUser, loginUser, getMe, getUserProfile, savePushToken };

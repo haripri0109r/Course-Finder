@@ -65,6 +65,10 @@ const userSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    expoPushToken: {
+      type: String,
+      default: '',
+    },
   },
   {
     timestamps: true, // adds createdAt and updatedAt automatically
