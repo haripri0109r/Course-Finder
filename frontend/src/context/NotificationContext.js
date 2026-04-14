@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { Platform, Button, View, AppState } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications'; // 🔥 FIX 5: SYSTEM NOTIF
+import Constants from 'expo-constants';
 import { AuthContext } from "./AuthContext"; 
 import { showToast } from "../components/Toast";
 import socket from '../services/socket'; 
@@ -78,8 +79,9 @@ export const NotificationProvider = ({ children }) => {
       }
 
       // Important: Project ID required for EAS build if app.json missing it.
+      const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: "your-project-id" // ensure app.json has expo.extra.eas.projectId inside EAS configs if necessary
+        projectId: projectId
       });
       token = tokenData.data;
       console.log("DEBUG: EXPO PUSH TOKEN ->", token);
