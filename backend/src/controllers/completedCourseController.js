@@ -335,6 +335,7 @@ const likeCompletion = async (req, res) => {
   ).populate('course', 'title image');
 
   // 🔔 Trigger Notification (only if liker ≠ post owner)
+  console.log("🔥 NOTIFICATION TRIGGERED: post_like");
   await createNotification({
     userId: completion.user.toString(),
     actorId: req.user._id.toString(),

@@ -64,6 +64,29 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/comments', commentRoutes);
 app.use('/api/v1/follow', followRoutes);
 
+// ─── FORCE TEST PUSH ROUTE ───────────────────────────────────────────────────
+app.get('/test-push', async (req, res) => {
+  // Replace with the token printed in frontend logs just before visiting this URL
+  const token = "ExponentPushToken[PASTE_YOUR_TOKEN]";
+
+  await fetch("https://exp.host/--/api/v2/push/send", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      to: token,
+      sound: "default",
+      title: "TEST 🔥",
+      body: "If you see this → backend works",
+    }),
+  });
+
+  console.log("TEST PUSH SENT");
+  res.send("Push sent. Check terminal logs or device.");
+});
+
 // ─── 404 Handler (JSON for consistency) ──────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({

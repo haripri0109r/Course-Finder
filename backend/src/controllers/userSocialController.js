@@ -37,6 +37,7 @@ const followUser = async (req, res) => {
     await User.findByIdAndUpdate(userId, { $addToSet: { following: targetId } });
     await User.findByIdAndUpdate(targetId, { $addToSet: { followers: userId } });
 
+    console.log("🔥 NOTIFICATION TRIGGERED: follow");
     await createNotification({
       userId: targetId.toString(),
       actorId: userId.toString(),

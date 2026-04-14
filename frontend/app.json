@@ -18,6 +18,12 @@
     "plugins": [
       "expo-asset",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "680cf8eb-ea0a-4ec6-9558-09681ea30947"
+      }
+    },
+    "owner": "haripri0109"
   }
 }

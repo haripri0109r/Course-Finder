@@ -8,6 +8,14 @@ import { showToast } from "../components/Toast";
 import socket from '../services/socket'; 
 import api from '../services/api';
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 export const NotificationContext = createContext();
 
 export const NotificationProvider = ({ children }) => {
