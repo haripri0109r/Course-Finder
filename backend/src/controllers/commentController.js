@@ -46,6 +46,7 @@ export const addComment = async (req, res) => {
     }
 
     if (recipientId) {
+      console.log(`🔥 NOTIFICATION TRIGGERED: ${isReply ? 'reply' : 'comment'}`);
       await createNotification({
         userId: recipientId,
         actorId: req.user._id.toString(),
@@ -130,6 +131,7 @@ export const toggleLikeComment = async (req, res) => {
 
     const liked = updated.likes.map(id => id.toString()).includes(userId.toString());
     if (liked) {
+      console.log("🔥 NOTIFICATION TRIGGERED: comment_like");
       await createNotification({
         userId: (updated.userId._id || updated.userId).toString(),
         actorId: req.user._id.toString(),

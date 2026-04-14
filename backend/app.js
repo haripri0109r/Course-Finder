@@ -65,11 +65,12 @@ app.use('/api/v1/comments', commentRoutes);
 app.use('/api/v1/follow', followRoutes);
 
 // ─── FORCE TEST PUSH ROUTE ───────────────────────────────────────────────────
-app.get('/test-push', async (req, res) => {
-  // Replace with the token printed in frontend logs just before visiting this URL
-  const token = "ExponentPushToken[PASTE_YOUR_TOKEN]";
+app.get("/test-push", async (req, res) => {
+  const token = "ExponentPushToken[45cRA0H4tpZz847ORmFpKB]";
 
-  await fetch("https://exp.host/--/api/v2/push/send", {
+  console.log("🔥 TEST PUSH TRIGGERED");
+
+  const response = await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -83,8 +84,10 @@ app.get('/test-push', async (req, res) => {
     }),
   });
 
-  console.log("TEST PUSH SENT");
-  res.send("Push sent. Check terminal logs or device.");
+  const data = await response.json();
+  console.log("EXPO RESPONSE:", data);
+
+  res.send(data);
 });
 
 // ─── 404 Handler (JSON for consistency) ──────────────────────────────────────
