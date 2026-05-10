@@ -24,6 +24,18 @@ const sendPushNotification = async (expoPushToken, title, message, dataPayload) 
     const data = await response.json();
     console.log("EXPO RESPONSE:", data);
 
+    // Self-healing: remove dead tokens that Expo has confirmed are invalid
+    if (
+      data?.data?.status === "error" &&
+      data?.data?.details?.error === "DeviceNotRegistered"
+    ) {
+      console.log("🗑️ Removing dead Expo token:", expoPushToken);
+      await User.updateMany(
+        { expoPushTokens: expoPushToken },
+        { $pull: { expoPushTokens: expoPushToken } }
+      );
+    }
+
   } catch (error) {
     console.log("PUSH ERROR:", error);
   }
