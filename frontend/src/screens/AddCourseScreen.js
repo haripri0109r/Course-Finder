@@ -43,6 +43,7 @@ export default function AddCourseScreen({ navigation }) {
   const [metadataError, setMetadataError] = useState('');
   const [metadataManualMode, setMetadataManualMode] = useState(false);
   const [metadataFetched, setMetadataFetched] = useState(false);
+  const [generatedFallback, setGeneratedFallback] = useState(false);
   const [errors, setErrors] = useState({});
 
   const nextStep = () => {
@@ -85,11 +86,12 @@ export default function AddCourseScreen({ navigation }) {
       setIsFetchingMetadata(true);
       setMetadataError('');
       setMetadataManualMode(false);
+      setGeneratedFallback(false);
       const res = await api.fetchMetadata(url);
       const metadata = res.data?.metadata || res.data?.data || null;
 
       if (res.data?.success && metadata) {
-        const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b, description: desc, publisher: pub, logo: lg } = metadata;
+        const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b, description: desc, publisher: pub, logo: lg, generatedFallback: isGenerated } = metadata;
         if (t) setTitle(t);
         if (thumbnail) setImage(thumbnail);
         if (a) setAuthor(a);
@@ -99,6 +101,7 @@ export default function AddCourseScreen({ navigation }) {
         if (lg) setLogo(lg);
         setProviderBadge(b || '');
         setPlatform(mapPlatformToDisplay(p, b));
+        setGeneratedFallback(isGenerated || false);
         setMetadataFetched(true);
         showToast({ message: 'Course details fetched.', type: 'success' });
         return;
@@ -133,6 +136,7 @@ export default function AddCourseScreen({ navigation }) {
     setMetadataError('');
     setMetadataManualMode(false);
     setMetadataFetched(false);
+    setGeneratedFallback(false);
   }, [url]);
 
   const handlePickCertificate = async () => {
@@ -269,6 +273,7 @@ export default function AddCourseScreen({ navigation }) {
                     <Text style={styles.previewSub}>{duration || 'Duration not available'}</Text>
                   <View style={styles.previewBadgeRow}>
                     <Text style={styles.previewBadge}>{providerBadge || platform || 'Other'}</Text>
+                    {generatedFallback && <Text style={[styles.previewBadge, { backgroundColor: '#F59E0B' }]}>Auto-generated from URL</Text>}
                   </View>
                 </View>
               </View>

@@ -200,7 +200,7 @@ const isUsefulMetadata = (metadata = {}) => {
   return Boolean(title && title !== 'Untitled Course') || Boolean(description) || Boolean(thumbnail) || Boolean(author) || Boolean(publisher);
 };
 
-const buildSuccessResponse = (metadata, platform, sourceUrl) => {
+const buildSuccessResponse = (metadata, platform, sourceUrl, generatedFallback = false) => {
   const normalized = normalizeShape(metadata, platform, sourceUrl);
   return {
     success: true,
@@ -213,8 +213,9 @@ const buildSuccessResponse = (metadata, platform, sourceUrl) => {
       logo: normalized.logo,
       sourceUrl: normalized.sourceUrl,
       platform: normalized.platform,
+      generatedFallback,
     },
-    data: normalized,
+    data: { ...normalized, generatedFallback },
   };
 };
 
@@ -223,6 +224,98 @@ const buildFailureResponse = (reason = 'metadata_unavailable') => ({
   manualEntry: true,
   reason,
 });
+
+// Tech term mapping for intelligent slug-to-title conversion
+// Longer, more specific terms should be listed first to prevent partial matches
+const TECH_TERM_MAP = {
+  javascript: 'JavaScript',
+  typescript: 'TypeScript',
+  nodejs: 'Node.js',
+  'node-js': 'Node.js',
+  mongodb: 'MongoDB',
+  graphql: 'GraphQL',
+  'machine-learning': 'Machine Learning',
+  'deep-learning': 'Deep Learning',
+  js: 'JavaScript',
+  ts: 'TypeScript',
+  react: 'React',
+  node: 'Node.js',
+  python: 'Python',
+  sql: 'SQL',
+  aws: 'AWS',
+  html: 'HTML',
+  css: 'CSS',
+  php: 'PHP',
+  java: 'Java',
+  cpp: 'C++',
+  csharp: 'C#',
+  go: 'Go',
+  rust: 'Rust',
+  swift: 'Swift',
+  kotlin: 'Kotlin',
+  ruby: 'Ruby',
+  vue: 'Vue',
+  angular: 'Angular',
+  docker: 'Docker',
+  kubernetes: 'Kubernetes',
+  rest: 'REST',
+  api: 'API',
+  ai: 'AI',
+  ml: 'Machine Learning',
+  dl: 'Deep Learning',
+  nlp: 'NLP',
+};
+
+const extractUdemySlug = (url = '') => {
+  try {
+    const parsed = new URL(String(url));
+    const path = parsed.pathname.toLowerCase();
+    // Format: /course/course-name/ or /course/course-name
+    const match = path.match(/^\/course\/([a-z0-9\-]+)/);
+    return match?.[1] || '';
+  } catch {
+    return '';
+  }
+};
+
+const generateTitleFromSlug = (slug = '') => {
+  if (!slug) return '';
+  
+  // Split by hyphen and process each word
+  const words = slug.split('-').filter(Boolean);
+  
+  const titleWords = [];
+  let i = 0;
+  
+  while (i < words.length) {
+    let foundTerm = false;
+    
+    // Try to find matching tech terms (greedy: check combinations first)
+    for (let len = Math.min(3, words.length - i); len >= 1; len--) {
+      if (i + len <= words.length) {
+        const candidate = words.slice(i, i + len).join('-').toLowerCase();
+        if (TECH_TERM_MAP[candidate]) {
+          titleWords.push(TECH_TERM_MAP[candidate]);
+          i += len;
+          foundTerm = true;
+          break;
+        }
+      }
+    }
+    
+    if (!foundTerm) {
+      // Not a tech term, capitalize normally
+      titleWords.push(words[i].charAt(0).toUpperCase() + words[i].slice(1));
+      i++;
+    }
+  }
+  
+  return titleWords.join(' ');
+};
+
+const getDefaultUdemyThumbnail = () => {
+  return 'https://www.udemy.com/staticx/udemy/images/v4/default-meta-image.png';
+};
 
 const isLikelyEncodedToken = (title = '') => {
   const value = asText(title);
@@ -609,6 +702,44 @@ export const getMetadata = async (inputUrl) => {
       }
 
       if (enrichment?.invalidUdemyCourse) {
+        // For Udemy course URLs, generate smart fallback from slug instead of failing
+        if (isUdemyCourseUrl(finalUrl)) {
+          const slug = extractUdemySlug(finalUrl);
+          if (slug) {
+            const generatedTitle = generateTitleFromSlug(slug);
+            if (generatedTitle) {
+              const fallbackMetadata = {
+                title: generatedTitle,
+                thumbnail: getDefaultUdemyThumbnail(),
+                author: 'Udemy Instructor',
+                duration: '',
+                description: '',
+                publisher: 'Udemy',
+              };
+              const normalized = normalizeShape(fallbackMetadata, platform, finalUrl);
+              await MetadataCache.findOneAndUpdate(
+                { url: finalUrl },
+                {
+                  url: finalUrl,
+                  title: normalized.title,
+                  image: normalized.thumbnail,
+                  thumbnail: normalized.thumbnail,
+                  author: normalized.author,
+                  duration: normalized.duration,
+                  provider: normalized.providerBadge,
+                  platform: normalized.platform,
+                  sourceUrl: normalized.sourceUrl,
+                  description: normalized.description || '',
+                  publisher: normalized.publisher || '',
+                  logo: normalized.logo || '',
+                  cachedAt: Date.now(),
+                },
+                { upsert: true, new: true }
+              );
+              return buildSuccessResponse(fallbackMetadata, platform, finalUrl, true);
+            }
+          }
+        }
         return buildFailureResponse('invalid_udemy_course');
       }
 
@@ -620,6 +751,48 @@ export const getMetadata = async (inputUrl) => {
       const merged = mergePrefer({}, enrichment);
 
       const normalized = normalizeShape(merged, platform, finalUrl);
+
+      // For Udemy, check if we got generic metadata and generate fallback instead
+      if (platform === 'udemy' && isUdemyCourseUrl(finalUrl)) {
+        const titleIsGeneric = isGenericUdemyTitle(normalized.title) || normalized.title === 'Untitled Course';
+        if (titleIsGeneric) {
+          const slug = extractUdemySlug(finalUrl);
+          if (slug) {
+            const generatedTitle = generateTitleFromSlug(slug);
+            if (generatedTitle && generatedTitle !== 'Untitled Course') {
+              const fallbackMetadata = {
+                title: generatedTitle,
+                thumbnail: getDefaultUdemyThumbnail(),
+                author: 'Udemy Instructor',
+                duration: '',
+                description: '',
+                publisher: 'Udemy',
+              };
+              const normalized = normalizeShape(fallbackMetadata, platform, finalUrl);
+              await MetadataCache.findOneAndUpdate(
+                { url: finalUrl },
+                {
+                  url: finalUrl,
+                  title: normalized.title,
+                  image: normalized.thumbnail,
+                  thumbnail: normalized.thumbnail,
+                  author: normalized.author,
+                  duration: normalized.duration,
+                  provider: normalized.providerBadge,
+                  platform: normalized.platform,
+                  sourceUrl: normalized.sourceUrl,
+                  description: normalized.description || '',
+                  publisher: normalized.publisher || '',
+                  logo: normalized.logo || '',
+                  cachedAt: Date.now(),
+                },
+                { upsert: true, new: true }
+              );
+              return buildSuccessResponse(fallbackMetadata, platform, finalUrl, true);
+            }
+          }
+        }
+      }
 
       // Determine if result is useful: at least title or thumbnail or description
       const hasUseful = (normalized.title && normalized.title !== 'Untitled Course') || normalized.thumbnail || normalized.description;
