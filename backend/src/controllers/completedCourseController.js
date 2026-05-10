@@ -335,13 +335,24 @@ const likeCompletion = async (req, res) => {
   ).populate('course', 'title image');
 
   // 🔔 Trigger Notification (only if liker ≠ post owner)
-  console.log("🔥 NOTIFICATION TRIGGERED: post_like");
-  await createNotification({
-    userId: completion.user.toString(),
-    actorId: req.user._id.toString(),
-    type: 'post_like',
-    postId: completion._id
-  });
+  const likeRecipient = completion.user.toString();
+  const likeActor = req.user._id.toString();
+  console.log("🔔 LIKE NOTIFICATION DEBUG:");
+  console.log("  ACTOR:", likeActor);
+  console.log("  RECIPIENT:", likeRecipient);
+  console.log("  TYPE: post_like");
+
+  if (likeRecipient !== likeActor) {
+    console.log("🔥 NOTIFICATION TRIGGERED: post_like");
+    await createNotification({
+      userId: likeRecipient,
+      actorId: likeActor,
+      type: 'post_like',
+      postId: completion._id
+    });
+  } else {
+    console.log("⏭️ Skipped: self-like notification");
+  }
 
   // Track Interest (Async)
   if (updated.course?.tags) {

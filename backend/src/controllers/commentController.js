@@ -37,7 +37,9 @@ export const addComment = async (req, res) => {
   // 🔔 Trigger Notification
   try {
     const isReply = !!parentId;
+    const actorId = req.user._id.toString();
     let recipientId;
+
     if (isReply) {
       const parentComment = await Comment.findById(parentId);
       recipientId = parentComment?.userId?.toString();
@@ -45,15 +47,24 @@ export const addComment = async (req, res) => {
       recipientId = completion.user?.toString();
     }
 
-    if (recipientId) {
+    console.log("🔔 COMMENT NOTIFICATION DEBUG:");
+    console.log("  ACTOR:", actorId);
+    console.log("  RECIPIENT:", recipientId);
+    console.log("  TYPE:", isReply ? 'reply' : 'comment');
+    console.log("  POST OWNER:", completion.user?.toString());
+
+    // Prevent self-notification
+    if (recipientId && recipientId !== actorId) {
       console.log(`🔥 NOTIFICATION TRIGGERED: ${isReply ? 'reply' : 'comment'}`);
       await createNotification({
         userId: recipientId,
-        actorId: req.user._id.toString(),
+        actorId: actorId,
         type: isReply ? 'reply' : 'comment',
         postId: postId,
         commentId: isReply ? parentId : undefined
       });
+    } else {
+      console.log("⏭️ Skipped: self-notification or missing recipient");
     }
   } catch (err) {
     console.error("Notification trigger failed:", err);
@@ -131,14 +142,25 @@ export const toggleLikeComment = async (req, res) => {
 
     const liked = updated.likes.map(id => id.toString()).includes(userId.toString());
     if (liked) {
-      console.log("🔥 NOTIFICATION TRIGGERED: comment_like");
-      await createNotification({
-        userId: (updated.userId._id || updated.userId).toString(),
-        actorId: req.user._id.toString(),
-        type: "comment_like",
-        commentId: updated._id,
-        postId: updated.postId,
-      });
+      const commentLikeRecipient = (updated.userId._id || updated.userId).toString();
+      const commentLikeActor = req.user._id.toString();
+      console.log("🔔 COMMENT_LIKE NOTIFICATION DEBUG:");
+      console.log("  ACTOR:", commentLikeActor);
+      console.log("  RECIPIENT:", commentLikeRecipient);
+      console.log("  TYPE: comment_like");
+
+      if (commentLikeRecipient !== commentLikeActor) {
+        console.log("🔥 NOTIFICATION TRIGGERED: comment_like");
+        await createNotification({
+          userId: commentLikeRecipient,
+          actorId: commentLikeActor,
+          type: "comment_like",
+          commentId: updated._id,
+          postId: updated.postId,
+        });
+      } else {
+        console.log("⏭️ Skipped: self comment-like notification");
+      }
     } else {
       const filter = {
         userId: updated.userId._id || updated.userId,
