@@ -23,6 +23,8 @@ export default function AddCourseScreen({ navigation }) {
   const [url, setUrl] = useState('');
   const [author, setAuthor] = useState('');
   const [providerBadge, setProviderBadge] = useState('');
+  const [publisher, setPublisher] = useState('');
+  const [logo, setLogo] = useState('');
   const [rating, setRating] = useState('');
   const [review, setReview] = useState('');
   const [image, setImage] = useState('');
@@ -86,11 +88,14 @@ export default function AddCourseScreen({ navigation }) {
       const res = await api.fetchMetadata(url);
 
       if (res.data?.success && res.data?.data) {
-        const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b } = res.data.data;
+        const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b, description: desc, publisher: pub, logo: lg } = res.data.data;
         if (t) setTitle(t);
         if (thumbnail) setImage(thumbnail);
         if (a) setAuthor(a);
         if (d) setDuration(d);
+        if (desc) setDescription(desc);
+        if (pub) setPublisher(pub);
+        if (lg) setLogo(lg);
         setProviderBadge(b || '');
         setPlatform(mapPlatformToDisplay(p, b));
         setMetadataFetched(true);
@@ -250,8 +255,9 @@ export default function AddCourseScreen({ navigation }) {
                 {!!image && <Image source={{ uri: image }} style={styles.previewThumb} />}
                 <View style={styles.previewMeta}>
                   <Text style={styles.previewTitle} numberOfLines={2}>{title || 'Untitled Course'}</Text>
-                  {!!author && <Text style={styles.previewSub}>{author}</Text>}
-                  <Text style={styles.previewSub}>{duration || 'Duration not available'}</Text>
+                    {!!author && <Text style={styles.previewSub}>{author}</Text>}
+                    {!!publisher && <Text style={styles.previewSub}>{publisher}</Text>}
+                    <Text style={styles.previewSub}>{duration || 'Duration not available'}</Text>
                   <View style={styles.previewBadgeRow}>
                     <Text style={styles.previewBadge}>{providerBadge || platform || 'Other'}</Text>
                   </View>
