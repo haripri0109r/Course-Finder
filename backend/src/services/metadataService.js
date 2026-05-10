@@ -160,6 +160,36 @@ const normalizeShape = (data = {}, platform = 'other', sourceUrl = '') => {
 
 const isUdemyShareUrl = (url = '') => String(url).toLowerCase().includes('udemy.com/share/');
 
+const isUdemyCourseUrl = (url = '') => {
+  try {
+    const parsed = new URL(String(url));
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    return host.includes('udemy.com') && path.startsWith('/course/');
+  } catch {
+    return false;
+  }
+};
+
+const isGenericUdemyTitle = (title = '') => {
+  const normalized = asText(title).toLowerCase();
+  if (!normalized) return true;
+
+  if (normalized.includes('online courses') || normalized.includes('learn anything')) {
+    return true;
+  }
+
+  const stripped = normalized
+    .replace(/[|\-:]/g, ' ')
+    .replace(/\budemy\b/g, ' ')
+    .replace(/\bonline\b|\bcourses\b|\blearn\b|\banything\b|\bhome\b|\bpage\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // If nothing meaningful remains, treat this as a generic Udemy title.
+  return stripped.length < 6 || stripped.split(' ').filter(Boolean).length < 2;
+};
+
 const isUsefulMetadata = (metadata = {}) => {
   const title = asText(metadata.title);
   const description = asText(metadata.description);
@@ -376,25 +406,97 @@ const fetchMicrolink = async (url) => {
   }
 };
 
+const pickJsonLdCourseObject = (objects = []) => {
+  return objects.find((obj) => {
+    const type = obj?.['@type'];
+    return type === 'Course' || (Array.isArray(type) && type.includes('Course'));
+  }) || objects.find((obj) => obj?.name || obj?.headline) || {};
+};
+
 const mergePrefer = (base = {}, enrich = {}) => ({
   ...base,
   ...Object.fromEntries(Object.entries(enrich).filter(([, v]) => v != null && String(v).trim() !== '')),
 });
 
-const fetchUdemyMetadata = async (url, finalUrl) => {
-  const targetUrl = finalUrl || url;
-  const microlinkUrl = targetUrl || url;
-  const metadata = await fetchMicrolink(microlinkUrl);
-
-  if (isUsefulMetadata(metadata)) {
-    return metadata;
+const fetchUdemyCourseMetadata = async (originalUrl, finalUrl) => {
+  // Accept only canonical Udemy course pages.
+  if (isUdemyShareUrl(originalUrl)) {
+    return { invalidUdemyCourse: true };
+  }
+  if (!isUdemyCourseUrl(originalUrl) || !isUdemyCourseUrl(finalUrl)) {
+    return { invalidUdemyCourse: true };
   }
 
-  if (isUdemyShareUrl(url)) {
-    return { providerBlocked: true };
-  }
+  try {
+    const response = await axios.get(finalUrl, {
+      timeout: 10000,
+      maxRedirects: 5,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Accept: 'text/html',
+        Referer: 'https://www.google.com/',
+      },
+    });
 
-  return {};
+    const $ = cheerio.load(response.data || '');
+    const jsonLd = getJsonLdObjects($);
+    const courseObj = pickJsonLdCourseObject(jsonLd);
+
+    const jsonLdTitle = courseObj?.name || courseObj?.headline || '';
+    const ogTitle = $('meta[property="og:title"]').attr('content') || '';
+    const twitterTitle = $('meta[name="twitter:title"]').attr('content') || '';
+    const pageTitle = $('title').text() || '';
+
+    const title = asText(jsonLdTitle || ogTitle || twitterTitle || pageTitle);
+
+    const jsonLdImage = Array.isArray(courseObj?.image) ? courseObj.image[0] : courseObj?.image;
+    const thumbnail = asText(
+      jsonLdImage ||
+      $('meta[property="og:image"]').attr('content') ||
+      $('meta[name="twitter:image"]').attr('content') ||
+      ''
+    );
+
+    const jsonLdInstructor =
+      courseObj?.creator?.name ||
+      courseObj?.instructor?.name ||
+      (Array.isArray(courseObj?.creator) ? courseObj.creator[0]?.name : '') ||
+      (Array.isArray(courseObj?.instructor) ? courseObj.instructor[0]?.name : '') ||
+      '';
+
+    const author = asText(
+      jsonLdInstructor ||
+      $('meta[name="author"]').attr('content') ||
+      $('[data-purpose="instructor-name-top"] span').first().text() ||
+      ''
+    );
+
+    const durationRaw = courseObj?.timeRequired || '';
+    const duration = asText(formatIsoDuration(durationRaw) || durationRaw);
+
+    const description = asText(
+      courseObj?.description ||
+      $('meta[property="og:description"]').attr('content') ||
+      $('meta[name="description"]').attr('content') ||
+      ''
+    );
+
+    if (!title || isGenericUdemyTitle(title) || isBadThumbnail(thumbnail)) {
+      return { invalidUdemyCourse: true };
+    }
+
+    return {
+      title,
+      thumbnail,
+      author,
+      duration,
+      description,
+      publisher: 'Udemy',
+    };
+  } catch {
+    return { invalidUdemyCourse: true };
+  }
 };
 
 const fetchGenericMetadata = async (url) => {
@@ -485,9 +587,13 @@ export const getMetadata = async (inputUrl) => {
       if (platform === 'youtube') {
         enrichment = await fetchYouTubeMetadata(finalUrl);
       } else if (platform === 'udemy') {
-        enrichment = await fetchUdemyMetadata(originalUrl, finalUrl);
+        enrichment = await fetchUdemyCourseMetadata(originalUrl, finalUrl);
       } else {
         enrichment = await fetchGenericMetadata(finalUrl);
+      }
+
+      if (enrichment?.invalidUdemyCourse) {
+        return buildFailureResponse('invalid_udemy_course');
       }
 
       if (enrichment?.providerBlocked) {

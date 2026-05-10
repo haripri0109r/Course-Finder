@@ -109,6 +109,8 @@ export default function AddCourseScreen({ navigation }) {
         setMetadataFetched(false);
         if (res.data?.reason === 'provider_blocked') {
           setMetadataError('This provider blocks automatic metadata extraction. Please continue with manual entry.');
+        } else if (res.data?.reason === 'invalid_udemy_course') {
+          setMetadataError('This link does not provide usable course details. Please enter details manually.');
         } else if (res.data?.reason === 'low_quality_metadata') {
           setMetadataError('This link does not provide usable course details. Please enter them manually.');
         } else {
