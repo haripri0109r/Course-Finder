@@ -1,85 +1,225 @@
-// Design System — single source of truth for the entire app
+import { Platform, Dimensions } from 'react-native';
+
+const { width, height } = Dimensions.get('window');
+
 export const COLORS = {
-  primary: '#6C63FF',      // Vibrant Indigo
-  primaryLight: '#8B85FF',
-  primaryDark: '#5A52E0',
-  secondary: '#00C9A7',    // Teal/Mint
-  secondaryLight: '#33D4B9',
-  background: '#F8F9FB',   // Off-white/Gray
-  card: '#FFFFFF',
-  textPrimary: '#1E1E2D',  // Deep Blue/Black
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
-  border: '#E5E7EB',
-  borderLight: '#F3F4F6',
-  danger: '#EF4444',
-  dangerLight: '#FEE2E2',
-  success: '#10B981',
-  successLight: '#D1FAE5',
+  // Brand
+  primary: '#0F172A',
+  accent: '#2563EB',
+  accentLight: '#DBEAFE',
+  accentDark: '#1D4ED8',
+  
+  // Neutral
+  background: '#F8FAFC',
+  surface: '#FFFFFF',
+  surfaceCard: '#FFFFFF',
+  surfaceSubtle: '#F1F5F9',
+  
+  // Text
+  textPrimary: '#0F172A',   // Slate 900
+  textSecondary: '#64748B',
+  textMuted: '#94A3B8',     // Slate 400
+  textInverse: '#FFFFFF',
   white: '#FFFFFF',
   black: '#000000',
-  overlay: 'rgba(0,0,0,0.05)',
+
+  // Status
+  success: '#16A34A',
+  successSoft: '#ECFDF5',
+  danger: '#DC2626',
+  dangerSoft: '#FEF2F2',
+  warning: '#D97706',
+  warningSoft: '#FFFBEB',
+  info: '#3B82F6',
+  infoSoft: '#EFF6FF',
+
+  // Border & Dividers
+  border: '#E2E8F0',        // Slate 200
+  borderLight: '#F1F5F9',   // Slate 100
+  borderMedium: '#CBD5E1',  // Slate 300
+  shimmer: '#E2E8F0',
+  
+  // Platform specific (Semantic)
+  platforms: {
+    Udemy: '#A435F0',
+    Coursera: '#0056D2',
+    YouTube: '#FF0000',
+    LinkedIn: '#0A66C2',
+    Other: '#64748B',
+  },
+  // Backward-compatible aliases used across existing screens/components.
+  primarySoft: '#E2E8F0',
+  secondary: '#64748B',
+  card: '#FFFFFF',
 };
 
 export const SPACING = {
-  xs: 4,
+  xs: 8,
   sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
-  huge: 48,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 40,
+  '2xl': 40,
+  '3xl': 48,
+  '4xl': 64,
+  '5xl': 80,
+  xxxl: 48,
 };
 
 export const RADIUS = {
   xs: 4,
   sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  md: 10,
+  lg: 12,
+  xl: 16,
   xxl: 24,
-  pill: 50,
+  pill: 999,
+  full: 999,
 };
 
 export const FONTS = {
-  h1: { fontSize: 30, fontWeight: '900', color: COLORS.textPrimary, letterSpacing: -0.5 },
-  h2: { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.3 },
-  h3: { fontSize: 20, fontWeight: '700', color: COLORS.textPrimary },
-  body: { fontSize: 16, fontWeight: '400', color: COLORS.textPrimary, lineHeight: 24 },
-  bodyBold: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
-  caption: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
-  small: { fontSize: 12, fontWeight: '600', color: COLORS.textMuted },
-  tiny: { fontSize: 10, fontWeight: '800', color: COLORS.textMuted, textTransform: 'uppercase' },
+  // Display
+  display: {
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -1,
+    color: COLORS.textPrimary,
+    lineHeight: 40,
+  },
+  // Headings
+  h1: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    color: COLORS.textPrimary,
+    lineHeight: 32,
+  },
+  h2: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    color: COLORS.textPrimary,
+    lineHeight: 28,
+  },
+  h3: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    lineHeight: 24,
+  },
+  // Body
+  body: {
+    fontSize: 15,
+    fontWeight: '400',
+    color: COLORS.textSecondary,
+    lineHeight: 22,
+  },
+  bodyMedium: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+    lineHeight: 22,
+  },
+  bodyBold: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    lineHeight: 22,
+  },
+  // Small
+  caption: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.textMuted,
+    lineHeight: 18,
+  },
+  captionBold: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  small: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    lineHeight: 16,
+  },
+  tiny: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    lineHeight: 14,
+  },
+  // Interactive
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  }
 };
 
 export const SHADOW = {
+  none: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  xs: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
   sm: {
     shadowColor: '#000',
-    shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
   md: {
     shadowColor: '#000',
-    shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 4,
   },
   lg: {
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.2,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 24,
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
     elevation: 8,
   },
-  inner: { 
-    shadowColor: '#000', 
-    shadowOpacity: 0.05, 
-    shadowOffset: { width: 0, height: 1 }, 
-    shadowRadius: 2, 
-    elevation: 1 
+  accent: {
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  }
+};
+
+export const LAYOUT = {
+  window: { width, height },
+  isSmallDevice: width < 375,
+  safeBottom: Platform.OS === 'ios' ? 34 : 16,
+  tabBarHeight: 64,
+  floatingNavBottom: Platform.OS === 'ios' ? 24 : 16,
+  avatarSizes: { xs: 24, sm: 32, md: 40, lg: 48, xl: 64, xxl: 80 },
+};
+
+export const ANIMATION = {
+  tap: {
+    scale: 0.97,
+    duration: 100,
+  },
+  shimmer: {
+    duration: 1500,
+    lowOpacity: 0.4,
+    highOpacity: 0.7,
   }
 };

@@ -1,41 +1,28 @@
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, Image } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
-import NetInfo from '@react-native-community/netinfo';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
-import SkeletonPreview from '../components/SkeletonPreview';
-import CoursePreview from '../components/CoursePreview';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import SectionHeader from '../components/SectionHeader';
+import Chip from '../components/Chip';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import { showToast } from '../components/Toast';
+import { COLORS, SPACING, FONTS, RADIUS, SHADOW, LAYOUT } from '../utils/theme';
 
 const PLATFORMS = ['Udemy', 'Coursera', 'YouTube', 'Other'];
+const STEPS = ['Content', 'Details', 'Feedback', 'Verification'];
 
-/**
- * Normalizes URL similarly to the backend for consistency.
- */
-const normalizeUrl = (url) => {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes('youtube.com')) {
-      const v = u.searchParams.get('v');
-      u.search = v ? `?v=${v}` : '';
-    } else if (u.hostname.includes('youtu.be')) {
-      u.search = '';
-    } else {
-      u.search = '';
-    }
-    return u.toString();
-  } catch {
-    return url;
-  }
-};
-
-export default function AddCourseScreen() {
+export default function AddCourseScreen({ navigation }) {
+  const [currentStep, setCurrentStep] = useState(0);
+  
+  // Form State
   const [title, setTitle] = useState('');
   const [platform, setPlatform] = useState('');
   const [url, setUrl] = useState('');
+  const [author, setAuthor] = useState('');
+  const [providerBadge, setProviderBadge] = useState('');
   const [rating, setRating] = useState('');
   const [review, setReview] = useState('');
   const [image, setImage] = useState('');
@@ -45,445 +32,510 @@ export default function AddCourseScreen() {
   const [description, setDescription] = useState('');
   const [learnings, setLearnings] = useState('');
   const [postTags, setPostTags] = useState('');
-  const [certificatePreviewUri, setCertificatePreviewUri] = useState('');
-  const [stagedAsset, setStagedAsset] = useState(null);
+  
+  // Internal State
   const [uploadingCert, setUploadingCert] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadFailed, setUploadFailed] = useState(false);
-  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
-  const [fetchError, setFetchError] = useState(null);
+  const [metadataError, setMetadataError] = useState('');
+  const [metadataManualMode, setMetadataManualMode] = useState(false);
+  const [metadataFetched, setMetadataFetched] = useState(false);
+  const [errors, setErrors] = useState({});
 
-  const lastUrlRef = useRef('');
+  const nextStep = () => {
+    if (currentStep === 0 && !url.trim()) {
+      setErrors({ url: 'Course URL is required' });
+      return;
+    }
+    if (currentStep === 1 && (!title.trim() || !platform)) {
+      setErrors({ title: !title.trim() ? 'Title is required' : null, platform: !platform ? 'Select platform' : null });
+      return;
+    }
+    setErrors({});
+    if (currentStep < STEPS.length - 1) setCurrentStep(currentStep + 1);
+  };
 
-  // ─── Auto-Metadata Fetching (Debounced) ───────────────────────────────────
-  useEffect(() => {
-    if (!url || url === lastUrlRef.current) return;
+  const prevStep = () => {
+    if (currentStep > 0) setCurrentStep(currentStep - 1);
+  };
 
-    // 3. Prevent Fetch on Empty / Invalid URL
-    if (url.length < 10 || !url.startsWith("http")) return;
+  const isValidHttpUrl = (value = '') => /^https?:\/\//i.test(value.trim());
 
-    lastUrlRef.current = url;
-    setFetchError(null);
+  const mapPlatformToDisplay = (platformValue, badgeValue) => {
+    const candidate = (badgeValue || platformValue || '').toLowerCase();
+    const matched = PLATFORMS.find((p) => p.toLowerCase() === candidate);
+    if (matched) return matched;
+    if (candidate.includes('youtube')) return 'YouTube';
+    if (candidate.includes('udemy')) return 'Udemy';
+    if (candidate.includes('coursera')) return 'Coursera';
+    return 'Other';
+  };
 
-    const timer = setTimeout(() => {
-      fetchMetadata(url);
-    }, 800); // 800ms debounce
+  // Metadata Fetch
+  const fetchMetadata = async () => {
+    if (!isValidHttpUrl(url)) {
+      setMetadataError('Enter a valid URL to fetch details.');
+      return;
+    }
 
-    return () => clearTimeout(timer);
-  }, [url]);
-
-  const fetchMetadata = async (targetUrl) => {
     try {
       setIsFetchingMetadata(true);
-      setFetchError(null);
-      
-      const response = await api.fetchMetadata(targetUrl);
-      
-      if (response.data.success) {
-        const { title: fetchedTitle, image: fetchedImage, provider, duration: fetchedDuration } = response.data.data;
-        
-        // Auto-fill logic
-        if (fetchedTitle && !title) setTitle(fetchedTitle);
-        if (fetchedImage && !image) {
-          setImage(fetchedImage);
-          if (fetchedImage.startsWith('http')) {
-            Image.prefetch(fetchedImage).catch(() => {});
-          }
-        }
-        if (fetchedDuration && !duration) setDuration(fetchedDuration);
-        if (provider && !platform) {
-          const matched = PLATFORMS.find(p => p.toLowerCase() === provider.toLowerCase());
-          setPlatform(matched || 'Other');
-        }
-        
-        showToast('Course metadata fetched! ✨', 'success');
+      setMetadataError('');
+      setMetadataManualMode(false);
+      const res = await api.fetchMetadata(url);
+
+      if (res.data?.success && res.data?.data) {
+        const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b } = res.data.data;
+        if (t) setTitle(t);
+        if (thumbnail) setImage(thumbnail);
+        if (a) setAuthor(a);
+        if (d) setDuration(d);
+        setProviderBadge(b || '');
+        setPlatform(mapPlatformToDisplay(p, b));
+        setMetadataFetched(true);
+        showToast({ message: 'Course details fetched.', type: 'success' });
+        return;
       }
-    } catch (err) {
-      if (err.response?.status === 404) {
-        // 6. Handle 404 Gracefully
-        console.warn("Metadata API route not found");
-        setFetchError('Metadata service endpoint not found (404). Contact support or fill manually.');
-      } else {
-        console.warn("Metadata fetch failed:", err.message);
-        setFetchError('Metadata not found. Please fill manually.');
+
+      if (res.data?.manualEntry) {
+        setMetadataManualMode(true);
+        setMetadataFetched(false);
+        setMetadataError('Unsupported URL. Please enter details manually.');
+        return;
       }
+
+      setMetadataError('Could not fetch details. You can still post manually.');
+    } catch (e) {
+      const timedOut = e?.code === 'ECONNABORTED';
+      setMetadataFetched(false);
+      setMetadataError(timedOut ? 'Request timed out. Please retry.' : 'Failed to fetch details. Please retry.');
     } finally {
       setIsFetchingMetadata(false);
     }
   };
 
-  const validate = () => {
-    const newErrors = {};
-    if (!title.trim()) newErrors.title = 'Title is required';
-    if (!platform) newErrors.platform = 'Please select a platform';
-    
-    if (!url) newErrors.url = 'Course URL is required';
-    else if (!url.startsWith('http')) newErrors.url = 'Invalid URL (must start with http/https)';
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  useEffect(() => {
+    setMetadataError('');
+    setMetadataManualMode(false);
+    setMetadataFetched(false);
+  }, [url]);
 
   const handlePickCertificate = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'application/pdf'],
-        copyToCacheDirectory: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setCertificatePreviewUri(result.assets[0].uri);
-        setStagedAsset(result.assets[0]);
-        await uploadCertificateFile(result.assets[0]);
+      const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'] });
+      if (!result.canceled && result.assets?.[0]) {
+        uploadFile(result.assets[0]);
       }
-    } catch (error) {
-      showToast('Failed to open file picker', 'error');
+    } catch (e) {
+      showToast({ message: 'Picker failed', type: 'error' });
     }
   };
 
-  const retryUpload = async () => {
-    if (stagedAsset) {
-      await uploadCertificateFile(stagedAsset);
-    }
-  };
-
-  const uploadCertificateFile = async (asset) => {
+  const uploadFile = async (asset) => {
     try {
-      const netState = await NetInfo.fetch();
-      if (!netState.isConnected) {
-        showToast('No internet connection', 'error');
-        setUploadFailed(true);
-        return;
-      }
-
       setUploadingCert(true);
-      setUploadFailed(false);
       setUploadProgress(0);
       const formData = new FormData();
-      formData.append('file', {
-        uri: asset.uri,
-        name: asset.name || 'document.pdf',
-        type: asset.mimeType || 'application/pdf',
-      });
-      // Pass old info for cleanup if replacing
-      if (certificatePublicId) {
-        formData.append('oldPublicId', certificatePublicId);
-        formData.append('oldResourceType', certificateUrl.endsWith('.pdf') ? 'raw' : 'image');
-      }
-
-      const response = await api.post('/completed/upload-certificate', formData, {
+      formData.append('file', { uri: asset.uri, name: asset.name || 'cert.pdf', type: asset.mimeType || 'application/pdf' });
+      
+      const res = await api.post('/completed/upload-certificate', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (progressEvent) => {
-           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-           setUploadProgress(percentCompleted);
-        }
+        onUploadProgress: p => setUploadProgress(Math.round((p.loaded * 100) / p.total))
       });
       
-      if (response.data.success) {
-        setCertificateUrl(response.data.url);
-        setCertificatePublicId(response.data.public_id || '');
-        showToast('Certificate uploaded securely!', 'success');
-      } else {
-        showToast(response.data.message || 'Verification failed', 'error');
-        setUploadFailed(true);
+      if (res.data.success) {
+        setCertificateUrl(res.data.url);
+        setCertificatePublicId(res.data.public_id);
+        showToast({ message: 'Certificate synced!', type: 'success' });
       }
-    } catch (error) {
-      const msg = error.response?.data?.message || 'Failed to upload certificate';
-      showToast(msg, 'error');
-      setUploadFailed(true);
+    } catch (e) {
+      showToast({ message: 'Upload failed', type: 'error' });
     } finally {
       setUploadingCert(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (uploadingCert) {
-      showToast('Please wait for the certificate to finish uploading.', 'info');
-      return;
-    }
-    if (uploadFailed) {
-      showToast('Please retry the certificate upload before submitting.', 'error');
-      return;
-    }
-    if (!validate()) return;
-
     try {
       setLoading(true);
-      const response = await api.post('/completed', {
-        title, platform, url,
-        image,
-        duration,
-        certificateUrl,
-        certificatePublicId,
-        rating: rating ? Number(rating) : undefined,
-        review,
-        description,
+      await api.post('/completed', {
+        title, platform, url, image, duration, certificateUrl, certificatePublicId,
+        rating: Number(rating), review, description,
         learnings: learnings.split(',').map(i => i.trim()).filter(Boolean),
         tags: postTags.split(',').map(i => i.trim().toLowerCase()).filter(Boolean),
       });
-      showToast(response.data.message || 'Course logged successfully!', 'success');
-      setTitle(''); setPlatform(''); setUrl(''); setRating(''); setReview(''); setImage(''); setDuration(''); setCertificateUrl(''); setCertificatePublicId(''); setCertificatePreviewUri(''); setStagedAsset(null); setUploadFailed(false);
-      setDescription(''); setLearnings(''); setPostTags('');
-      setErrors({});
-    } catch (error) {
-      showToast(error.response?.data?.message || 'Failed to add course', 'error');
+      showToast({ message: 'Course Shared Successfully! 🚀', type: 'success' });
+      navigation.navigate('Home');
+    } catch (e) {
+      showToast({ message: 'Failed to share', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  const clearError = (field) => {
-    if (errors[field]) {
-      setErrors({ ...errors, [field]: null });
+  const StepIndicator = () => (
+    <View style={styles.indicatorContainer}>
+      <View style={styles.stepIndicator}>
+        {STEPS.map((step, idx) => (
+          <View key={step} style={styles.stepWrapper}>
+            <View style={[
+              styles.stepDot, 
+              idx <= currentStep && styles.stepDotActive, 
+              idx < currentStep && styles.stepDotDone
+            ]}>
+              {idx < currentStep ? (
+                <Text style={styles.stepCheck}>✓</Text>
+              ) : (
+                <Text style={[styles.stepNum, idx === currentStep && styles.stepNumActive]}>{idx + 1}</Text>
+              )}
+            </View>
+            {idx < STEPS.length - 1 && (
+              <View style={[styles.stepLine, idx < currentStep && styles.stepLineActive]} />
+            )}
+          </View>
+        ))}
+      </View>
+      <Text style={styles.stepLabel}>{STEPS[currentStep]}</Text>
+    </View>
+  );
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 0:
+        return (
+          <View style={styles.stepContent}>
+            <SectionHeader title="Course Source" subtitle="Paste the URL to automatically sync course details" />
+            <InputField
+              label="Course URL"
+              placeholder="https://..."
+              value={url}
+              onChangeText={setUrl}
+              error={errors.url}
+              icon="🔗"
+            />
+
+            {isValidHttpUrl(url) && (
+              <View style={styles.fetchActionRow}>
+                <PrimaryButton
+                  title="Fetch Details"
+                  onPress={fetchMetadata}
+                  loading={isFetchingMetadata}
+                  size="sm"
+                  style={styles.fetchBtn}
+                />
+              </View>
+            )}
+
+            {isFetchingMetadata && (
+              <View style={styles.metadataSkeleton}>
+                <Text style={styles.fetchText}>Fetching course details...</Text>
+                <LoadingSkeleton height={120} radius={RADIUS.md} style={{ marginTop: SPACING.sm }} />
+              </View>
+            )}
+
+            {!isFetchingMetadata && metadataError ? (
+              <View style={styles.metadataAlert}>
+                <Text style={styles.metadataAlertText}>{metadataError}</Text>
+                {!metadataManualMode && (
+                  <TouchableOpacity onPress={fetchMetadata} style={styles.retryInlineBtn}>
+                    <Text style={styles.retryInlineText}>Retry</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null}
+
+            {(metadataFetched || title || image) && !isFetchingMetadata && (
+              <View style={styles.previewCard}>
+                {!!image && <Image source={{ uri: image }} style={styles.previewThumb} />}
+                <View style={styles.previewMeta}>
+                  <Text style={styles.previewTitle} numberOfLines={2}>{title || 'Untitled Course'}</Text>
+                  {!!author && <Text style={styles.previewSub}>{author}</Text>}
+                  <Text style={styles.previewSub}>{duration || 'Duration not available'}</Text>
+                  <View style={styles.previewBadgeRow}>
+                    <Text style={styles.previewBadge}>{providerBadge || platform || 'Other'}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+        );
+      case 1:
+        return (
+          <View style={styles.stepContent}>
+            <SectionHeader title="Identify & Categorize" subtitle="Confirm the course details" />
+            <InputField label="Title" value={title} onChangeText={setTitle} error={errors.title} />
+            <Text style={styles.label}>Platform</Text>
+            <View style={styles.platformRow}>
+              {PLATFORMS.map(p => (
+                <Chip key={p} label={p} selected={platform === p} onPress={() => setPlatform(p)} variant={platform === p ? 'filled' : 'soft'} />
+              ))}
+            </View>
+            <InputField label="Estimated Duration" placeholder="e.g. 12 hours" value={duration} onChangeText={setDuration} icon="⌛" />
+            <InputField label="Instructor / Author" placeholder="e.g. Andrew Ng" value={author} onChangeText={setAuthor} icon="👤" />
+            <InputField label="Skills / Tags" placeholder="react, frontend, hooks" value={postTags} onChangeText={setPostTags} icon="🏷️" />
+          </View>
+        );
+      case 2:
+        return (
+          <View style={styles.stepContent}>
+            <SectionHeader title="Your Experience" subtitle="Rate and share your thoughts" />
+            <Text style={styles.label}>Overall Rating</Text>
+            <View style={styles.ratingRow}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <TouchableOpacity key={n} onPress={() => setRating(String(n))} activeOpacity={0.7} style={styles.starBtn}>
+                  <Text style={[styles.star, Number(rating) >= n && styles.starActive]}>
+                    {Number(rating) >= n ? '★' : '☆'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <InputField label="Key Learnings" placeholder="What were your top takeaways?" value={learnings} onChangeText={setLearnings} multiline style={styles.multilineInput} />
+            <InputField label="Your Short Review" placeholder="Share a brief insight with the community" value={review} onChangeText={setReview} multiline style={styles.multilineInput} />
+          </View>
+        );
+      case 3:
+        return (
+          <View style={styles.stepContent}>
+            <SectionHeader title="Proof of Completion" subtitle="Sync your certificate (Optional)" />
+            <TouchableOpacity 
+              style={[styles.uploadZone, certificateUrl && styles.uploadZoneSuccess]} 
+              onPress={handlePickCertificate}
+              disabled={uploadingCert}
+            >
+              <View style={styles.uploadIconCircle}>
+                <Text style={styles.uploadEmoji}>{certificateUrl ? '🏆' : '📂'}</Text>
+              </View>
+              <Text style={styles.uploadTitle}>{certificateUrl ? 'Certificate Linked' : 'Upload Certificate'}</Text>
+              <Text style={styles.uploadSub}>
+                {uploadingCert ? `Uploading ${uploadProgress}%...` : 'PDF or Image (Max 5MB)'}
+              </Text>
+            </TouchableOpacity>
+            
+            <View style={styles.finalCard}>
+              <Text style={styles.finalHeader}>Ready to Post</Text>
+              <View style={styles.finalBody}>
+                <Text style={styles.finalTitle} numberOfLines={2}>{title}</Text>
+                <View style={styles.finalMeta}>
+                  <Text style={styles.finalPlatform}>{platform}</Text>
+                  <View style={styles.metaDot} />
+                  <Text style={styles.finalRating}>⭐ {rating}.0</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        );
     }
   };
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <Text style={styles.headline}>Log a Course 📝</Text>
-        <Text style={styles.subline}>Completed something awesome? Record it here.</Text>
-
-        <InputField
-          label="Course Title *"
-          placeholder="e.g. Advanced React Patterns"
-          value={title}
-          onChangeText={(t) => { setTitle(t); clearError('title'); }}
-          error={errors.title}
-        />
-
-        {/* Platform Selector */}
-        <Text style={styles.label}>Platform *</Text>
-        <View style={styles.platformRow}>
-          {PLATFORMS.map((p) => (
-            <PrimaryButton
-              key={p}
-              title={p}
-              variant={platform === p ? 'primary' : 'outline'}
-              onPress={() => { setPlatform(p); clearError('platform'); }}
-              style={styles.platformChip}
-              textStyle={{ fontSize: 13 }}
-            />
-          ))}
-        </View>
-        {errors.platform && <Text style={styles.errorTextSmall}>{errors.platform}</Text>}
-
-        <InputField
-          label="Course URL *"
-          placeholder="https://..."
-          value={url}
-          onChangeText={(t) => { setUrl(t); clearError('url'); }}
-          autoCapitalize="none"
-          keyboardType="url"
-          error={errors.url}
-        />
-
-        {isFetchingMetadata && <SkeletonPreview />}
-
-        {!isFetchingMetadata && (title || image || platform) ? (
-          <CoursePreview 
-            title={title}
-            image={image}
-            platform={platform}
-            duration={duration}
-          />
-        ) : null}
-
-        {fetchError && (
-          <TouchableOpacity style={styles.retryRow} onPress={() => fetchMetadata(url)}>
-            <Text style={styles.errorTextSmall}>{fetchError}</Text>
-            <Text style={styles.retryText}> - Tap to Retry</Text>
-          </TouchableOpacity>
-        )}
-
-        <InputField
-          label="Course Thumbnail URL (optional)"
-          placeholder="https://.../image.jpg"
-          value={image}
-          onChangeText={setImage}
-          autoCapitalize="none"
-          keyboardType="url"
-        />
-
-        <Text style={styles.label}>Certificate</Text>
-        <TouchableOpacity 
-          style={styles.uploadBtn} 
-          onPress={uploadFailed ? retryUpload : handlePickCertificate}
-          disabled={uploadingCert}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.uploadBtnText, uploadFailed && { color: '#EF4444' }]}>
-            {uploadingCert ? `⏳ Uploading... ${uploadProgress}%` : uploadFailed ? '⚠️ Upload Failed - Tap to Retry' : certificateUrl ? '🔄 Replace Document' : '📤 Upload Document'}
-          </Text>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
+          <Text style={{ fontSize: 20 }}>✕</Text>
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Log Achievement</Text>
+        <View style={{ width: 40 }} />
+      </View>
 
-        {certificatePreviewUri && !uploadFailed ? (
-          <View style={styles.previewContainer}>
-             {certificatePreviewUri.endsWith('.pdf') ? (
-               <Text style={styles.pdfPreview}>📄 PDF Document Readied</Text>
-             ) : (
-               <Image source={{ uri: certificatePreviewUri }} style={styles.imagePreview} />
-             )}
-             {uploadingCert && <Text style={styles.successTextSmall}>Synchronizing with Cloud...</Text>}
-             {certificateUrl !== '' && !uploadingCert && <Text style={styles.successTextSmall}>✅ Successfully Synced!</Text>}
-          </View>
-        ) : null}
+      <StepIndicator />
 
-        {/* Star Rating Selector */}
-        <Text style={styles.label}>Your Rating</Text>
-        <View style={styles.ratingRow}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Text
-              key={n}
-              style={[styles.star, Number(rating) >= n && styles.starActive]}
-              onPress={() => setRating(String(n))}
-            >
-              ★
-            </Text>
-          ))}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {renderStep()}
+        </ScrollView>
+
+        <View style={styles.footer}>
+          {currentStep > 0 && (
+            <PrimaryButton 
+              title="Previous" 
+              onPress={prevStep} 
+              variant="outline" 
+              style={{ flex: 1, marginRight: SPACING.md }} 
+            />
+          )}
+          {currentStep < STEPS.length - 1 ? (
+            <PrimaryButton 
+              title="Next Step" 
+              onPress={nextStep} 
+              style={{ flex: 2 }} 
+            />
+          ) : (
+            <PrimaryButton 
+              title="Publish Log" 
+              onPress={handleSubmit} 
+              loading={loading} 
+              style={{ flex: 2 }} 
+            />
+          )}
         </View>
-
-        <InputField label="Review (optional)" placeholder="What did you like about this course?" value={review} onChangeText={setReview} multiline />
-
-        <Text style={styles.sectionHeader}>Social: Learning Post 🚀</Text>
-        <InputField 
-          label="Learning Insight / Caption" 
-          placeholder="e.g. Mastered React Hooks today! The course was super clear on useEffect." 
-          value={description} 
-          onChangeText={setDescription} 
-          multiline 
-        />
-        <InputField 
-          label="Top Learnings (comma separated, max 5)" 
-          placeholder="State mgmt, Custom hooks, Optimization" 
-          value={learnings} 
-          onChangeText={setLearnings} 
-        />
-        <InputField 
-          label="Hashtags (comma separated)" 
-          placeholder="react, frontend, hooks" 
-          value={postTags} 
-          onChangeText={setPostTags} 
-          autoCapitalize="none"
-        />
-
-        <PrimaryButton title="Submit Course" onPress={handleSubmit} loading={loading} style={{ marginTop: SPACING.sm }} />
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: COLORS.background },
-  container: { flexGrow: 1, paddingHorizontal: SPACING.xl, paddingBottom: 40 },
-  headline: { ...FONTS.h1, paddingTop: 56, marginBottom: SPACING.xs },
-  subline: { ...FONTS.caption, fontSize: 15, marginBottom: SPACING.xxl },
-  label: { ...FONTS.caption, fontWeight: '600', color: COLORS.textPrimary, marginBottom: SPACING.sm, marginLeft: SPACING.xs },
-
-  inlineLoading: {
-    flexDirection: 'row',
+  container: { flex: 1, backgroundColor: COLORS.surface },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.xl, 
+    paddingVertical: SPACING.lg,
+    borderBottomWidth: 1, 
+    borderBottomColor: COLORS.borderLight 
+  },
+  headerTitle: { ...FONTS.h3, color: COLORS.textPrimary },
+  closeBtn: { width: 40, height: 40, justifyContent: 'center' },
+  indicatorContainer: {
+    backgroundColor: COLORS.background,
+    paddingVertical: SPACING.xl,
     alignItems: 'center',
-    marginBottom: SPACING.md,
-    marginLeft: SPACING.xs,
   },
-  fetchingText: {
-    ...FONTS.small,
-    color: COLORS.primary,
-    marginLeft: 8,
-    fontWeight: '600',
-  },
-  retryRow: {
-    flexDirection: 'row',
-    marginBottom: SPACING.md,
-    marginLeft: SPACING.xs,
-  },
-  retryText: {
-    ...FONTS.small,
-    color: COLORS.secondary,
-    fontWeight: 'bold',
-  },
-
-  platformRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: SPACING.lg,
-  },
-  platformChip: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm,
-    marginRight: SPACING.sm,
-    marginBottom: SPACING.sm,
-    minHeight: 40,
-    borderRadius: RADIUS.pill,
-  },
-
-  uploadBtn: {
-    backgroundColor: `${COLORS.secondary}15`,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    marginLeft: SPACING.xs,
-  },
-  uploadBtnText: {
-    color: COLORS.secondary,
-    fontWeight: '700',
-    ...FONTS.body,
-  },
-  previewContainer: {
-    marginTop: SPACING.xs,
-    marginBottom: SPACING.md,
-    alignItems: 'center',
+  stepIndicator: { 
+    flexDirection: 'row', 
+    width: '60%',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  pdfPreview: {
-    ...FONTS.caption,
-    color: COLORS.textPrimary,
-    fontStyle: 'italic',
-    marginBottom: SPACING.xs,
-    padding: SPACING.sm,
-    backgroundColor: COLORS.card,
-    borderRadius: RADIUS.sm,
+  stepWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  stepDot: { 
+    width: 24, 
+    height: 24, 
+    borderRadius: 12, 
+    backgroundColor: COLORS.border, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    zIndex: 2,
+    ...SHADOW.xs,
+  },
+  stepDotActive: { backgroundColor: COLORS.accent },
+  stepDotDone: { backgroundColor: COLORS.success },
+  stepNum: { ...FONTS.tiny, color: COLORS.textMuted, fontSize: 10 },
+  stepNumActive: { color: COLORS.white },
+  stepCheck: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
+  stepLine: { flex: 1, height: 2, backgroundColor: COLORS.border, marginHorizontal: -2 },
+  stepLineActive: { backgroundColor: COLORS.success },
+  stepLabel: {
+    ...FONTS.tiny,
+    marginTop: 12,
+    color: COLORS.accent,
+    letterSpacing: 1,
+  },
+  scroll: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: 140 },
+  stepContent: { flex: 1 },
+  label: { ...FONTS.label, marginBottom: SPACING.sm, marginTop: SPACING.lg },
+  fetchLoading: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md },
+  fetchText: { ...FONTS.caption, marginLeft: SPACING.md, color: COLORS.accent },
+  fetchActionRow: { marginTop: SPACING.sm, marginBottom: SPACING.sm, alignItems: 'flex-start' },
+  fetchBtn: { minWidth: 130 },
+  metadataSkeleton: { marginTop: SPACING.sm },
+  metadataAlert: {
+    marginTop: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.border,
-  },
-  imagePreview: {
-    width: 200,
-    height: 120,
     borderRadius: RADIUS.md,
-    resizeMode: 'cover',
-    marginBottom: SPACING.xs,
+    padding: SPACING.md,
+    backgroundColor: COLORS.surface,
   },
-  successTextSmall: {
-    ...FONTS.caption,
-    color: COLORS.secondary,
-    marginLeft: SPACING.xs,
-    marginBottom: SPACING.xl,
+  metadataAlertText: { ...FONTS.small, color: COLORS.textSecondary },
+  retryInlineBtn: { marginTop: SPACING.sm },
+  retryInlineText: { ...FONTS.captionBold, color: COLORS.accent },
+  previewCard: {
+    marginTop: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    overflow: 'hidden',
   },
-
-  ratingRow: {
-    flexDirection: 'row',
-    marginBottom: SPACING.xl,
-    marginLeft: SPACING.xs,
+  previewThumb: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: COLORS.surfaceSubtle,
   },
-  star: {
-    fontSize: 36,
-    color: COLORS.border,
-    marginRight: SPACING.sm,
+  previewMeta: {
+    padding: SPACING.md,
   },
-  starActive: {
-    color: '#FBBF24',
-  },
-  sectionHeader: {
+  previewTitle: {
     ...FONTS.bodyBold,
-    marginTop: SPACING.xl,
-    marginBottom: SPACING.sm,
-    color: COLORS.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-    paddingBottom: 4,
+    color: COLORS.textPrimary,
+    fontSize: 14,
   },
+  previewSub: {
+    ...FONTS.small,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  previewBadgeRow: {
+    marginTop: SPACING.sm,
+    alignItems: 'flex-start',
+  },
+  previewBadge: {
+    ...FONTS.small,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    backgroundColor: COLORS.surfaceSubtle,
+  },
+  platformRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: SPACING.md },
+  ratingRow: { flexDirection: 'row', marginBottom: SPACING.xl },
+  starBtn: { marginRight: SPACING.md },
+  star: { fontSize: 42, color: COLORS.border },
+  starActive: { color: '#F59E0B' },
+  multilineInput: { minHeight: 80, textAlignVertical: 'top' },
+  uploadZone: { 
+    height: 180, 
+    borderRadius: RADIUS.xxl, 
+    borderStyle: 'dashed', 
+    borderWidth: 2, 
+    borderColor: COLORS.border, 
+    backgroundColor: COLORS.background,
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginTop: SPACING.xl,
+    padding: SPACING.xl,
+  },
+  uploadZoneSuccess: { borderColor: COLORS.success, backgroundColor: COLORS.successSoft },
+  uploadIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+    ...SHADOW.sm,
+  },
+  uploadEmoji: { fontSize: 24 },
+  uploadTitle: { ...FONTS.bodyBold, color: COLORS.textPrimary },
+  uploadSub: { ...FONTS.caption, color: COLORS.textMuted, marginTop: 4 },
+  finalCard: {
+    marginTop: SPACING['4xl'],
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.xl,
+    ...SHADOW.lg,
+  },
+  finalHeader: { ...FONTS.tiny, color: 'rgba(255,255,255,0.6)', marginBottom: 12 },
+  finalBody: { flex: 1 },
+  finalTitle: { ...FONTS.h3, color: COLORS.white, fontSize: 16 },
+  finalMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  finalPlatform: { ...FONTS.tiny, color: COLORS.accentLight },
+  metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 8 },
+  finalRating: { ...FONTS.tiny, color: COLORS.white },
+  footer: { 
+    position: 'absolute', 
+    bottom: 0, left: 0, right: 0, 
+    flexDirection: 'row', 
+    padding: SPACING.xl, 
+    backgroundColor: COLORS.surface,
+    borderTopWidth: 1, 
+    borderTopColor: COLORS.borderLight,
+    paddingBottom: Platform.OS === 'ios' ? 40 : SPACING.xl,
+  }
 });

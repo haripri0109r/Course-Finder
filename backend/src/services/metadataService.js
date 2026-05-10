@@ -2,234 +2,305 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { DEFAULT_IMAGE } from '../config/constants.js';
 import { MetadataCache, AnalyticsEvent } from '../models/index.js';
+import { extractYouTubeId } from '../utils/extractYouTubeId.js';
 
-// In-flight request lock to prevent cache stampede
 const inFlightRequests = new Map();
+const SUPPORTED_PLATFORMS = new Set([
+  'youtube',
+  'udemy',
+  'coursera',
+  'edx',
+  'skillshare',
+  'freecodecamp',
+  'khanacademy',
+  'pluralsight',
+]);
 
-/**
- * 🔍 Platform detection
- */
-export const detectPlatform = (url = "") => {
-  const u = url.toLowerCase();
-
-  if (u.includes("youtube.com") || u.includes("youtu.be")) return "YouTube";
-  if (u.includes("udemy.com")) return "Udemy";
-  if (u.includes("coursera.org")) return "Coursera";
-  if (u.includes("skillshare.com")) return "Skillshare";
-
-  return "Other";
+const PLATFORM_LABELS = {
+  youtube: 'YouTube',
+  udemy: 'Udemy',
+  coursera: 'Coursera',
+  edx: 'edX',
+  skillshare: 'Skillshare',
+  freecodecamp: 'freeCodeCamp',
+  khanacademy: 'Khan Academy',
+  pluralsight: 'Pluralsight',
+  other: 'Other',
 };
 
-/**
- * Smart URL Normalization: Preserves 'v=' for YouTube, strips query for others.
- */
+export const detectPlatform = (url = '') => {
+  const value = url.toLowerCase();
+  if (value.includes('youtube.com') || value.includes('youtu.be')) return 'youtube';
+  if (value.includes('udemy.com')) return 'udemy';
+  if (value.includes('coursera.org')) return 'coursera';
+  if (value.includes('edx.org')) return 'edx';
+  if (value.includes('skillshare.com')) return 'skillshare';
+  if (value.includes('freecodecamp.org')) return 'freecodecamp';
+  if (value.includes('khanacademy.org')) return 'khanacademy';
+  if (value.includes('pluralsight.com')) return 'pluralsight';
+  return 'other';
+};
+
 const normalizeUrl = (url) => {
   try {
-    const u = new URL(url);
-    if (u.hostname.includes('youtube.com')) {
-      const v = u.searchParams.get('v');
-      u.search = v ? `?v=${v}` : '';
-    } else if (u.hostname.includes('youtu.be')) {
-      u.search = '';
+    const parsed = new URL(url);
+    parsed.hash = '';
+    if (parsed.hostname.includes('youtube.com')) {
+      const id = parsed.searchParams.get('v');
+      parsed.search = id ? `v=${id}` : '';
+    } else if (parsed.hostname.includes('youtu.be')) {
+      parsed.search = '';
     } else {
-      u.search = ''; // Strip for generic platforms
+      parsed.search = '';
     }
-    return u.toString();
+    return parsed.toString();
   } catch {
     return url;
   }
 };
 
-/**
- * Utility to format ISO 8601 duration (PT#H#M#S) to readable string
- */
-const formatDuration = (iso) => {
-  if (!iso) return 'N/A';
-  const match = iso.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
-  if (!match) return 'N/A';
+const asText = (value = '') => String(value).trim();
 
-  const hours = (match[1] || '').replace('H', '');
-  const minutes = (match[2] || '').replace('M', '');
-  const seconds = (match[3] || '').replace('S', '');
-
-  let result = '';
-  if (hours) result += `${hours}h `;
-  if (minutes) result += `${minutes}m `;
-  if (!hours && seconds) result += `${seconds}s`;
-
-  return result.trim() || 'N/A';
+const humanDuration = (seconds) => {
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const hours = Math.floor(n / 3600);
+  const minutes = Math.floor((n % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 };
 
-/**
- * Fetch YouTube Metadata using Data API v3
- */
-export const fetchYouTubeMetadata = async (videoId) => {
-  const API_KEY = process.env.YOUTUBE_API_KEY;
-
-  if (!API_KEY || API_KEY === 'your_google_cloud_youtube_v3_api_key_here') {
-    throw new Error('YouTube API key missing or invalid');
-  }
-
-  const response = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
-    params: {
-      id: videoId,
-      key: API_KEY,
-      part: 'snippet,contentDetails',
-    },
-    timeout: 5000,
-  });
-
-  if (!response.data.items || response.data.items.length === 0) {
-    throw new Error('YouTube video not found');
-  }
-
-  const video = response.data.items[0];
-  const { snippet, contentDetails } = video;
-
-  return {
-    title: snippet.title,
-    image: snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url || DEFAULT_IMAGE,
-    provider: snippet.channelTitle || 'YouTube',
-    duration: formatDuration(contentDetails.duration),
-  };
+const formatIsoDuration = (iso) => {
+  if (!iso) return '';
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i);
+  if (!match) return '';
+  const hours = Number(match[1] || 0);
+  const minutes = Number(match[2] || 0);
+  const seconds = Number(match[3] || 0);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  if (seconds > 0) return `${seconds}s`;
+  return '';
 };
 
-/**
- * Scrape Generic Metadata (Open Graph) using Cheerio
- */
-export const scrapeGenericMetadata = async (url) => {
-  const { data } = await axios.get(url, {
-    timeout: 8000,
+const scrapePage = async (url) => {
+  const response = await axios.get(url, {
+    timeout: 10000,
     headers: {
-      'User-Agent': 'Mozilla/5.0',
+      'User-Agent': 'Mozilla/5.0 (compatible; CourseFinderBot/1.0)',
+      Accept: 'text/html,application/xhtml+xml',
     },
   });
+  return cheerio.load(response.data);
+};
 
-  const $ = cheerio.load(data);
-  const domain = new URL(url).hostname.replace('www.', '');
+const getJsonLdObjects = ($) => {
+  const objects = [];
+  $('script[type="application/ld+json"]').each((_, node) => {
+    try {
+      const raw = $(node).contents().text();
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) objects.push(...parsed);
+      else objects.push(parsed);
+    } catch {
+      // ignore invalid blocks
+    }
+  });
+  return objects;
+};
 
-  const title = 
-    $('meta[property="og:title"]').attr('content') || 
-    $('title').text() || 
-    'Untitled Course';
+const normalizeShape = (data, platform, sourceUrl) => ({
+  title: asText(data.title) || 'Untitled Course',
+  thumbnail: asText(data.thumbnail || data.image) || DEFAULT_IMAGE,
+  author: asText(data.author) || '',
+  duration: asText(data.duration) || '',
+  platform,
+  providerBadge: PLATFORM_LABELS[platform] || 'Other',
+  sourceUrl,
+});
 
-  const image = 
-    $('meta[property="og:image"]').attr('content') || 
-    $('meta[name="twitter:image"]').attr('content') || 
-    null;
+const fetchYouTubeMetadata = async (url) => {
+  const videoId = extractYouTubeId(url);
+  if (!videoId) throw new Error('Unable to read YouTube video id');
 
-  const provider = 
-    $('meta[property="og:site_name"]').attr('content') || 
-    domain.charAt(0).toUpperCase() + domain.slice(1);
+  const oembed = await axios.get('https://www.youtube.com/oembed', {
+    params: { url: `https://www.youtube.com/watch?v=${videoId}`, format: 'json' },
+    timeout: 8000,
+  });
+
+  let duration = '';
+  try {
+    const details = await axios.get(
+      `https://www.youtube.com/watch?v=${videoId}&pbj=1`,
+      { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    const content = JSON.stringify(details.data);
+    const match = content.match(/"lengthSeconds":"(\d+)"/);
+    if (match?.[1]) duration = humanDuration(match[1]);
+  } catch {
+    // duration optional; keep empty when blocked
+  }
 
   return {
-    title: title.trim(),
-    image,
-    provider: provider.trim(),
-    duration: 'N/A',
+    title: oembed.data?.title,
+    thumbnail: oembed.data?.thumbnail_url,
+    author: oembed.data?.author_name,
+    duration,
   };
 };
 
-/**
- * Exposed service to fetch and cache metadata
- */
-export const getMetadata = async (url) => {
-  const normalized = normalizeUrl(url);
+const scrapeGenericPlatform = async (url) => {
+  const $ = await scrapePage(url);
+  const jsonLd = getJsonLdObjects($);
+  const courseObj = jsonLd.find((obj) => {
+    const type = obj?.['@type'];
+    return type === 'Course' || (Array.isArray(type) && type.includes('Course'));
+  });
 
-  // 1. Check in-flight lock for cache stampede protection
-  if (inFlightRequests.has(normalized)) {
-    console.log(`Lock Match: ${normalized} (reusing promise)`);
-    return inFlightRequests.get(normalized);
+  const title =
+    $('meta[property="og:title"]').attr('content') ||
+    courseObj?.name ||
+    $('title').text();
+  const thumbnail =
+    $('meta[property="og:image"]').attr('content') ||
+    $('meta[name="twitter:image"]').attr('content') ||
+    courseObj?.image;
+  const author =
+    $('meta[name="author"]').attr('content') ||
+    courseObj?.provider?.name ||
+    courseObj?.author?.name ||
+    '';
+
+  return {
+    title,
+    thumbnail,
+    author,
+    duration: '',
+  };
+};
+
+const fetchUdemyMetadata = async (url) => {
+  const $ = await scrapePage(url);
+  const jsonLd = getJsonLdObjects($);
+  const courseObj = jsonLd.find((obj) => obj?.['@type'] === 'Course');
+  const title = $('meta[property="og:title"]').attr('content') || courseObj?.name || $('title').text();
+  const thumbnail = $('meta[property="og:image"]').attr('content') || courseObj?.image;
+  const author =
+    $('meta[name="author"]').attr('content') ||
+    $('a[data-purpose="instructor-name-top"] span').first().text() ||
+    courseObj?.provider?.name ||
+    '';
+  const duration =
+    $('[data-purpose="curriculum-stats"] span').first().text() ||
+    courseObj?.timeRequired ||
+    '';
+
+  return { title, thumbnail, author, duration: formatIsoDuration(duration) || duration };
+};
+
+const fetchCourseraMetadata = async (url) => {
+  const $ = await scrapePage(url);
+  const jsonLd = getJsonLdObjects($);
+  const courseObj = jsonLd.find((obj) => obj?.['@type'] === 'Course');
+  const title = $('meta[property="og:title"]').attr('content') || courseObj?.name || $('h1').first().text();
+  const thumbnail = $('meta[property="og:image"]').attr('content') || courseObj?.image;
+  const author =
+    courseObj?.provider?.name ||
+    $('[data-testid="instructor-name"]').first().text() ||
+    $('[class*="instructor"]').first().text() ||
+    '';
+  const duration =
+    $('[data-testid="CourseDuration"]').first().text() ||
+    courseObj?.timeRequired ||
+    '';
+  return { title, thumbnail, author, duration: formatIsoDuration(duration) || duration };
+};
+
+const fetchByPlatform = async (platform, url) => {
+  if (platform === 'youtube') return fetchYouTubeMetadata(url);
+  if (platform === 'udemy') return fetchUdemyMetadata(url);
+  if (platform === 'coursera') return fetchCourseraMetadata(url);
+  if (SUPPORTED_PLATFORMS.has(platform)) return scrapeGenericPlatform(url);
+  return null;
+};
+
+export const getMetadata = async (url) => {
+  const sourceUrl = normalizeUrl(url);
+  const platform = detectPlatform(sourceUrl);
+
+  if (!SUPPORTED_PLATFORMS.has(platform)) {
+    return { success: false, manualEntry: true };
   }
 
-  const fetchPromise = (async () => {
+  if (inFlightRequests.has(sourceUrl)) {
+    return inFlightRequests.get(sourceUrl);
+  }
+
+  const promise = (async () => {
     try {
-      // 2. Check DB Cache
-      const cached = await MetadataCache.findOne({ url: normalized });
+      const cached = await MetadataCache.findOne({ url: sourceUrl });
       if (cached) {
-        console.log(`DB Cache Hit: ${normalized}`);
-        return { ...cached.toObject(), success: true };
-      }
-
-      // 3. Persistent Fetch with 5s Timeout Fallback
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Fetch Timeout')), 5000)
-      );
-
-      const performFetch = async () => {
-        let data;
-        const { extractYouTubeId } = await import('../utils/extractYouTubeId.js');
-        const videoId = extractYouTubeId(url);
-
-        if (videoId) {
-          try {
-            data = await fetchYouTubeMetadata(videoId);
-          } catch (ytError) {
-            console.warn(`YouTube API failed, falling back to scraper: ${ytError.message}`);
-            data = await scrapeGenericMetadata(url);
-          }
-        } else {
-          data = await scrapeGenericMetadata(url);
-        }
-
-        const provider = detectPlatform(url);
-
-        // Standardize
         return {
-          ...data,
-          image: data.image || DEFAULT_IMAGE,
-          url: normalized,
-          provider,
+          success: true,
+          data: normalizeShape(
+            {
+              title: cached.title,
+              thumbnail: cached.thumbnail || cached.image,
+              author: cached.author,
+              duration: cached.duration,
+            },
+            cached.platform || platform,
+            cached.sourceUrl || sourceUrl
+          ),
         };
-      };
-
-      let resultData;
-      try {
-        resultData = await Promise.race([performFetch(), timeoutPromise]);
-      } catch (raceErr) {
-        console.warn(`Primary fetch timed out or failed, absolute generic fallback: ${raceErr.message}`);
-        resultData = await scrapeGenericMetadata(url);
-        resultData.url = normalized;
-        resultData.image = resultData.image || DEFAULT_IMAGE;
       }
 
-      // 4. Upsert Cache
+      const fetched = await fetchByPlatform(platform, sourceUrl);
+      if (!fetched) return { success: false, manualEntry: true };
+
+      const normalized = normalizeShape(fetched, platform, sourceUrl);
+
       await MetadataCache.findOneAndUpdate(
-        { url: normalized },
-        { ...resultData, cachedAt: Date.now() },
+        { url: sourceUrl },
+        {
+          url: sourceUrl,
+          title: normalized.title,
+          image: normalized.thumbnail,
+          thumbnail: normalized.thumbnail,
+          author: normalized.author,
+          duration: normalized.duration,
+          provider: normalized.providerBadge,
+          platform: normalized.platform,
+          sourceUrl: normalized.sourceUrl,
+          cachedAt: Date.now(),
+        },
         { upsert: true, new: true }
       );
 
-      // 5. Asynchronous Analytics (Non-blocking)
       setImmediate(() => {
         AnalyticsEvent.create({
           event: 'metadata_fetch_success',
-          metadata: { url: normalized, provider: resultData.provider }
-        }).catch(err => console.error('Analytics failed:', err.message));
+          metadata: { url: sourceUrl, platform },
+        }).catch(() => {});
       });
 
-      return { ...resultData, success: true };
+      return { success: true, data: normalized };
     } catch (error) {
       setImmediate(() => {
         AnalyticsEvent.create({
           event: 'metadata_fetch_failed',
-          metadata: { url: normalized, error: error.message }
+          metadata: { url: sourceUrl, error: error.message },
         }).catch(() => {});
       });
       throw error;
     }
   })();
 
-  // Set lock
-  inFlightRequests.set(normalized, fetchPromise);
-
-  // Safety cleanup for Map (15s deadman switch)
-  setTimeout(() => inFlightRequests.delete(normalized), 15000);
-
+  inFlightRequests.set(sourceUrl, promise);
   try {
-    const finalData = await fetchPromise;
-    return finalData;
+    return await promise;
   } finally {
-    inFlightRequests.delete(normalized);
+    inFlightRequests.delete(sourceUrl);
   }
 };

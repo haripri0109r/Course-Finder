@@ -8,11 +8,15 @@ import {
   ActivityIndicator,
   SafeAreaView,
   RefreshControl,
+  StatusBar
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
-import { timeAgo } from '../utils/formatter';
+import { timeAgo } from '../utils/format';
 import { NotificationContext } from '../context/NotificationContext';
-import SafeImage from '../components/SafeImage';
+import Avatar from '../components/Avatar';
+import EmptyState from '../components/EmptyState';
+import SectionHeader from '../components/SectionHeader';
 
 const NotificationScreen = ({ navigation }) => {
   const { 
@@ -31,30 +35,45 @@ const NotificationScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const getMessage = (item) => {
-    const name = item.actorName || item.actorId?.name || "Someone";
+  const getTypeIcon = (type) => {
+    switch (type) {
+      case "post_like":
+      case "like":
+      case "comment_like":
+        return { icon: 'heart', bg: COLORS.dangerSoft, color: COLORS.danger };
+      case "comment":
+      case "reply":
+        return { icon: 'chatbubble', bg: COLORS.infoSoft, color: COLORS.info };
+      case "follow":
+        return { icon: 'person', bg: COLORS.successSoft, color: COLORS.success };
+      default:
+        return { icon: 'notifications', bg: COLORS.accentLight, color: COLORS.accent };
+    }
+  };
 
+  const getActionText = (item) => {
     switch (item.type) {
       case "post_like":
-        return `${name} liked your post`;
-      case "like": // fallback legacy
-        return `${name} liked your post`;
+      case "like":
+        return "liked your course log";
       case "comment":
-        return `${name} commented on your post`;
+        return "commented on your post";
       case "reply":
-        return `${name} replied to your comment`;
+        return "replied to your comment";
       case "follow":
-        return `${name} started following you`;
+        return "started following you";
       case "comment_like":
-        return `${name} liked your comment`;
+        return "liked your comment";
       default:
-        return "New activity";
+        return "interacted with you";
     }
   };
 
   const handlePress = async (item) => {
     if (item.postId) {
       navigation.navigate("PostDetail", { postId: item.postId });
+    } else if (item.type === 'follow') {
+      navigation.navigate("UserProfile", { userId: item.actorId?._id || item.actorId });
     }
 
     if (!item.isRead) {
@@ -62,60 +81,72 @@ const NotificationScreen = ({ navigation }) => {
     }
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.notificationItem, !item.isRead && styles.unreadItem]}
-      onPress={() => handlePress(item)}
-    >
-      <View style={styles.avatarContainer}>
-        {item.actorId?.profilePicture ? (
-          <SafeImage source={{ uri: item.actorId.profilePicture }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>{(item.actorName || item.actorId?.name || 'U')[0].toUpperCase()}</Text>
+  const renderItem = ({ item }) => {
+    const meta = getTypeIcon(item.type);
+    
+    return (
+      <TouchableOpacity
+        style={[styles.notificationItem, !item.isRead && styles.unreadItem]}
+        onPress={() => handlePress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.avatarWrapper}>
+          <Avatar 
+            name={item.actorName || item.actorId?.name} 
+            uri={item.actorId?.profilePicture} 
+            size="md" 
+          />
+          <View style={[styles.typeBadge, { backgroundColor: meta.bg }]}>
+            <Ionicons name={meta.icon} size={11} color={meta.color} />
           </View>
-        )}
-      </View>
-      <View style={styles.content}>
-        <Text style={[styles.message, !item.isRead && styles.unreadMessage]}>
-          {getMessage(item)}
-        </Text>
-        <Text style={styles.time}>{timeAgo(item.createdAt)}</Text>
-      </View>
-      {!item.isRead && <View style={styles.unreadDot} />}
-    </TouchableOpacity>
-  );
+        </View>
+
+        <View style={styles.textContent}>
+          <Text style={styles.messageText} numberOfLines={2}>
+            <Text style={styles.actorName}>{item.actorName || item.actorId?.name || "Someone"} </Text>
+            <Text style={styles.actionText}>{getActionText(item)}</Text>
+          </Text>
+          <Text style={styles.timestamp}>{timeAgo(item.createdAt)}</Text>
+        </View>
+
+        {!item.isRead && <View style={styles.unreadIndicator} />}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Notifications</Text>
         {notifications.some(n => !n.isRead) && (
           <TouchableOpacity onPress={markAllAsRead}>
-            <Text style={styles.markReadBtn}>Mark all as read</Text>
+            <Text style={styles.markAllText}>Mark all read</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+      {loading && !refreshing ? (
+        <View style={styles.loaderBox}>
+          <ActivityIndicator size="large" color={COLORS.accent} />
         </View>
       ) : (
         <FlatList
           data={notifications}
           keyExtractor={item => item._id}
           renderItem={renderItem}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={COLORS.accent} />
           }
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>🔔</Text>
-              <Text style={styles.emptyText}>You're all caught up!</Text>
-              <Text style={styles.emptySub}>Notifications about your courses and social activity will appear here.</Text>
-            </View>
+            <EmptyState 
+              icon="○"
+              title="Nothing here yet"
+              subtitle="Social updates and achievements will appear here."
+            />
           }
         />
       )}
@@ -124,41 +155,103 @@ const NotificationScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { 
+    flex: 1, 
+    backgroundColor: COLORS.background 
+  },
   header: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.lg,
+    backgroundColor: COLORS.surface,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: SPACING.xl,
-    backgroundColor: COLORS.white,
-    ...SHADOW.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  headerTitle: { ...FONTS.h2 },
-  markReadBtn: { color: COLORS.primary, fontWeight: 'bold' },
-  list: { paddingBottom: 100 },
+  headerTitle: { 
+    ...FONTS.h1, 
+    fontSize: 26, 
+    color: COLORS.textPrimary 
+  },
+  markAllText: { 
+    ...FONTS.captionBold,
+    color: COLORS.accent, 
+    textTransform: 'none',
+    fontWeight: '700' 
+  },
+  listContent: { 
+    paddingBottom: 100,
+    paddingTop: SPACING.md,
+  },
   notificationItem: {
     flexDirection: 'row',
-    padding: SPACING.xl,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-    alignItems: 'center'
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
+    marginHorizontal: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  unreadItem: { backgroundColor: '#F0F7FF' },
-  avatarContainer: { marginRight: SPACING.lg },
-  avatar: { width: 48, height: 48, borderRadius: 24 },
-  avatarPlaceholder: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.secondary, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: COLORS.white, fontWeight: 'bold', fontSize: 18 },
-  content: { flex: 1 },
-  message: { ...FONTS.body, fontSize: 15, color: COLORS.textPrimary, lineHeight: 20 },
-  unreadMessage: { fontWeight: '600' },
-  time: { ...FONTS.small, color: COLORS.textMuted, marginTop: 4 },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.primary, marginLeft: 8 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100, padding: 40 },
-  emptyEmoji: { fontSize: 50, marginBottom: 20 },
-  emptyText: { ...FONTS.h3, marginBottom: 8 },
-  emptySub: { ...FONTS.body, color: COLORS.textMuted, textAlign: 'center' }
+  unreadItem: {
+    backgroundColor: '#F3F7FF',
+    borderColor: '#BFDBFE',
+  },
+  avatarWrapper: { 
+    position: 'relative' 
+  },
+  typeBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.surface,
+    ...SHADOW.xs,
+  },
+  textContent: { 
+    flex: 1, 
+    marginLeft: SPACING.lg 
+  },
+  messageText: { 
+    lineHeight: 20,
+  },
+  actorName: { 
+    ...FONTS.bodyBold, 
+    fontSize: 14, 
+    color: COLORS.textPrimary 
+  },
+  actionText: { 
+    ...FONTS.body, 
+    fontSize: 14, 
+    color: COLORS.textSecondary 
+  },
+  timestamp: { 
+    ...FONTS.tiny, 
+    color: COLORS.textMuted, 
+    marginTop: 4, 
+    textTransform: 'none' 
+  },
+  unreadIndicator: { 
+    width: 8, 
+    height: 8, 
+    borderRadius: 4, 
+    backgroundColor: COLORS.accent, 
+    marginLeft: SPACING.md 
+  },
+  loaderBox: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
 });
 
 export default NotificationScreen;

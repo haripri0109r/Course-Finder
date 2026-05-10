@@ -1,54 +1,82 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { COLORS, SPACING, FONTS, RADIUS } from '../utils/theme';
+import PrimaryButton from './PrimaryButton';
 
+/**
+ * Premium error state with retry action
+ */
 export default function RetryBox({ message, onRetry, error }) {
   return (
     <View style={styles.container}>
-      <Text style={styles.emoji}>⚠️</Text>
-      <Text style={styles.message}>{message || 'An unexpected error occurred'}</Text>
-      {error && <Text style={styles.errorText}>{error.message || String(error)}</Text>}
+      <View style={styles.iconContainer}>
+        <Text style={styles.icon}>!</Text>
+      </View>
       
-      <TouchableOpacity style={styles.button} onPress={onRetry}>
-        <Text style={styles.buttonText}>Try Again</Text>
-      </TouchableOpacity>
+      <Text style={styles.message}>{message || 'Something went wrong'}</Text>
+      
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error.message || String(error)}</Text>
+        </View>
+      )}
+      
+      <PrimaryButton
+        title="Try Again"
+        onPress={onRetry}
+        variant="secondary"
+        size="md"
+        style={styles.button}
+        icon="↻"
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: SPACING.xxl,
+    padding: SPACING['5xl'],
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
+    backgroundColor: COLORS.background,
   },
-  emoji: {
-    fontSize: 40,
-    marginBottom: SPACING.md,
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.dangerSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xl,
+  },
+  icon: {
+    fontSize: 28,
+    color: COLORS.danger,
+    fontWeight: '700',
   },
   message: {
     ...FONTS.h3,
     color: COLORS.textPrimary,
     textAlign: 'center',
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  errorContainer: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING['3xl'],
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    width: '100%',
   },
   errorText: {
-    ...FONTS.caption,
+    ...FONTS.tiny,
     color: COLORS.danger,
     textAlign: 'center',
-    marginBottom: SPACING.xl,
-    opacity: 0.8,
+    fontWeight: '600',
   },
   button: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: SPACING.xxl,
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.pill,
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
+    minWidth: 160,
   },
 });

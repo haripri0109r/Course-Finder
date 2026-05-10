@@ -1,5 +1,5 @@
-import React, { useState, useContext, useEffect } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useContext } from 'react';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
@@ -13,130 +13,103 @@ export default function RegisterScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  const [isWakingUp, setIsWakingUp] = useState(false);
-
-  useEffect(() => {
-    let timer;
-    if (loading) {
-      timer = setTimeout(() => setIsWakingUp(true), 5000);
-    } else {
-      setIsWakingUp(false);
-    }
-    return () => clearTimeout(timer);
-  }, [loading]);
 
   const validate = () => {
     const newErrors = {};
-    if (!name.trim()) newErrors.name = 'Full name is required';
-    
-    if (!email) newErrors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'Email is invalid';
-    
-    if (!password) newErrors.password = 'Password is required';
-    else if (password.length < 6) newErrors.password = 'Password must be at least 6 characters';
-    
+    if (!name) newErrors.name = 'Name required';
+    if (!email) newErrors.email = 'Email required';
+    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'Invalid email';
+    if (!password) newErrors.password = 'Password required';
+    else if (password.length < 6) newErrors.password = 'Min 6 characters';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleRegister = async () => {
     if (!validate()) return;
-
     try {
       setLoading(true);
       await register(name, email, password);
-      showToast('Account created successfully!', 'success');
+      showToast({ message: 'Account created! Welcome 🎉', type: 'success' });
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Registration failed';
-      showToast(msg, 'error');
+      showToast({ message: 'Registration failed', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  const clearError = (field) => {
-    if (errors[field]) {
-      setErrors({ ...errors, [field]: null });
-    }
-  };
-
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.brandBlock}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>CF</Text>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <Text style={styles.title}>Join us</Text>
+            <Text style={styles.subtitle}>Start sharing your learning journey with the world.</Text>
           </View>
-        </View>
 
-        <Text style={styles.title}>Create Account 🚀</Text>
-        <Text style={styles.subtitle}>Join thousands of learners showcasing their skills.</Text>
+          <View style={styles.formCard}>
+            <InputField
+              label="Full Name"
+              placeholder="Jane Doe"
+              value={name}
+              onChangeText={setName}
+              error={errors.name}
+              icon="👤"
+            />
 
-        <InputField
-          label="Full Name"
-          placeholder="John Doe"
-          value={name}
-          onChangeText={(t) => { setName(t); clearError('name'); }}
-          autoCapitalize="words"
-          error={errors.name}
-        />
+            <InputField
+              label="Email"
+              placeholder="jane@example.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              error={errors.email}
+              icon="✉️"
+            />
 
-        <InputField
-          label="Email Address"
-          placeholder="name@example.com"
-          value={email}
-          onChangeText={(t) => { setEmail(t); clearError('email'); }}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          error={errors.email}
-        />
+            <InputField
+              label="Password"
+              placeholder="••••••••"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              error={errors.password}
+              icon="🔒"
+            />
 
-        <InputField
-          label="Password"
-          placeholder="Min 6 characters"
-          value={password}
-          onChangeText={(t) => { setPassword(t); clearError('password'); }}
-          secureTextEntry
-          error={errors.password}
-        />
+            <PrimaryButton 
+              title="Create Account" 
+              onPress={handleRegister} 
+              loading={loading} 
+              fullWidth 
+              style={styles.submit}
+            />
+          </View>
 
-        <PrimaryButton title="Register" onPress={handleRegister} loading={loading} variant="secondary" style={{ marginTop: SPACING.sm }} />
-
-        {isWakingUp && (
-          <Text style={styles.wakingText}>📍 Server waking up... please wait</Text>
-        )}
-
-        <PrimaryButton
-          title="Already have an account? Login"
-          onPress={() => navigation.goBack()}
-          variant="outline"
-          style={{ marginTop: SPACING.lg }}
-        />
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Text style={styles.footerLink}>Sign in</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: COLORS.background },
-  container: { flexGrow: 1, justifyContent: 'center', padding: SPACING.xxl },
-  brandBlock: { alignItems: 'center', marginBottom: SPACING.xxl },
-  logoCircle: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: COLORS.secondary,
-    justifyContent: 'center', alignItems: 'center',
-    ...SHADOW.md,
-  },
-  logoText: { color: COLORS.white, fontSize: 24, fontWeight: '900' },
-  title: { ...FONTS.h1, marginBottom: SPACING.sm },
-  subtitle: { ...FONTS.caption, fontSize: 16, marginBottom: SPACING.xxl },
-  errorBox: { backgroundColor: COLORS.dangerLight, padding: SPACING.md, borderRadius: RADIUS.sm, marginBottom: SPACING.lg },
-  errorText: { color: COLORS.danger, fontWeight: '600', fontSize: 14 },
-  wakingText: {
-    textAlign: 'center',
-    color: COLORS.secondary,
-    fontWeight: '700',
-    marginTop: SPACING.md,
-    fontSize: 13,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  flex: { flex: 1 },
+  scroll: { flexGrow: 1, paddingHorizontal: SPACING.xl, justifyContent: 'center', paddingVertical: 40 },
+  header: { alignItems: 'flex-start', marginBottom: SPACING['3xl'], paddingHorizontal: SPACING.sm },
+  title: { ...FONTS.display, fontSize: 32, color: COLORS.primary },
+  subtitle: { ...FONTS.body, color: COLORS.textMuted, marginTop: 8 },
+  formCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.xxl, padding: SPACING.xxl, ...SHADOW.sm, borderWidth: 1, borderColor: COLORS.borderLight },
+  submit: { marginTop: SPACING.lg },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING['3xl'] },
+  footerText: { ...FONTS.body, color: COLORS.textSecondary },
+  footerLink: { ...FONTS.bodyBold, color: COLORS.accent },
 });

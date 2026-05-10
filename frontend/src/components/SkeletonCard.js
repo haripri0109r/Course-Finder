@@ -1,51 +1,86 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
-import { COLORS, RADIUS, SPACING } from '../utils/theme';
+import { COLORS, RADIUS, SPACING, SHADOW, ANIMATION } from '../utils/theme';
 
-export default function SkeletonCard() {
-  const opacity = useRef(new Animated.Value(0.3)).current;
+/**
+ * Premium shimmer skeleton loader
+ * Variants: card | detail | compact
+ */
+export default function SkeletonCard({ variant = 'card' }) {
+  const opacity = useRef(new Animated.Value(ANIMATION.shimmer.lowOpacity)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {
-          toValue: 0.7,
-          duration: 800,
+          toValue: ANIMATION.shimmer.highOpacity,
+          duration: ANIMATION.shimmer.duration,
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {
-          toValue: 0.3,
-          duration: 800,
+          toValue: ANIMATION.shimmer.lowOpacity,
+          duration: ANIMATION.shimmer.duration,
           useNativeDriver: true,
         }),
       ])
     ).start();
   }, [opacity]);
 
+  const Bone = ({ width, height, radius = RADIUS.sm, mb = 0, style }) => (
+    <Animated.View
+      style={[
+        styles.bone,
+        { width, height, borderRadius: radius, marginBottom: mb, opacity },
+        style,
+      ]}
+    />
+  );
+
+  if (variant === 'compact') {
+    return (
+      <View style={styles.compactCard}>
+        <Bone width={60} height={60} radius={RADIUS.md} />
+        <View style={styles.compactContent}>
+          <Bone width="70%" height={14} mb={8} />
+          <Bone width="45%" height={12} mb={6} />
+          <Bone width="30%" height={10} />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.card}>
-      <View style={styles.accent} />
+      {/* Image placeholder */}
+      <Bone width="100%" height={160} radius={0} mb={0} style={styles.imageBone} />
+
       <View style={styles.content}>
-        <View style={styles.headerRow}>
-          <Animated.View style={[styles.shimmer, { width: '40%', height: 12, opacity }]} />
-          <Animated.View style={[styles.shimmer, { width: '20%', height: 10, opacity }]} />
+        {/* Author + time row */}
+        <View style={styles.row}>
+          <Bone width={28} height={28} radius={14} />
+          <View style={{ marginLeft: 10, flex: 1 }}>
+            <Bone width="40%" height={12} mb={6} />
+            <Bone width="25%" height={10} />
+          </View>
         </View>
 
-        <View style={styles.titleRow}>
-          <Animated.View style={[styles.shimmer, { width: '80%', height: 20, opacity, marginBottom: 8 }]} />
-          <Animated.View style={[styles.shimmer, { width: 32, height: 32, borderRadius: 8, opacity }]} />
-        </View>
+        {/* Title */}
+        <Bone width="85%" height={18} mb={10} />
+        <Bone width="60%" height={14} mb={16} />
 
-        <Animated.View style={[styles.shimmer, { width: '30%', height: 24, borderRadius: 12, opacity, marginBottom: 16 }]} />
+        {/* Platform badge */}
+        <Bone width={80} height={24} radius={RADIUS.full} mb={16} />
 
-        <Animated.View style={[styles.shimmer, { width: '100%', height: 60, borderRadius: 8, opacity, marginBottom: 16 }]} />
+        {/* Description */}
+        <Bone width="100%" height={12} mb={6} />
+        <Bone width="90%" height={12} mb={6} />
+        <Bone width="70%" height={12} mb={20} />
 
-        <View style={styles.statsRow}>
-          <Animated.View style={[styles.shimmer, { width: 40, height: 16, opacity }]} />
-          <View style={styles.divider} />
-          <Animated.View style={[styles.shimmer, { width: 40, height: 16, opacity }]} />
-          <View style={styles.divider} />
-          <Animated.View style={[styles.shimmer, { width: 40, height: 16, opacity }]} />
+        {/* Stats row */}
+        <View style={styles.row}>
+          <Bone width={50} height={16} />
+          <Bone width={50} height={16} style={{ marginLeft: 20 }} />
+          <Bone width={50} height={16} style={{ marginLeft: 20 }} />
         </View>
       </View>
     </View>
@@ -54,43 +89,40 @@ export default function SkeletonCard() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.surface,
     borderRadius: RADIUS.lg,
     marginBottom: SPACING.lg,
-    flexDirection: 'row',
     overflow: 'hidden',
-    height: 180,
+    ...SHADOW.sm,
   },
-  accent: {
-    width: 6,
-    backgroundColor: COLORS.border,
+  imageBone: {
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
   },
   content: {
-    flex: 1,
     padding: SPACING.lg,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  shimmer: {
-    backgroundColor: '#E1E9EE',
-    borderRadius: 4,
-  },
-  statsRow: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: SPACING.lg,
   },
-  divider: {
-    width: 1,
-    height: 14,
-    backgroundColor: COLORS.borderLight,
-    marginHorizontal: SPACING.md,
+  bone: {
+    backgroundColor: COLORS.shimmer,
+  },
+
+  // Compact variant
+  compactCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...SHADOW.xs,
+  },
+  compactContent: {
+    flex: 1,
+    marginLeft: SPACING.md,
   },
 });

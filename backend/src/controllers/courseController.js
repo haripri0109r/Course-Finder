@@ -225,12 +225,18 @@ const fetchMetadata = async (req, res) => {
   }
 
   try {
-    const data = await metadataService.getMetadata(url);
-
+    const result = await metadataService.getMetadata(url);
+    if (!result.success) {
+      return res.status(200).json({
+        success: false,
+        manualEntry: true,
+        version: API_VERSION,
+      });
+    }
     return res.status(200).json({
       success: true,
       version: API_VERSION,
-      data,
+      data: result.data,
     });
   } catch (error) {
     console.error('Metadata fetch error in controller:', error.message);

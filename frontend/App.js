@@ -3,12 +3,14 @@ import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { AuthProvider } from './src/context/AuthContext';
+import { NavigationContainer } from '@react-navigation/native';
 import AppNavigator from './src/navigation/AppNavigator';
 import { NotificationProvider } from './src/context/NotificationContext';
 import Toast from './src/components/Toast';
 import { COLORS, SPACING, FONTS } from './src/utils/theme';
 import * as Notifications from 'expo-notifications';
 import { navigationRef } from './src/navigation/navigationRef';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 export default function App() {
   const { isConnected } = useNetInfo();
@@ -35,7 +37,11 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <NotificationProvider>
-          <AppNavigator />
+          <NavigationContainer ref={navigationRef}>
+            <ErrorBoundary>
+              <AppNavigator />
+            </ErrorBoundary>
+          </NavigationContainer>
           {isConnected === false && (
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineText}>📡 No Internet Connection</Text>

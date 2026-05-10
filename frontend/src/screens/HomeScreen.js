@@ -1,76 +1,55 @@
-import React, { useState, useCallback, useContext, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useState, useContext, useEffect } from 'react';
+import { View, Text, FlatList, StyleSheet, RefreshControl, SafeAreaView, StatusBar, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import CourseCard from '../components/CourseCard';
 import SkeletonCard from '../components/SkeletonCard';
-import RetryBox from '../components/RetryBox';
-import AnimatedPressable from '../components/AnimatedPressable';
-import { showToast } from '../components/Toast';
+import Avatar from '../components/Avatar';
+import SectionHeader from '../components/SectionHeader';
 import CourseImage from '../components/CourseImage';
+import EmptyState from '../components/EmptyState';
 import { prefetchImages } from '../utils/prefetch';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { COLORS, SPACING, FONTS, RADIUS } from '../utils/theme';
 
 export default function HomeScreen({ navigation }) {
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
-  const [recommended, setRecommended] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [posts, setPosts] = useState([]);
   const [trending, setTrending] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
 
-  const fetchPosts = async () => {
+  const fetchPosts = async (isRefresh = false) => {
     try {
-      // 🚨 STOP if no more data
-      if (cursor === null && posts.length > 0) {
-        console.log("🛑 No more posts to fetch");
-        return;
-      }
-
+      if (!isRefresh && cursor === null && posts.length > 0) return;
       if (loading) return;
+      
       setLoading(true);
-
-      const res = await api.get(`/posts/feed?cursor=${cursor || ""}`);
-
-      console.log("FULL RESPONSE:", res.data);
-
+      const targetCursor = isRefresh ? "" : (cursor || "");
+      const res = await api.get(`/posts/feed?cursor=${targetCursor}`);
       const newPosts = res.data?.posts || [];
       const nextCursor = res.data?.nextCursor || null;
 
-      if (!Array.isArray(newPosts)) {
-        console.error("Invalid posts format");
-        return;
-      }
-
-      // ✅ DEDUPLICATION Logic
       setPosts(prev => {
+        if (isRefresh) return newPosts;
         const existingIds = new Set(prev.map(p => p._id));
         const filtered = newPosts.filter(p => !existingIds.has(p._id));
         return [...prev, ...filtered];
       });
 
       setCursor(nextCursor);
-      
-      // Prefetch images for smoother scrolling
       prefetchImages(newPosts);
-
     } catch (error) {
-      console.log("Feed fetch error:", error.response?.status);
+      console.log("Feed fetch error:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  // 🚀 Cursors are now handled via loadMore -> fetchData(false)
-
   useEffect(() => {
-    fetchPosts();
-    
-    // Periodically sync trending completions independently
+    fetchPosts(true);
     const syncTrending = async () => {
       try {
         const trendRes = await api.getTrending();
@@ -82,24 +61,15 @@ export default function HomeScreen({ navigation }) {
     syncTrending();
   }, []);
 
-  const handleLoadMore = () => {
-    if (!loading && cursor !== null) {
-      fetchPosts();
-    }
-  };
-
-  const onRefresh = async () => {
-    setCursor(null);
-    setPosts([]); 
-    await fetchPosts();
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchPosts(true);
   };
 
   const handleLike = async (item) => {
     const isLiked = item.isLikedByMe;
-    
-    // Optimistic UI update
     setPosts(prev => prev.map(a => 
-      a.id === item.id 
+      a._id === item._id 
         ? { ...a, isLikedByMe: !isLiked, likesCount: isLiked ? a.likesCount - 1 : a.likesCount + 1 }
         : a
     ));
@@ -108,144 +78,256 @@ export default function HomeScreen({ navigation }) {
       if (isLiked) await api.unlikeCompletion(item.id);
       else await api.likeCompletion(item.id);
     } catch (err) {
-      // Revert if silent refresh or error handling is needed
-      fetchPosts(true); 
-      showToast('Interaction failed', 'error');
+      // Rollback logic could go here
     }
   };
 
   const Header = () => (
-    <View style={styles.headerBlock}>
-      <Text style={styles.greeting}>Good day 👋</Text>
-      <Text style={styles.headline}>Learning Feed</Text>
-      
-      {trending.length > 0 && (
-        <>
-          <View style={styles.trendHeader}>
-            <Text style={styles.sectionTitle}>🔥 Trending Now</Text>
-            <View style={styles.trendLive} />
+    <View style={styles.header}>
+      <View style={styles.navBar}>
+        <View style={styles.userSection}>
+          <Avatar name={currentUser?.name} size="sm" />
+          <Text style={styles.appTitle}>Course Finder</Text>
+        </View>
+        <TouchableOpacity style={styles.notificationBtn} onPress={() => navigation.navigate('Inbox')}>
+          <Ionicons name="notifications-outline" size={18} color={COLORS.textPrimary} />
+          <View style={styles.notifDot} />
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity style={styles.searchBar} onPress={() => navigation.navigate('Search')} activeOpacity={0.85}>
+        <Ionicons name="search-outline" style={styles.searchIcon} />
+        <Text style={styles.searchText}>Search courses, skills, authors</Text>
+      </TouchableOpacity>
+
+      <View style={styles.moduleSection}>
+        <SectionHeader title="Continue learning" actionLabel="Open" onAction={() => navigation.navigate('Saved')} />
+        <View style={styles.continueRow}>
+          <View style={styles.continueMeta}>
+            <Text style={styles.continueTitle}>Frontend Architecture Fundamentals</Text>
+            <Text style={styles.continueSub}>45 min remaining · 7/12 lessons</Text>
           </View>
+          <TouchableOpacity style={styles.playBtn} activeOpacity={0.75}>
+            <Ionicons name="play" size={14} color={COLORS.accent} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {trending.length > 0 && (
+        <View style={styles.moduleSection}>
+          <SectionHeader title="Recommended courses" actionLabel="See all" onAction={() => navigation.navigate('Search')} />
           <FlatList
             horizontal
             data={trending}
-            keyExtractor={item => `trend-${item.id}`}
+            keyExtractor={(item, index) => `trend-${item?.id || item?._id || index}`}
             showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.trendingList}
             renderItem={({ item }) => (
-              <AnimatedPressable 
-                style={styles.trendCard} 
-                onPress={() => navigation.navigate('CompletionDetail', { id: item.id })}
-                scaleTo={0.95}
-              >
-                <CourseImage uri={item.image} style={styles.trendThumb} />
-                <View style={styles.trendOverlay}>
-                  <Text style={styles.trendTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.trendMeta}>{item.viewsCount} views</Text>
-                </View>
-              </AnimatedPressable>
+              <TouchableOpacity activeOpacity={0.9} style={styles.trendItem} onPress={() => navigation.navigate('PostDetail', { postId: item.id })}>
+                <CourseImage uri={item.image} style={styles.trendImage} />
+                <Text style={styles.trendTitle} numberOfLines={2}>{item.title}</Text>
+                <Text style={styles.trendSub}>{item.platform} · {item.duration || 'Course'}</Text>
+              </TouchableOpacity>
             )}
-            contentContainerStyle={styles.horizontalList}
           />
-        </>
+        </View>
       )}
 
-      <Text style={[styles.sectionTitle, { marginTop: SPACING.xl }]}>Community Activity</Text>
+      <View style={styles.feedHeader}>
+        <SectionHeader title="Community feed" />
+      </View>
     </View>
   );
 
-  const Footer = () => {
-    if (!loading || (loading && posts.length === 0)) return <View style={{ height: 40 }} />;
-    return (
-      <View style={styles.footerLoader}>
-        <ActivityIndicator color={COLORS.primary} size="small" />
-      </View>
-    );
-  };
-
-  if (error && posts.length === 0) {
-    return <RetryBox message="Unable to load your feed" error={error} onRetry={() => fetchPosts(true)} />;
-  }
-
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
       <FlatList
-        data={loading && posts.length === 0 ? [1, 2, 3] : posts}
-        keyExtractor={(item) => (loading && posts.length === 0) ? `skel-${Math.random()}` : item._id}
+        data={(loading && posts.length === 0) ? [1, 2, 3] : posts}
+        keyExtractor={(item, index) => (loading && posts.length === 0) ? `skel-${index}` : (item?._id || item?.id || index).toString()}
         renderItem={({ item }) => 
-          loading ? (
-            <SkeletonCard />
+          (loading && posts.length === 0) ? (
+            <View style={{ paddingHorizontal: SPACING.xl }}>
+              <SkeletonCard />
+            </View>
           ) : (
-            <CourseCard
-              item={item}
-              onBookmark={() => toggleBookmark(item.id)}
-              onLike={() => handleLike(item)}
-              isBookmarked={bookmarks.has(item.id)}
-            />
-          )
-        }
-        ListHeaderComponent={<Header />}
-        ListFooterComponent={<Footer />}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh} 
-            tintColor={COLORS.primary} 
-            colors={[COLORS.primary]} 
-          />
-        }
-        removeClippedSubviews={true}
-        initialNumToRender={5}
-        maxToRenderPerBatch={10}
-        windowSize={10}
-        ListEmptyComponent={
-          !loading && posts.length === 0 && (
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyEmoji}>📬</Text>
-              <Text style={styles.emptyTitle}>Nothing here yet</Text>
-              <Text style={styles.emptySubtitle}>Follow users to see their learning journey!</Text>
+            <View style={{ paddingHorizontal: SPACING.xl }}>
+              <CourseCard
+                item={item}
+                onBookmark={() => toggleBookmark(item.id)}
+                onLike={() => handleLike(item)}
+                isBookmarked={bookmarks.has(item.id)}
+              />
             </View>
           )
         }
+        ListHeaderComponent={<Header />}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        onEndReached={() => fetchPosts()}
+        onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />
+        }
+        ListEmptyComponent={
+          !loading && (
+            <EmptyState 
+              icon="○"
+              title="Your feed is quiet"
+              subtitle="Follow more learners to see their progress here."
+              actionTitle="Explore"
+              onAction={() => navigation.navigate('Search')}
+            />
+          )
+        }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  list: { paddingHorizontal: SPACING.xl, paddingBottom: SPACING.xxxl },
-  headerBlock: { paddingTop: 60, marginBottom: SPACING.lg },
-  greeting: { ...FONTS.caption, fontSize: 16, marginBottom: SPACING.xs },
-  headline: { ...FONTS.h1, marginBottom: SPACING.xl },
-  sectionTitle: { ...FONTS.h3, marginBottom: SPACING.md },
-  horizontalList: { paddingRight: SPACING.xl, marginBottom: SPACING.md },
-  trendHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md },
-  trendLive: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.danger, marginLeft: 8 },
-  trendCard: {
-    width: 240,
-    height: 140,
-    borderRadius: RADIUS.lg,
-    marginRight: SPACING.md,
-    overflow: 'hidden',
-    ...SHADOW.sm,
+  container: { 
+    flex: 1, 
+    backgroundColor: COLORS.background 
   },
-  trendThumb: { width: '100%', height: '100%' },
-  trendOverlay: {
+  listContent: { 
+    paddingBottom: 84,
+  },
+  header: { 
+    backgroundColor: COLORS.background,
+    paddingBottom: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  navBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
+  },
+  userSection: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  appTitle: {
+    ...FONTS.bodyBold,
+    fontSize: 16,
+    marginLeft: SPACING.sm,
+    color: COLORS.textPrimary,
+  },
+  notificationBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  notifDot: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: SPACING.md,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    top: 8,
+    right: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.danger,
+    borderWidth: 1,
+    borderColor: COLORS.surface,
   },
-  trendTitle: { color: COLORS.white, ...FONTS.bodyBold, fontSize: 14 },
-  trendMeta: { color: 'rgba(255,255,255,0.8)', fontSize: 11, marginTop: 2 },
-  footerLoader: { paddingVertical: SPACING.xxl, alignItems: 'center' },
-  emptyBox: { alignItems: 'center', paddingVertical: 80 },
-  emptyEmoji: { fontSize: 60, marginBottom: SPACING.md, opacity: 0.5 },
-  emptyTitle: { ...FONTS.h3, marginBottom: SPACING.xs },
-  emptySubtitle: { ...FONTS.caption, fontSize: 15, textAlign: 'center' },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    height: 42,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  searchIcon: { 
+    marginRight: SPACING.md, 
+    fontSize: 18,
+    color: COLORS.textSecondary,
+  },
+  searchText: { 
+    ...FONTS.body, 
+    color: COLORS.textSecondary,
+    fontSize: 13,
+  },
+  moduleSection: {
+    marginTop: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+  },
+  continueRow: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  continueMeta: {
+    flex: 1,
+    paddingRight: SPACING.sm,
+  },
+  continueTitle: {
+    ...FONTS.bodyBold,
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  continueSub: {
+    ...FONTS.small,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  playBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+  },
+  trendingList: { 
+    paddingBottom: SPACING.xs, 
+  },
+  trendItem: {
+    width: 210,
+    borderRadius: RADIUS.md,
+    marginRight: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+    paddingBottom: SPACING.sm,
+  },
+  trendImage: { 
+    width: '100%', 
+    height: 108,
+    resizeMode: 'cover',
+  },
+  trendTitle: { 
+    ...FONTS.captionBold,
+    color: COLORS.textPrimary, 
+    fontSize: 13,
+    marginTop: SPACING.sm,
+    marginHorizontal: SPACING.sm,
+  },
+  trendSub: {
+    ...FONTS.small,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    marginHorizontal: SPACING.sm,
+  },
+  feedHeader: { 
+    paddingHorizontal: SPACING.xl, 
+    marginTop: SPACING.sm,
+  },
 });

@@ -1,425 +1,280 @@
-import React, { memo, useState } from 'react';
-import { View, Text, StyleSheet, Linking, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { COLORS, RADIUS, SHADOW, SPACING, FONTS } from '../utils/theme';
-import { timeAgo } from '../utils/format';
-import { showToast } from './Toast';
-import AnimatedPressable from './AnimatedPressable';
-import CourseImage from './CourseImage';
-import PrimaryButton from './PrimaryButton';
-import api from '../services/api';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Share } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, SPACING, FONTS, RADIUS } from '../utils/theme';
+import Avatar from './Avatar';
+import { timeAgo } from '../utils/format';
+import CourseImage from './CourseImage';
 
 /**
- * PRODUCTION-GRADE CourseCard
- * Consumes flattened v1 API structure.
- * Media handling is delegated to the resilient <CourseImage /> component.
+ * Premium Course Card — Coursera + Airbnb aesthetic
  */
-const CourseCard = memo(({ 
-  item = {},
-  onLike,
-  onBookmark,
-  isBookmarked
-}) => {
+const CourseCard = ({ item, onBookmark, onLike, isBookmarked }) => {
   const navigation = useNavigation();
-  const [isLikeLoading, setIsLikeLoading] = useState(false);
-  const [isBookmarkLoading, setIsBookmarkLoading] = useState(false);
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
 
-  const handlePress = () => {
-    if (isNavigating) return;
-    setIsNavigating(true);
-
+  const handleShare = async () => {
     try {
-      navigation.navigate("PostDetail", {
-        postId: item._id,
+      await Share.share({
+        message: `Check out this course I found on CourseFinder: ${item.title} - ${item.url}`,
       });
-    } finally {
-      // Reset safety latch after short delay
-      setTimeout(() => setIsNavigating(false), 500);
+    } catch (error) {
+      console.log(error.message);
     }
   };
 
-  const platformColor = {
-    Udemy: '#A435F0',
-    Coursera: '#2A73CC',
-    YouTube: '#FF0000',
-    Skillshare: '#00FF84',
-    Other: '#888',
+  const navigateToDetail = () => {
+    navigation.navigate('PostDetail', { postId: item.id || item._id });
   };
 
-  const handleLike = async () => {
-    if (isLikeLoading) return;
-    setIsLikeLoading(true);
-    try {
-      await onLike?.();
-    } finally {
-      setIsLikeLoading(false);
-    }
+  const navigateToUser = () => {
+    navigation.navigate('UserProfile', { userId: item.userId?._id || item.userId });
   };
 
-  const handleBookmark = async () => {
-    if (isBookmarkLoading) return;
-    setIsBookmarkLoading(true);
-    try {
-      await onBookmark?.();
-    } finally {
-      setIsBookmarkLoading(false);
-    }
-  };
-
-  const isPdfCert = item?.certificateUrl && (item.certificateUrl.endsWith('.pdf') || item.certificateUrl.includes('/raw/'));
+  const platformColor = COLORS.platforms[item.platform] || COLORS.accent;
 
   return (
-    <AnimatedPressable
-      style={styles.card}
-      onPress={handlePress}
-      scaleTo={0.98}
-      haptic="impactLight"
-    >
-      <View style={[styles.accent, { backgroundColor: platformColor[item?.platform] || COLORS.primary }]} />
+    <View style={styles.card}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={navigateToUser} style={styles.authorRow}>
+          <Avatar 
+            name={item.authorName || item.userId?.name} 
+            uri={item.userId?.profilePicture} 
+            size="sm" 
+          />
+          <View style={styles.authorMeta}>
+            <Text style={styles.authorName}>{item.authorName || item.userId?.name || 'Learner'}</Text>
+            <Text style={styles.timeAgo}>{timeAgo(item.createdAt)}</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.moreIconBtn} activeOpacity={0.75}>
+          <Ionicons name="ellipsis-horizontal" size={16} color={COLORS.textMuted} />
+        </TouchableOpacity>
+      </View>
 
-      <View style={styles.cardInner}>
-        <View style={styles.imageContainer}>
-          <CourseImage uri={item?.image} style={styles.thumbnail} />
+      <TouchableOpacity activeOpacity={0.9} onPress={navigateToDetail}>
+        <View style={styles.mediaContainer}>
+          <CourseImage uri={item.image} style={styles.image} />
+          <View style={styles.platformBadge}>
+            <View style={[styles.dot, { backgroundColor: platformColor }]} />
+            <Text style={styles.platformName}>{item.platform}</Text>
+          </View>
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.headerRow}>
-            {item?.authorName && (
-              <Text style={styles.authorTag}>Logged by <Text style={styles.authorName}>{item.authorName}</Text></Text>
-            )}
-            {item?.createdAt && <Text style={styles.timeText}>{timeAgo(item.createdAt)}</Text>}
+        <View style={styles.body}>
+          <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
+          
+          <View style={styles.ratingRow}>
+            <Ionicons name="star" size={12} color={COLORS.warning} />
+            <Text style={styles.ratingText}>{item.rating?.toFixed(1) || '0.0'}</Text>
+            <View style={styles.metaDivider} />
+            <Text style={styles.durationText}>{item.duration || 'Short Course'}</Text>
           </View>
 
-          <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={2}>{item?.title}</Text>
-            <AnimatedPressable 
-              style={[styles.bookmarkBtn, isBookmarked && styles.bookmarkBtnActive]} 
-              onPress={handleBookmark}
-              disabled={isBookmarkLoading}
-              scaleTo={0.8}
-              haptic="impactMedium"
-            >
-              <Text style={{ fontSize: 18 }}>{isBookmarked ? '🔖' : '🔖'}</Text>
-              {!isBookmarked && <View style={styles.bookmarkOverlay} />}
-            </AnimatedPressable>
-          </View>
-
-          <View style={styles.platformBadge}>
-            <Text style={[styles.platformText, { color: platformColor[item?.platform] || COLORS.primary }]}>
-              {item?.platform}
-            </Text>
-          </View>
-
-          {item?.reviewSnippet && (
-            <Text style={styles.reviewSnippet} numberOfLines={2}>"{item.reviewSnippet}"</Text>
+          {item.review && (
+            <Text style={styles.reviewQuote} numberOfLines={2}>{item.review}</Text>
           )}
+        </View>
+      </TouchableOpacity>
 
-          {/* Learning Post Features */}
-          {item?.description && (
-            <View style={styles.descriptionContainer}>
-              <Text 
-                style={styles.description} 
-                numberOfLines={isDescriptionExpanded ? undefined : 3}
-              >
-                {item.description}
-              </Text>
-              {item.description.length > 100 && (
-                <TouchableOpacity onPress={() => setIsDescriptionExpanded(!isDescriptionExpanded)}>
-                  <Text style={styles.seeMoreText}>
-                    {isDescriptionExpanded ? 'Show less' : 'See more...'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+      <View style={styles.footer}>
+        <View style={styles.statsRow}>
+          <Text style={styles.engagementText}>
+            <Text style={styles.statBold}>{item.likesCount || 0}</Text> likes  •  <Text style={styles.statBold}>{item.commentsCount || 0}</Text> comments
+          </Text>
+        </View>
 
-          {item?.learnings && item.learnings.length > 0 && (
-            <View style={styles.learningsContainer}>
-              <Text style={styles.learningsHeader}>💡 What I learned:</Text>
-              {item.learnings.map((learning, index) => (
-                <View key={index} style={styles.learningItem}>
-                  <Text style={styles.bullet}>•</Text>
-                  <Text style={styles.learningText}>{learning}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+        <View style={styles.divider} />
 
-          {item?.tags && item.tags.length > 0 && (
-            <View style={styles.tagsContainer}>
-              {item.tags.map((tag, index) => (
-                <Text key={index} style={styles.tagText}>#{tag}</Text>
-              ))}
-            </View>
-          )}
+        <View style={styles.actionGrid}>
+          <TouchableOpacity onPress={onLike} style={styles.actionItem}>
+            <Ionicons
+              name={item.isLikedByMe ? 'heart' : 'heart-outline'}
+              size={16}
+              color={item.isLikedByMe ? COLORS.accent : COLORS.textSecondary}
+            />
+            <Text style={[styles.actionLabel, item.isLikedByMe && styles.activeLabel]}>Like</Text>
+          </TouchableOpacity>
 
-          {item?.certificateUrl ? (
-            <TouchableOpacity 
-              style={styles.certificateBtn} 
-              onPress={() => {
-                api.post('/completed/analytics/cert-view', { url: item.certificateUrl }).catch(() => {});
-                
-                Linking.openURL(item.certificateUrl).catch(() => {
-                  showToast('Unable to open certificate link', 'error');
-                });
-              }}
-            >
-              <Text style={styles.certificateText}>
-                {isPdfCert ? '📄 View Certificate [PDF]' : '🖼️ View Certificate [Image]'}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity onPress={navigateToDetail} style={styles.actionItem}>
+            <Ionicons name="chatbubble-outline" size={16} color={COLORS.textSecondary} />
+            <Text style={styles.actionLabel}>Comment</Text>
+          </TouchableOpacity>
 
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statEmoji}>⭐</Text>
-              <Text style={styles.statValue}>{item?.rating ? item.rating.toFixed(1) : '0.0'}</Text>
-            </View>
-            
-            <View style={styles.divider} />
-            
-            <AnimatedPressable 
-              onPress={handleLike} 
-              disabled={isLikeLoading}
-              style={styles.stat}
-              scaleTo={0.85}
-              haptic="impactMedium"
-            >
-              <Text style={styles.statEmoji}>{item?.isLiked ? '❤️' : '🤍'}</Text>
-              <Text style={styles.statValue}>{item?.likesCount}</Text>
-            </AnimatedPressable>
+          <TouchableOpacity onPress={handleShare} style={styles.actionItem}>
+            <Ionicons name="share-social-outline" size={16} color={COLORS.textSecondary} />
+            <Text style={styles.actionLabel}>Share</Text>
+          </TouchableOpacity>
 
-            <View style={styles.divider} />
-            
-            <View style={styles.stat}>
-              <Text style={styles.statEmoji}>💬</Text>
-              <Text style={styles.statValue}>{item?.commentsCount || 0}</Text>
-            </View>
-            
-            {item?.duration && item.duration !== 'N/A' && (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.stat}>
-                  <Text style={styles.statEmoji}>⌛</Text>
-                  <Text style={styles.statValue}>{item.duration}</Text>
-                </View>
-              </>
-            )}
-          </View>
-
-          <PrimaryButton 
-            title="View Course" 
-            onPress={handlePress}
-            disabled={!item?.url}
-            variant="outline"
-            style={styles.viewBtn}
-            textStyle={{ fontSize: 12 }}
-          />
+          <TouchableOpacity onPress={onBookmark} style={styles.actionItem}>
+            <Ionicons
+              name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+              size={16}
+              color={isBookmarked ? COLORS.accent : COLORS.textSecondary}
+            />
+            <Text style={[styles.actionLabel, isBookmarked && styles.activeLabel]}>Save</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </AnimatedPressable>
+    </View>
   );
-});
+};
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.card,
-    borderRadius: RADIUS.lg,
-    marginBottom: SPACING.lg,
-    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    marginBottom: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     overflow: 'hidden',
-    ...SHADOW.md,
   },
-  accent: {
-    width: 6,
-  },
-  cardInner: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  imageContainer: {
-    width: '100%',
-    height: 150,
-  },
-  thumbnail: {
-    width: '100%',
-    height: 150,
-  },
-  content: {
-    flex: 1,
-    padding: SPACING.lg,
-  },
-  headerRow: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
   },
-  authorTag: {
-    ...FONTS.small,
-    color: COLORS.textSecondary,
-    fontSize: 11,
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  authorMeta: {
+    marginLeft: SPACING.sm,
   },
   authorName: {
-    color: COLORS.primary,
-    fontWeight: '700',
+    ...FONTS.captionBold,
+    fontSize: 13,
+    color: COLORS.textPrimary,
   },
-  timeText: {
+  timeAgo: {
     ...FONTS.small,
-    fontSize: 10,
-    color: COLORS.textMuted,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
-  titleRow: {
+  moreIconBtn: {
+    padding: SPACING.xs,
+  },
+  moreText: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+  },
+  mediaContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: COLORS.surfaceSubtle,
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  platformBadge: {
+    position: 'absolute',
+    right: SPACING.sm,
+    top: SPACING.sm,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: SPACING.xs,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  platformName: {
+    ...FONTS.small,
+    fontSize: 11,
+    color: COLORS.textPrimary,
+  },
+  body: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
   },
   title: {
     ...FONTS.bodyBold,
-    fontSize: 17,
-    lineHeight: 23,
-    flex: 1,
-    marginRight: SPACING.md,
-  },
-  bookmarkBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: `${COLORS.background}80`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bookmarkBtnActive: {
-    backgroundColor: `${COLORS.secondary}20`,
-  },
-  bookmarkOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-    borderRadius: 8,
-  },
-  platformBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.borderLight,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.pill,
-    marginBottom: SPACING.md,
-  },
-  platformText: {
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  reviewSnippet: {
-    ...FONTS.caption,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
+    fontSize: 16,
+    color: COLORS.textPrimary,
     lineHeight: 20,
-    marginBottom: SPACING.md,
-    backgroundColor: COLORS.background,
-    padding: SPACING.md,
-    borderRadius: RADIUS.md,
   },
-  certificateBtn: {
-    backgroundColor: `${COLORS.primary}15`,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: RADIUS.sm,
-    alignSelf: 'flex-start',
-    marginBottom: SPACING.md,
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
   },
-  certificateText: {
-    color: COLORS.primary,
-    ...FONTS.caption,
-    fontWeight: '700',
+  ratingText: {
+    ...FONTS.small,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginLeft: 4,
+  },
+  metaDivider: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: COLORS.textMuted,
+    marginHorizontal: 8,
+  },
+  durationText: {
+    ...FONTS.small,
+    color: COLORS.textSecondary,
+  },
+  reviewQuote: {
+    ...FONTS.small,
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
+    marginTop: 6,
+  },
+  footer: {
+    paddingBottom: 2,
   },
   statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: 6,
   },
-  stat: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  engagementText: {
+    ...FONTS.small,
+    color: COLORS.textSecondary,
   },
-  statEmoji: {
-    fontSize: 16,
-    marginRight: 6,
-  },
-  statValue: {
-    ...FONTS.caption,
+  statBold: {
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: COLORS.textSecondary,
   },
   divider: {
-    width: 1,
-    height: 14,
+    height: 1,
     backgroundColor: COLORS.border,
     marginHorizontal: SPACING.md,
   },
-  viewBtn: {
-    marginTop: SPACING.lg,
-    paddingVertical: 8,
-    minHeight: 36,
-  },
-  
-  // Learning Post Styles
-  descriptionContainer: {
-    marginBottom: SPACING.md,
-  },
-  description: {
-    ...FONTS.body,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    lineHeight: 20,
-  },
-  seeMoreText: {
-    ...FONTS.small,
-    color: COLORS.primary,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  learningsContainer: {
-    backgroundColor: `${COLORS.background}50`,
-    padding: SPACING.md,
-    borderRadius: RADIUS.md,
-    marginBottom: SPACING.md,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.secondary,
-  },
-  learningsHeader: {
-    ...FONTS.caption,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 6,
-  },
-  learningItem: {
+  actionGrid: {
     flexDirection: 'row',
-    marginBottom: 2,
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
   },
-  bullet: {
-    color: COLORS.secondary,
-    marginRight: 6,
-    fontWeight: 'bold',
-  },
-  learningText: {
-    ...FONTS.caption,
-    color: COLORS.textSecondary,
+  actionItem: {
     flex: 1,
-  },
-  tagsContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: SPACING.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 4,
   },
-  tagText: {
+  actionLabel: {
     ...FONTS.small,
-    color: COLORS.primary,
     fontWeight: '600',
-    marginRight: 10,
-    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  activeLabel: {
+    color: COLORS.accent,
   },
 });
 

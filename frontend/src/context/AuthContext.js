@@ -24,6 +24,9 @@ export const AuthProvider = ({ children }) => {
   // Load user/token on app boot
   const loadUser = async () => {
     try {
+      // Temporarily clear stored auth session to force a clean slate
+      // await AsyncStorage.removeItem('userToken');
+      
       const token = await AsyncStorage.getItem('userToken');
       if (token) {
         const response = await api.get('/auth/me');

@@ -15,6 +15,14 @@ const metadataCacheSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  thumbnail: {
+    type: String,
+    default: '',
+  },
+  author: {
+    type: String,
+    default: '',
+  },
   duration: {
     type: String,
     default: 'N/A',
@@ -22,6 +30,14 @@ const metadataCacheSchema = new mongoose.Schema({
   provider: {
     type: String,
     default: 'Unknown',
+  },
+  platform: {
+    type: String,
+    default: 'other',
+  },
+  sourceUrl: {
+    type: String,
+    default: '',
   },
   cachedAt: {
     type: Date,
