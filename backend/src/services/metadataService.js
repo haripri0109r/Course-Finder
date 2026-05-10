@@ -193,6 +193,47 @@ const buildFailureResponse = (reason = 'metadata_unavailable') => ({
   reason,
 });
 
+const isLikelyEncodedToken = (title = '') => {
+  const value = asText(title);
+  if (!value) return false;
+  if (value.includes('@')) return true;
+  if (value.length > 80 && !value.includes(' ')) return true;
+  return /^[A-Za-z0-9@_\-=]{25,}$/.test(value);
+};
+
+const isBadThumbnail = (thumbnail = '') => {
+  const value = String(thumbnail || '').toLowerCase();
+  if (!value) return true;
+  if (/(logo|favicon|icon)/i.test(value)) return true;
+  return false;
+};
+
+export const isValidMetadata = (metadata = {}, sourceUrl = '') => {
+  const title = asText(metadata.title);
+  const thumbnail = asText(metadata.thumbnail || metadata.image);
+  const description = asText(metadata.description);
+  const author = asText(metadata.author);
+  const publisher = asText(metadata.publisher || metadata.provider);
+  const platform = detectPlatform(sourceUrl || metadata.sourceUrl || '');
+  const isUdemyShare = String(sourceUrl || metadata.sourceUrl || '').toLowerCase().includes('udemy.com/share/');
+
+  if (!title) return false;
+  if (isLikelyEncodedToken(title)) return false;
+  if (!thumbnail) return false;
+  if (isBadThumbnail(thumbnail)) return false;
+
+  const hasReadableSignal = Boolean(description) || Boolean(author) || Boolean(publisher);
+  if (!hasReadableSignal) return false;
+
+  if (platform === 'udemy' && isUdemyShare) {
+    if (isLikelyEncodedToken(title)) return false;
+    if (isBadThumbnail(thumbnail)) return false;
+    if (!author && !publisher && !description) return false;
+  }
+
+  return true;
+};
+
 // Platform-specific fetchers (keep existing behavior but used as enrichment only)
 const fetchYouTubeMetadata = async (url) => {
   const videoId = extractYouTubeId(url);
@@ -457,6 +498,9 @@ export const getMetadata = async (inputUrl) => {
           cached.platform || platform,
           cached.sourceUrl || finalUrl
         );
+        if (!isValidMetadata(normalized, cached.sourceUrl || finalUrl)) {
+          return buildFailureResponse('low_quality_metadata');
+        }
         return buildSuccessResponse(normalized, cached.platform || platform, cached.sourceUrl || finalUrl);
       }
 
@@ -480,8 +524,8 @@ export const getMetadata = async (inputUrl) => {
 
       // Determine if result is useful: at least title or thumbnail or description
       const hasUseful = (normalized.title && normalized.title !== 'Untitled Course') || normalized.thumbnail || normalized.description;
-      if (!hasUseful) {
-        return buildFailureResponse(platform === 'udemy' ? 'provider_blocked' : 'metadata_unavailable');
+      if (!hasUseful || !isValidMetadata(normalized, finalUrl)) {
+        return buildFailureResponse('low_quality_metadata');
       }
 
       // store to cache

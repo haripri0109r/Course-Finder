@@ -109,6 +109,8 @@ export default function AddCourseScreen({ navigation }) {
         setMetadataFetched(false);
         if (res.data?.reason === 'provider_blocked') {
           setMetadataError('This provider blocks automatic metadata extraction. Please continue with manual entry.');
+        } else if (res.data?.reason === 'low_quality_metadata') {
+          setMetadataError('This link does not provide usable course details. Please enter them manually.');
         } else {
           setMetadataError('Automatic extraction unavailable for this link.');
         }
@@ -255,7 +257,7 @@ export default function AddCourseScreen({ navigation }) {
               </View>
             ) : null}
 
-            {(metadataFetched || title || image) && !isFetchingMetadata && (
+            {metadataFetched && !isFetchingMetadata && (
               <View style={styles.previewCard}>
                 {!!image && <Image source={{ uri: image }} style={styles.previewThumb} />}
                 <View style={styles.previewMeta}>
