@@ -268,29 +268,6 @@ const fetchYouTubeMetadata = async (url) => {
   }
 };
 
-const fetchUdemyMetadata = async (url) => {
-  try {
-    const $ = await scrapePage(url);
-    const jsonLd = getJsonLdObjects($);
-    const courseObj = jsonLd.find((obj) => obj?.['@type'] === 'Course');
-    const title = $('meta[property="og:title"]').attr('content') || courseObj?.name || $('title').text();
-    const thumbnail = $('meta[property="og:image"]').attr('content') || courseObj?.image;
-    const author =
-      $('meta[name="author"]').attr('content') ||
-      $('a[data-purpose="instructor-name-top"] span').first().text() ||
-      courseObj?.provider?.name ||
-      '';
-    const duration =
-      $('[data-purpose="curriculum-stats"] span').first().text() ||
-      courseObj?.timeRequired ||
-      '';
-
-    return { title, thumbnail, author, duration: formatIsoDuration(duration) || duration };
-  } catch {
-    return {};
-  }
-};
-
 const fetchCourseraMetadata = async (url) => {
   try {
     const $ = await scrapePage(url);
