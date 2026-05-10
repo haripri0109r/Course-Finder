@@ -256,10 +256,22 @@ const TECH_TERM_MAP = {
   frontend: 'Frontend',
 };
 
+const isGenericUdemyThumbnail = (image = "") => {
+  const img = String(image || "").toLowerCase();
+  if (!img) return true;
+
+  return (
+    img.includes("udemy.com/staticx") ||
+    img.includes("udemy-logo") ||
+    img.includes("logo-udemy") ||
+    img.includes("default-meta-image") ||
+    img.includes("brand-logo")
+  );
+};
+
 const isGenericUdemyMetadata = (metadata = {}) => {
   const title = asText(metadata.title).toLowerCase();
   const author = asText(metadata.author).toLowerCase();
-  const thumbnail = asText(metadata.thumbnail || metadata.image).toLowerCase();
 
   // Pattern 1: Exact generic homepage titles
   const GENERIC_TITLES = [
@@ -279,9 +291,6 @@ const isGenericUdemyMetadata = (metadata = {}) => {
 
   // Pattern 3: Generic author with generic title
   if (author === "udemy" && (title.includes("online courses") || title.includes("learn anything"))) return true;
-
-  // Pattern 4: Known generic brand assets
-  if (thumbnail.includes("udemy-logo") || thumbnail.includes("default-meta-image")) return true;
 
   return false;
 };
@@ -597,8 +606,31 @@ const fetchUdemyCourseMetadata = async (originalUrl, finalUrl) => {
       ''
     );
 
-    if (!title || isGenericUdemyMetadata({ title, thumbnail, author }) || isBadThumbnail(thumbnail)) {
-      return { invalidUdemyCourse: true };
+    const isGenericText = isGenericUdemyMetadata({ title, author });
+    const isGenericThumb = isGenericUdemyThumbnail(thumbnail);
+
+    if (!title || isGenericText) {
+      // If text is generic, return what we have so getMetadata can handle fallback
+      return { 
+        isGeneric: true,
+        title,
+        thumbnail: isGenericThumb ? null : thumbnail,
+        author,
+        duration,
+        description,
+        publisher: 'Udemy'
+      };
+    }
+
+    if (isBadThumbnail(thumbnail) || isGenericThumb) {
+      return {
+        title,
+        thumbnail: null,
+        author,
+        duration,
+        description,
+        publisher: 'Udemy',
+      };
     }
 
     return {
@@ -722,7 +754,7 @@ export const getMetadata = async (inputUrl) => {
         }
       }
 
-      if (enrichment?.invalidUdemyCourse) {
+      if (enrichment?.invalidUdemyCourse || enrichment?.isGeneric) {
         // For Udemy course URLs, generate smart fallback from slug instead of failing
         const isUdemyDomain = /udemy\.com/i.test(finalUrl);
         if (isUdemyDomain && isUdemyCourseUrl(finalUrl)) {
@@ -730,12 +762,28 @@ export const getMetadata = async (inputUrl) => {
           if (slug) {
             const generatedTitle = generateTitleFromSlug(slug);
             if (generatedTitle) {
+              // Preserve thumbnail if valid, otherwise try to scrape OpenGraph
+              let usableThumbnail = enrichment?.thumbnail;
+              if (isGenericUdemyThumbnail(usableThumbnail)) {
+                usableThumbnail = null;
+              }
+
+              if (!usableThumbnail) {
+                try {
+                  const $ = await scrapePage(finalUrl);
+                  const ogImage = $('meta[property="og:image"]').attr('content') || $('meta[name="twitter:image"]').attr('content');
+                  if (ogImage && !isGenericUdemyThumbnail(ogImage)) {
+                    usableThumbnail = ogImage;
+                  }
+                } catch { /* ignore */ }
+              }
+
               const fallbackMetadata = {
                 title: generatedTitle,
-                thumbnail: null,
+                thumbnail: usableThumbnail,
                 author: 'Instructor unavailable',
-                duration: '',
-                description: '',
+                duration: enrichment?.duration || '',
+                description: enrichment?.description || '',
                 publisher: 'Udemy',
               };
               const normalizedFallback = normalizeShape(fallbackMetadata, platform, finalUrl);
@@ -744,8 +792,8 @@ export const getMetadata = async (inputUrl) => {
                 {
                   url: finalUrl,
                   title: normalizedFallback.title,
-                  image: null,
-                  thumbnail: null,
+                  image: normalizedFallback.thumbnail || null,
+                  thumbnail: normalizedFallback.thumbnail || null,
                   author: normalizedFallback.author,
                   duration: normalizedFallback.duration,
                   provider: normalizedFallback.providerBadge,
@@ -782,12 +830,18 @@ export const getMetadata = async (inputUrl) => {
           if (slug) {
             const generatedTitle = generateTitleFromSlug(slug);
             if (generatedTitle && generatedTitle !== 'Untitled Course') {
+              // Preserve thumbnail if valid
+              let usableThumbnail = normalized.thumbnail;
+              if (isGenericUdemyThumbnail(usableThumbnail)) {
+                usableThumbnail = null;
+              }
+
               const fallbackMetadata = {
                 title: generatedTitle,
-                thumbnail: null,
+                thumbnail: usableThumbnail,
                 author: 'Instructor unavailable',
-                duration: '',
-                description: '',
+                duration: normalized.duration || '',
+                description: normalized.description || '',
                 publisher: 'Udemy',
               };
               const normalizedFallback = normalizeShape(fallbackMetadata, platform, finalUrl);
@@ -796,8 +850,8 @@ export const getMetadata = async (inputUrl) => {
                 {
                   url: finalUrl,
                   title: normalizedFallback.title,
-                  image: null,
-                  thumbnail: null,
+                  image: normalizedFallback.thumbnail || null,
+                  thumbnail: normalizedFallback.thumbnail || null,
                   author: normalizedFallback.author,
                   duration: normalizedFallback.duration,
                   provider: normalizedFallback.providerBadge,
@@ -820,6 +874,12 @@ export const getMetadata = async (inputUrl) => {
       const hasUseful = (normalized.title && normalized.title !== 'Untitled Course') || normalized.thumbnail || normalized.description;
       if (!hasUseful || !isValidMetadata(normalized, finalUrl)) {
         return buildFailureResponse('low_quality_metadata');
+      }
+
+      // Safety check: do NOT cache generic Udemy branding images
+      if (platform === 'udemy' && normalized.thumbnail && isGenericUdemyThumbnail(normalized.thumbnail)) {
+        normalized.thumbnail = null;
+        normalized.image = null;
       }
 
       // store to cache
