@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { DEFAULT_IMAGE } from '../config/constants.js';
 import { MetadataCache, AnalyticsEvent } from '../models/index.js';
 import { extractYouTubeId } from '../utils/extractYouTubeId.js';
+import { fetchLinkMetadata } from './linkMetadataService.js';
 
 const inFlightRequests = new Map();
 
@@ -584,12 +585,27 @@ export const getMetadata = async (inputUrl) => {
       }
 
       let enrichment = {};
-      if (platform === 'youtube') {
-        enrichment = await fetchYouTubeMetadata(finalUrl);
-      } else if (platform === 'udemy') {
-        enrichment = await fetchUdemyCourseMetadata(originalUrl, finalUrl);
-      } else {
-        enrichment = await fetchGenericMetadata(finalUrl);
+
+      // API-first strategy (Iframely). Manual scraping remains fallback.
+      const apiMetadata = await fetchLinkMetadata(finalUrl);
+      const normalizedApi = normalizeShape(apiMetadata, platform, finalUrl);
+      if (isUsefulMetadata(apiMetadata) && isValidMetadata(normalizedApi, finalUrl)) {
+        enrichment = apiMetadata;
+      }
+
+      if (!isUsefulMetadata(enrichment)) {
+        if (platform === 'youtube') {
+          enrichment = await fetchYouTubeMetadata(finalUrl);
+        } else if (platform === 'udemy') {
+          enrichment = await fetchUdemyCourseMetadata(originalUrl, finalUrl);
+        } else if (platform === 'coursera') {
+          enrichment = await fetchCourseraMetadata(finalUrl);
+          if (!isUsefulMetadata(enrichment)) {
+            enrichment = await fetchGenericMetadata(finalUrl);
+          }
+        } else {
+          enrichment = await fetchGenericMetadata(finalUrl);
+        }
       }
 
       if (enrichment?.invalidUdemyCourse) {
