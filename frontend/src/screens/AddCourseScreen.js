@@ -94,6 +94,7 @@ export default function AddCourseScreen({ navigation }) {
         const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b, description: desc, publisher: pub, logo: lg, generatedFallback: isGenerated } = metadata;
         if (t) setTitle(t);
         if (thumbnail) setImage(thumbnail);
+        else setImage(null); // Explicitly set null for safety
         if (a) setAuthor(a);
         if (d) setDuration(d);
         if (desc) setDescription(desc);
@@ -265,7 +266,14 @@ export default function AddCourseScreen({ navigation }) {
 
             {metadataFetched && !isFetchingMetadata && (
               <View style={styles.previewCard}>
-                {!!image && <Image source={{ uri: image }} style={styles.previewThumb} />}
+                {image ? (
+                  <Image source={{ uri: image }} style={styles.previewThumb} />
+                ) : (
+                  <View style={[styles.previewThumb, { justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.surfaceSubtle }]}>
+                    <Ionicons name="school-outline" size={48} color={COLORS.textMuted} />
+                    <Text style={{ ...FONTS.tiny, color: COLORS.textMuted, marginTop: 8 }}>Preview not available</Text>
+                  </View>
+                )}
                 <View style={styles.previewMeta}>
                   <Text style={styles.previewTitle} numberOfLines={2}>{title || 'Untitled Course'}</Text>
                     {!!author && <Text style={styles.previewSub}>{author}</Text>}
@@ -273,7 +281,7 @@ export default function AddCourseScreen({ navigation }) {
                     <Text style={styles.previewSub}>{duration || 'Duration not available'}</Text>
                   <View style={styles.previewBadgeRow}>
                     <Text style={styles.previewBadge}>{providerBadge || platform || 'Other'}</Text>
-                    {generatedFallback && <Text style={[styles.previewBadge, { backgroundColor: '#F59E0B' }]}>Auto-generated from URL</Text>}
+                    {generatedFallback && <Text style={[styles.previewBadge, { backgroundColor: '#F59E0B', color: COLORS.white, borderColor: '#F59E0B' }]}>Auto-generated from URL</Text>}
                   </View>
                 </View>
               </View>
