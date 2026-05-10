@@ -46,7 +46,7 @@ export const createNotification = async ({
     });
 
     const user = await User.findById(actorId).select("name");
-    const recipient = await User.findById(userId).select("expoPushToken");
+    const recipient = await User.findById(userId).select("expoPushTokens");
 
     if (global.io) {
       global.io.to(userId.toString()).emit("new_notification", {
@@ -58,24 +58,26 @@ export const createNotification = async ({
       });
     }
 
-    // --- NEW: Send Expo Push Notification ---
-    console.log("TOKEN FROM DB:", recipient?.expoPushToken);
-    if (recipient && recipient.expoPushToken) {
+    // --- Send Expo Push Notification to ALL user devices ---
+    console.log("TOKENS FROM DB:", recipient?.expoPushTokens);
+    if (recipient && recipient.expoPushTokens && recipient.expoPushTokens.length > 0) {
       let bodyText = "New activity detected";
       if (type === "follow") bodyText = `${user?.name || "Someone"} started following you.`;
       else if (type === "like" || type === "post_like") bodyText = `${user?.name || "Someone"} liked your post.`;
       else if (type === "comment") bodyText = `${user?.name || "Someone"} commented on your post.`;
 
-      sendPushNotification(
-        recipient.expoPushToken,
-        user?.name ? `New from ${user.name}` : 'Course Finder',
-        bodyText,
-        {
-          type,
-          postId,
-          actorId
-        }
-      );
+      for (const token of recipient.expoPushTokens) {
+        await sendPushNotification(
+          token,
+          user?.name ? `New from ${user.name}` : 'Course Finder',
+          bodyText,
+          {
+            type,
+            postId,
+            actorId
+          }
+        );
+      }
     }
   } catch (err) {
     console.error("❌ Notification create error:", err.message);

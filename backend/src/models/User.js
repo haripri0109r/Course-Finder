@@ -65,9 +65,9 @@ const userSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
-    expoPushToken: {
-      type: String,
-      default: '',
+    expoPushTokens: {
+      type: [String],
+      default: [],
     },
   },
   {
