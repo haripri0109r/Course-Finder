@@ -158,6 +158,41 @@ const normalizeShape = (data = {}, platform = 'other', sourceUrl = '') => {
   };
 };
 
+const isUdemyShareUrl = (url = '') => String(url).toLowerCase().includes('udemy.com/share/');
+
+const isUsefulMetadata = (metadata = {}) => {
+  const title = asText(metadata.title);
+  const description = asText(metadata.description);
+  const thumbnail = asText(metadata.thumbnail);
+  const author = asText(metadata.author);
+  const publisher = asText(metadata.publisher);
+  return Boolean(title && title !== 'Untitled Course') || Boolean(description) || Boolean(thumbnail) || Boolean(author) || Boolean(publisher);
+};
+
+const buildSuccessResponse = (metadata, platform, sourceUrl) => {
+  const normalized = normalizeShape(metadata, platform, sourceUrl);
+  return {
+    success: true,
+    metadata: {
+      title: normalized.title,
+      description: normalized.description,
+      thumbnail: normalized.thumbnail,
+      author: normalized.author,
+      publisher: normalized.publisher,
+      logo: normalized.logo,
+      sourceUrl: normalized.sourceUrl,
+      platform: normalized.platform,
+    },
+    data: normalized,
+  };
+};
+
+const buildFailureResponse = (reason = 'metadata_unavailable') => ({
+  success: false,
+  manualEntry: true,
+  reason,
+});
+
 // Platform-specific fetchers (keep existing behavior but used as enrichment only)
 const fetchYouTubeMetadata = async (url) => {
   const videoId = extractYouTubeId(url);
@@ -183,7 +218,9 @@ const fetchYouTubeMetadata = async (url) => {
       title: oembed.data?.title,
       thumbnail: oembed.data?.thumbnail_url,
       author: oembed.data?.author_name,
+      publisher: 'YouTube',
       duration,
+      logo: 'https://www.youtube.com/s/desktop/14cba078/img/favicon_144x144.png',
     };
   } catch {
     return {};
@@ -312,15 +349,83 @@ const fetchMicrolink = async (url) => {
     const thumbnail = data.image?.url || data.image || data.logo?.url || '';
     const description = data.description || '';
     const author = data.author?.name || data.author || data.publisher?.name || data.publisher || '';
-    const provider = data.provider || '';
+    const publisher = data.publisher?.name || data.publisher || data.siteName || data.url || '';
+    const logo = data.logo?.url || '';
 
-    return { title, thumbnail, description, author, provider };
+    return { title, thumbnail, description, author, publisher, logo };
   } catch (err) {
     return {};
   }
 };
 
-const mergePrefer = (base = {}, enrich = {}) => ({ ...base, ...Object.fromEntries(Object.entries(enrich).filter(([, v]) => v != null && String(v).trim() !== '')) });
+const mergePrefer = (base = {}, enrich = {}) => ({
+  ...base,
+  ...Object.fromEntries(Object.entries(enrich).filter(([, v]) => v != null && String(v).trim() !== '')),
+});
+
+const fetchUdemyMetadata = async (url, finalUrl) => {
+  const targetUrl = finalUrl || url;
+  const microlinkUrl = targetUrl || url;
+  const metadata = await fetchMicrolink(microlinkUrl);
+
+  if (isUsefulMetadata(metadata)) {
+    return metadata;
+  }
+
+  if (isUdemyShareUrl(url)) {
+    return { providerBlocked: true };
+  }
+
+  return {};
+};
+
+const fetchGenericMetadata = async (url) => {
+  const metadata = await fetchMicrolink(url);
+  if (isUsefulMetadata(metadata)) return metadata;
+
+  // Best-effort HTML fallback for pages without Microlink coverage.
+  try {
+    const $ = await scrapePage(url);
+    const jsonLd = getJsonLdObjects($);
+    const firstCourseObj = jsonLd.find((obj) => {
+      const type = obj?.['@type'];
+      return type === 'Course' || (Array.isArray(type) && type.includes('Course'));
+    });
+
+    const fallback = {
+      title:
+        $('meta[property="og:title"]').attr('content') ||
+        $('meta[name="twitter:title"]').attr('content') ||
+        firstCourseObj?.name ||
+        $('title').text(),
+      thumbnail:
+        $('meta[property="og:image"]').attr('content') ||
+        $('meta[name="twitter:image"]').attr('content') ||
+        firstCourseObj?.image ||
+        '',
+      description:
+        $('meta[property="og:description"]').attr('content') ||
+        $('meta[name="description"]').attr('content') ||
+        $('meta[name="twitter:description"]').attr('content') ||
+        firstCourseObj?.description ||
+        '',
+      author:
+        $('meta[name="author"]').attr('content') ||
+        firstCourseObj?.provider?.name ||
+        (firstCourseObj?.author?.name || '') ||
+        '',
+      publisher:
+        firstCourseObj?.provider?.name ||
+        $('meta[property="og:site_name"]').attr('content') ||
+        '',
+      logo: $('link[rel="icon"]').attr('href') || '',
+    };
+
+    return fallback;
+  } catch {
+    return {};
+  }
+};
 
 export const getMetadata = async (inputUrl) => {
   const originalUrl = String(inputUrl || '').trim();
@@ -339,40 +444,44 @@ export const getMetadata = async (inputUrl) => {
       // check cache by final canonical URL
       const cached = await MetadataCache.findOne({ url: finalUrl });
       if (cached) {
-        return {
-          success: true,
-          data: normalizeShape(
-            {
-              title: cached.title,
-              thumbnail: cached.thumbnail || cached.image,
-              author: cached.author,
-              duration: cached.duration,
-              description: cached.description || '',
-            },
-            cached.platform || platform,
-            cached.sourceUrl || finalUrl
-          ),
-        };
+        const normalized = normalizeShape(
+          {
+            title: cached.title,
+            thumbnail: cached.thumbnail || cached.image,
+            author: cached.author,
+            duration: cached.duration,
+            description: cached.description || '',
+            publisher: cached.publisher || cached.provider || '',
+            logo: cached.logo || '',
+          },
+          cached.platform || platform,
+          cached.sourceUrl || finalUrl
+        );
+        return buildSuccessResponse(normalized, cached.platform || platform, cached.sourceUrl || finalUrl);
       }
 
-      // Generic extraction first
-      const generic = await scrapeGenericPlatform(finalUrl);
-
-      // Provider-specific enrichment
       let enrichment = {};
-      if (platform === 'youtube') enrichment = await fetchYouTubeMetadata(finalUrl);
-      else if (platform === 'udemy') enrichment = await fetchUdemyMetadata(finalUrl);
-      else if (platform === 'coursera') enrichment = await fetchCourseraMetadata(finalUrl);
+      if (platform === 'youtube') {
+        enrichment = await fetchYouTubeMetadata(finalUrl);
+      } else if (platform === 'udemy') {
+        enrichment = await fetchUdemyMetadata(originalUrl, finalUrl);
+      } else {
+        enrichment = await fetchGenericMetadata(finalUrl);
+      }
 
-      // Merge: enrichment values override generic when present
-      const merged = mergePrefer(generic, enrichment);
+      if (enrichment?.providerBlocked) {
+        return buildFailureResponse('provider_blocked');
+      }
+
+      // Merge: enrichment values override any existing values when present
+      const merged = mergePrefer({}, enrichment);
 
       const normalized = normalizeShape(merged, platform, finalUrl);
 
       // Determine if result is useful: at least title or thumbnail or description
       const hasUseful = (normalized.title && normalized.title !== 'Untitled Course') || normalized.thumbnail || normalized.description;
       if (!hasUseful) {
-        return { success: false, manualEntry: true, reason: 'metadata_not_found' };
+        return buildFailureResponse(platform === 'udemy' ? 'provider_blocked' : 'metadata_unavailable');
       }
 
       // store to cache
@@ -400,13 +509,12 @@ export const getMetadata = async (inputUrl) => {
         AnalyticsEvent.create({ event: 'metadata_fetch_success', metadata: { url: finalUrl, platform } }).catch(() => {});
       });
 
-      return { success: true, data: normalized };
+      return buildSuccessResponse(normalized, platform, finalUrl);
     } catch (error) {
       setImmediate(() => {
         AnalyticsEvent.create({ event: 'metadata_fetch_failed', metadata: { url: originalUrl, error: String(error?.message || error) } }).catch(() => {});
       });
-      // If there's partial data in cache or extraction failed, return manualEntry
-      return { success: false, manualEntry: true, reason: 'metadata_fetch_error' };
+      return buildFailureResponse(platform === 'udemy' ? 'provider_blocked' : 'metadata_unavailable');
     }
   })();
 

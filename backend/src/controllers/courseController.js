@@ -230,13 +230,15 @@ const fetchMetadata = async (req, res) => {
       return res.status(200).json({
         success: false,
         manualEntry: true,
+        reason: result.reason || 'metadata_unavailable',
         version: API_VERSION,
       });
     }
     return res.status(200).json({
       success: true,
       version: API_VERSION,
-      data: result.data,
+      metadata: result.metadata || result.data,
+      data: result.metadata || result.data,
     });
   } catch (error) {
     console.error('Metadata fetch error in controller:', error.message);

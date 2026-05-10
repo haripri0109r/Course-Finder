@@ -34,6 +34,7 @@ course_finder/
 - **Auth**: JWT (JSON Web Tokens) with Bcrypt password hashing
 - **Security**: Helmet, CORS, and Express Rate Limit
 - **Storage**: Cloudinary (integrated for uploads)
+- **Metadata Autofill**: Hybrid course URL extraction using YouTube oEmbed, Microlink, and graceful manual-entry fallback
 
 ## ⚙️ Quick Start
 

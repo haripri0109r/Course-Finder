@@ -86,9 +86,10 @@ export default function AddCourseScreen({ navigation }) {
       setMetadataError('');
       setMetadataManualMode(false);
       const res = await api.fetchMetadata(url);
+      const metadata = res.data?.metadata || res.data?.data || null;
 
-      if (res.data?.success && res.data?.data) {
-        const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b, description: desc, publisher: pub, logo: lg } = res.data.data;
+      if (res.data?.success && metadata) {
+        const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b, description: desc, publisher: pub, logo: lg } = metadata;
         if (t) setTitle(t);
         if (thumbnail) setImage(thumbnail);
         if (a) setAuthor(a);
@@ -106,15 +107,19 @@ export default function AddCourseScreen({ navigation }) {
       if (res.data?.manualEntry) {
         setMetadataManualMode(true);
         setMetadataFetched(false);
-        setMetadataError('Unsupported URL. Please enter details manually.');
+        if (res.data?.reason === 'provider_blocked') {
+          setMetadataError('This provider blocks automatic metadata extraction. Please continue with manual entry.');
+        } else {
+          setMetadataError('Automatic extraction unavailable for this link.');
+        }
         return;
       }
 
-      setMetadataError('Could not fetch details. You can still post manually.');
+      setMetadataError('Automatic extraction unavailable for this link.');
     } catch (e) {
       const timedOut = e?.code === 'ECONNABORTED';
       setMetadataFetched(false);
-      setMetadataError(timedOut ? 'Request timed out. Please retry.' : 'Failed to fetch details. Please retry.');
+      setMetadataError(timedOut ? 'Automatic extraction unavailable for this link.' : 'Could not fetch metadata. Please fill manually.');
     } finally {
       setIsFetchingMetadata(false);
     }
