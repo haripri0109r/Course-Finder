@@ -61,12 +61,13 @@ const addCompletedCourse = async (req, res) => {
 
   if (!finalTitle || !finalImage || !finalPlatform) {
     try {
-      const { getMetadata } = await import('../services/metadataService.js');
-      const metadata = await getMetadata(url);
-      
+      const metadataModule = await import('../services/metadataService.js');
+      const fetched = await metadataModule.getMetadata(url);
+      const metadata = fetched?.data || fetched || {};
+
       finalTitle = finalTitle || metadata.title;
-      finalImage = finalImage || metadata.image;
-      finalPlatform = finalPlatform || metadata.provider;
+      finalImage = finalImage || metadata.image || metadata.thumbnail;
+      finalPlatform = finalPlatform || metadata.provider || metadata.platform;
     } catch (err) {
       console.warn("Metadata safety valve failed:", err.message);
     }

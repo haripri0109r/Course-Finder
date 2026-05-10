@@ -23,6 +23,10 @@ const metadataCacheSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  description: {
+    type: String,
+    default: '',
+  },
   duration: {
     type: String,
     default: 'N/A',

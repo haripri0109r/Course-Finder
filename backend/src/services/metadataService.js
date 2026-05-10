@@ -3,18 +3,13 @@ import * as cheerio from 'cheerio';
 import { DEFAULT_IMAGE } from '../config/constants.js';
 import { MetadataCache, AnalyticsEvent } from '../models/index.js';
 import { extractYouTubeId } from '../utils/extractYouTubeId.js';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
+import { DEFAULT_IMAGE } from '../config/constants.js';
+import { MetadataCache, AnalyticsEvent } from '../models/index.js';
+import { extractYouTubeId } from '../utils/extractYouTubeId.js';
 
 const inFlightRequests = new Map();
-const SUPPORTED_PLATFORMS = new Set([
-  'youtube',
-  'udemy',
-  'coursera',
-  'edx',
-  'skillshare',
-  'freecodecamp',
-  'khanacademy',
-  'pluralsight',
-]);
 
 const PLATFORM_LABELS = {
   youtube: 'YouTube',
@@ -29,7 +24,7 @@ const PLATFORM_LABELS = {
 };
 
 export const detectPlatform = (url = '') => {
-  const value = url.toLowerCase();
+  const value = String(url).toLowerCase();
   if (value.includes('youtube.com') || value.includes('youtu.be')) return 'youtube';
   if (value.includes('udemy.com')) return 'udemy';
   if (value.includes('coursera.org')) return 'coursera';
@@ -41,25 +36,7 @@ export const detectPlatform = (url = '') => {
   return 'other';
 };
 
-const normalizeUrl = (url) => {
-  try {
-    const parsed = new URL(url);
-    parsed.hash = '';
-    if (parsed.hostname.includes('youtube.com')) {
-      const id = parsed.searchParams.get('v');
-      parsed.search = id ? `v=${id}` : '';
-    } else if (parsed.hostname.includes('youtu.be')) {
-      parsed.search = '';
-    } else {
-      parsed.search = '';
-    }
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-};
-
-const asText = (value = '') => String(value).trim();
+const asText = (value = '') => String(value || '').trim();
 
 const humanDuration = (seconds) => {
   const n = Number(seconds);
@@ -83,15 +60,62 @@ const formatIsoDuration = (iso) => {
   return '';
 };
 
-const scrapePage = async (url) => {
-  const response = await axios.get(url, {
-    timeout: 10000,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; CourseFinderBot/1.0)',
+// Hardened axios GET with retries and sensible headers
+const httpGet = async (url, opts = {}) => {
+  const retries = opts.retries ?? 2;
+  const timeout = opts.timeout ?? 10000;
+  const headers = Object.assign(
+    {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
       Accept: 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en-US,en;q=0.9',
+      Referer: 'https://www.google.com/',
     },
-  });
-  return cheerio.load(response.data);
+    opts.headers || {}
+  );
+
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await axios.get(url, {
+        timeout,
+        headers,
+        maxRedirects: 5,
+        responseType: 'text',
+        decompress: true,
+        validateStatus: (s) => s >= 200 && s < 400,
+      });
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === retries) throw lastErr;
+      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+};
+
+// Resolve final URL following redirects (best-effort)
+const resolveFinalUrl = async (url) => {
+  try {
+    const res = await axios.head(url, { maxRedirects: 5, timeout: 8000, validateStatus: () => true, headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.google.com/' } });
+    // try to read final URL from response.request
+    const final = res.request?.res?.responseUrl || res.request?.path || res.config?.url || url;
+    return String(final);
+  } catch (headErr) {
+    try {
+      const res = await httpGet(url, { timeout: 8000, retries: 1 });
+      const final = res.request?.res?.responseUrl || res.request?.path || res.config?.url || url;
+      return String(final);
+    } catch {
+      return url;
+    }
+  }
+};
+
+const scrapePage = async (url) => {
+  const res = await httpGet(url, { timeout: 10000, retries: 2 });
+  return cheerio.load(res.data);
 };
 
 const getJsonLdObjects = ($) => {
@@ -110,136 +134,164 @@ const getJsonLdObjects = ($) => {
   return objects;
 };
 
-const normalizeShape = (data, platform, sourceUrl) => ({
-  title: asText(data.title) || 'Untitled Course',
-  thumbnail: asText(data.thumbnail || data.image) || DEFAULT_IMAGE,
-  author: asText(data.author) || '',
-  duration: asText(data.duration) || '',
-  platform,
-  providerBadge: PLATFORM_LABELS[platform] || 'Other',
-  sourceUrl,
-});
-
-const fetchYouTubeMetadata = async (url) => {
-  const videoId = extractYouTubeId(url);
-  if (!videoId) throw new Error('Unable to read YouTube video id');
-
-  const oembed = await axios.get('https://www.youtube.com/oembed', {
-    params: { url: `https://www.youtube.com/watch?v=${videoId}`, format: 'json' },
-    timeout: 8000,
-  });
-
-  let duration = '';
-  try {
-    const details = await axios.get(
-      `https://www.youtube.com/watch?v=${videoId}&pbj=1`,
-      { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }
-    );
-    const content = JSON.stringify(details.data);
-    const match = content.match(/"lengthSeconds":"(\d+)"/);
-    if (match?.[1]) duration = humanDuration(match[1]);
-  } catch {
-    // duration optional; keep empty when blocked
-  }
-
+const normalizeShape = (data = {}, platform = 'other', sourceUrl = '') => {
+  const thumbnail = asText(data.thumbnail || data.image) || DEFAULT_IMAGE;
+  const providerBadge = PLATFORM_LABELS[platform] || 'Other';
   return {
-    title: oembed.data?.title,
-    thumbnail: oembed.data?.thumbnail_url,
-    author: oembed.data?.author_name,
-    duration,
+    title: asText(data.title) || 'Untitled Course',
+    thumbnail,
+    image: thumbnail,
+    author: asText(data.author) || '',
+    duration: asText(data.duration) || '',
+    description: asText(data.description) || '',
+    platform,
+    providerBadge,
+    provider: providerBadge,
+    sourceUrl,
   };
 };
 
-const scrapeGenericPlatform = async (url) => {
-  const $ = await scrapePage(url);
-  const jsonLd = getJsonLdObjects($);
-  const courseObj = jsonLd.find((obj) => {
-    const type = obj?.['@type'];
-    return type === 'Course' || (Array.isArray(type) && type.includes('Course'));
-  });
+// Platform-specific fetchers (keep existing behavior but used as enrichment only)
+const fetchYouTubeMetadata = async (url) => {
+  const videoId = extractYouTubeId(url);
+  if (!videoId) return {};
+  try {
+    const oembed = await axios.get('https://www.youtube.com/oembed', {
+      params: { url: `https://www.youtube.com/watch?v=${videoId}`, format: 'json' },
+      timeout: 8000,
+      headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.google.com/' },
+    });
 
-  const title =
-    $('meta[property="og:title"]').attr('content') ||
-    courseObj?.name ||
-    $('title').text();
-  const thumbnail =
-    $('meta[property="og:image"]').attr('content') ||
-    $('meta[name="twitter:image"]').attr('content') ||
-    courseObj?.image;
-  const author =
-    $('meta[name="author"]').attr('content') ||
-    courseObj?.provider?.name ||
-    courseObj?.author?.name ||
-    '';
+    let duration = '';
+    try {
+      const details = await axios.get(`https://www.youtube.com/watch?v=${videoId}&pbj=1`, { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const content = JSON.stringify(details.data);
+      const match = content.match(/"lengthSeconds":"(\d+)"/);
+      if (match?.[1]) duration = humanDuration(match[1]);
+    } catch {
+      // ignore
+    }
 
-  return {
-    title,
-    thumbnail,
-    author,
-    duration: '',
-  };
+    return {
+      title: oembed.data?.title,
+      thumbnail: oembed.data?.thumbnail_url,
+      author: oembed.data?.author_name,
+      duration,
+    };
+  } catch {
+    return {};
+  }
 };
 
 const fetchUdemyMetadata = async (url) => {
-  const $ = await scrapePage(url);
-  const jsonLd = getJsonLdObjects($);
-  const courseObj = jsonLd.find((obj) => obj?.['@type'] === 'Course');
-  const title = $('meta[property="og:title"]').attr('content') || courseObj?.name || $('title').text();
-  const thumbnail = $('meta[property="og:image"]').attr('content') || courseObj?.image;
-  const author =
-    $('meta[name="author"]').attr('content') ||
-    $('a[data-purpose="instructor-name-top"] span').first().text() ||
-    courseObj?.provider?.name ||
-    '';
-  const duration =
-    $('[data-purpose="curriculum-stats"] span').first().text() ||
-    courseObj?.timeRequired ||
-    '';
+  try {
+    const $ = await scrapePage(url);
+    const jsonLd = getJsonLdObjects($);
+    const courseObj = jsonLd.find((obj) => obj?.['@type'] === 'Course');
+    const title = $('meta[property="og:title"]').attr('content') || courseObj?.name || $('title').text();
+    const thumbnail = $('meta[property="og:image"]').attr('content') || courseObj?.image;
+    const author =
+      $('meta[name="author"]').attr('content') ||
+      $('a[data-purpose="instructor-name-top"] span').first().text() ||
+      courseObj?.provider?.name ||
+      '';
+    const duration =
+      $('[data-purpose="curriculum-stats"] span').first().text() ||
+      courseObj?.timeRequired ||
+      '';
 
-  return { title, thumbnail, author, duration: formatIsoDuration(duration) || duration };
+    return { title, thumbnail, author, duration: formatIsoDuration(duration) || duration };
+  } catch {
+    return {};
+  }
 };
 
 const fetchCourseraMetadata = async (url) => {
-  const $ = await scrapePage(url);
-  const jsonLd = getJsonLdObjects($);
-  const courseObj = jsonLd.find((obj) => obj?.['@type'] === 'Course');
-  const title = $('meta[property="og:title"]').attr('content') || courseObj?.name || $('h1').first().text();
-  const thumbnail = $('meta[property="og:image"]').attr('content') || courseObj?.image;
-  const author =
-    courseObj?.provider?.name ||
-    $('[data-testid="instructor-name"]').first().text() ||
-    $('[class*="instructor"]').first().text() ||
-    '';
-  const duration =
-    $('[data-testid="CourseDuration"]').first().text() ||
-    courseObj?.timeRequired ||
-    '';
-  return { title, thumbnail, author, duration: formatIsoDuration(duration) || duration };
-};
-
-const fetchByPlatform = async (platform, url) => {
-  if (platform === 'youtube') return fetchYouTubeMetadata(url);
-  if (platform === 'udemy') return fetchUdemyMetadata(url);
-  if (platform === 'coursera') return fetchCourseraMetadata(url);
-  if (SUPPORTED_PLATFORMS.has(platform)) return scrapeGenericPlatform(url);
-  return null;
-};
-
-export const getMetadata = async (url) => {
-  const sourceUrl = normalizeUrl(url);
-  const platform = detectPlatform(sourceUrl);
-
-  if (!SUPPORTED_PLATFORMS.has(platform)) {
-    return { success: false, manualEntry: true };
+  try {
+    const $ = await scrapePage(url);
+    const jsonLd = getJsonLdObjects($);
+    const courseObj = jsonLd.find((obj) => obj?.['@type'] === 'Course');
+    const title = $('meta[property="og:title"]').attr('content') || courseObj?.name || $('h1').first().text();
+    const thumbnail = $('meta[property="og:image"]').attr('content') || courseObj?.image;
+    const author =
+      courseObj?.provider?.name ||
+      $('[data-testid="instructor-name"]').first().text() ||
+      $('[class*="instructor"]').first().text() ||
+      '';
+    const duration =
+      $('[data-testid="CourseDuration"]').first().text() ||
+      courseObj?.timeRequired ||
+      '';
+    return { title, thumbnail, author, duration: formatIsoDuration(duration) || duration };
+  } catch {
+    return {};
   }
+};
 
-  if (inFlightRequests.has(sourceUrl)) {
-    return inFlightRequests.get(sourceUrl);
+// Generic extraction: OpenGraph, Twitter, Standard meta, JSON-LD
+const scrapeGenericPlatform = async (url) => {
+  try {
+    const $ = await scrapePage(url);
+    const jsonLd = getJsonLdObjects($);
+
+    const firstCourseObj = jsonLd.find((obj) => {
+      const type = obj?.['@type'];
+      return type === 'Course' || (Array.isArray(type) && type.includes('Course'));
+    });
+
+    const title =
+      $('meta[property="og:title"]').attr('content') ||
+      $('meta[name="twitter:title"]').attr('content') ||
+      firstCourseObj?.name ||
+      $('title').text();
+
+    const thumbnail =
+      $('meta[property="og:image"]').attr('content') ||
+      $('meta[name="twitter:image"]').attr('content') ||
+      firstCourseObj?.image ||
+      '';
+
+    const description =
+      $('meta[property="og:description"]').attr('content') ||
+      $('meta[name="description"]').attr('content') ||
+      $('meta[name="twitter:description"]').attr('content') ||
+      firstCourseObj?.description ||
+      '';
+
+    const author =
+      $('meta[name="author"]').attr('content') ||
+      firstCourseObj?.provider?.name ||
+      (firstCourseObj?.author?.name || '') ||
+      '';
+
+    // try to get duration from json-ld timeRequired or other hints
+    let duration = '';
+    if (firstCourseObj?.timeRequired) duration = formatIsoDuration(firstCourseObj.timeRequired) || firstCourseObj.timeRequired;
+
+    return { title, thumbnail, author, duration, description };
+  } catch {
+    return {};
+  }
+};
+
+const mergePrefer = (base = {}, enrich = {}) => ({ ...base, ...Object.fromEntries(Object.entries(enrich).filter(([, v]) => v != null && String(v).trim() !== '')) });
+
+export const getMetadata = async (inputUrl) => {
+  const originalUrl = String(inputUrl || '').trim();
+  if (!originalUrl) return { success: false, manualEntry: true, reason: 'invalid_url' };
+
+  // Resolve redirects to canonical final URL
+  const finalUrl = await resolveFinalUrl(originalUrl);
+  const platform = detectPlatform(finalUrl);
+
+  if (inFlightRequests.has(finalUrl)) {
+    return inFlightRequests.get(finalUrl);
   }
 
   const promise = (async () => {
     try {
-      const cached = await MetadataCache.findOne({ url: sourceUrl });
+      // check cache by final canonical URL
+      const cached = await MetadataCache.findOne({ url: finalUrl });
       if (cached) {
         return {
           success: true,
@@ -249,22 +301,39 @@ export const getMetadata = async (url) => {
               thumbnail: cached.thumbnail || cached.image,
               author: cached.author,
               duration: cached.duration,
+              description: cached.description || '',
             },
             cached.platform || platform,
-            cached.sourceUrl || sourceUrl
+            cached.sourceUrl || finalUrl
           ),
         };
       }
 
-      const fetched = await fetchByPlatform(platform, sourceUrl);
-      if (!fetched) return { success: false, manualEntry: true };
+      // Generic extraction first
+      const generic = await scrapeGenericPlatform(finalUrl);
 
-      const normalized = normalizeShape(fetched, platform, sourceUrl);
+      // Provider-specific enrichment
+      let enrichment = {};
+      if (platform === 'youtube') enrichment = await fetchYouTubeMetadata(finalUrl);
+      else if (platform === 'udemy') enrichment = await fetchUdemyMetadata(finalUrl);
+      else if (platform === 'coursera') enrichment = await fetchCourseraMetadata(finalUrl);
 
+      // Merge: enrichment values override generic when present
+      const merged = mergePrefer(generic, enrichment);
+
+      const normalized = normalizeShape(merged, platform, finalUrl);
+
+      // Determine if result is useful: at least title or thumbnail or description
+      const hasUseful = (normalized.title && normalized.title !== 'Untitled Course') || normalized.thumbnail || normalized.description;
+      if (!hasUseful) {
+        return { success: false, manualEntry: true, reason: 'metadata_not_found' };
+      }
+
+      // store to cache
       await MetadataCache.findOneAndUpdate(
-        { url: sourceUrl },
+        { url: finalUrl },
         {
-          url: sourceUrl,
+          url: finalUrl,
           title: normalized.title,
           image: normalized.thumbnail,
           thumbnail: normalized.thumbnail,
@@ -273,34 +342,30 @@ export const getMetadata = async (url) => {
           provider: normalized.providerBadge,
           platform: normalized.platform,
           sourceUrl: normalized.sourceUrl,
+          description: normalized.description || '',
           cachedAt: Date.now(),
         },
         { upsert: true, new: true }
       );
 
       setImmediate(() => {
-        AnalyticsEvent.create({
-          event: 'metadata_fetch_success',
-          metadata: { url: sourceUrl, platform },
-        }).catch(() => {});
+        AnalyticsEvent.create({ event: 'metadata_fetch_success', metadata: { url: finalUrl, platform } }).catch(() => {});
       });
 
       return { success: true, data: normalized };
     } catch (error) {
       setImmediate(() => {
-        AnalyticsEvent.create({
-          event: 'metadata_fetch_failed',
-          metadata: { url: sourceUrl, error: error.message },
-        }).catch(() => {});
+        AnalyticsEvent.create({ event: 'metadata_fetch_failed', metadata: { url: originalUrl, error: String(error?.message || error) } }).catch(() => {});
       });
-      throw error;
+      // If there's partial data in cache or extraction failed, return manualEntry
+      return { success: false, manualEntry: true, reason: 'metadata_fetch_error' };
     }
   })();
 
-  inFlightRequests.set(sourceUrl, promise);
+  inFlightRequests.set(finalUrl, promise);
   try {
     return await promise;
   } finally {
-    inFlightRequests.delete(sourceUrl);
+    inFlightRequests.delete(finalUrl);
   }
 };
