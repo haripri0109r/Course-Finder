@@ -199,6 +199,7 @@ const TECH_TERM_MAP = {
   'express-js': 'Express.js',
   'machine-learning': 'Machine Learning',
   'deep-learning': 'Deep Learning',
+  'node-js-complete-guide': 'Node.js Complete Guide',
   javascript: 'JavaScript',
   typescript: 'TypeScript',
   nodejs: 'Node.js',
@@ -254,8 +255,12 @@ const extractUdemySlug = (url = '') => {
   try {
     const parsed = new URL(String(url));
     const path = parsed.pathname.toLowerCase();
-    const match = path.match(/^\/course\/([a-z0-9\-]+)/);
-    return match?.[1] || '';
+    
+    // Pattern 1: /course/slug/ (standard or learn page)
+    const match = path.match(/\/course\/([^/]+)/);
+    if (match?.[1]) return match[1];
+    
+    return '';
   } catch {
     return '';
   }
@@ -386,6 +391,15 @@ export const getMetadata = async (inputUrl) => {
         if (slug) {
           enrichment = {
             title: generateTitleFromSlug(slug) || 'Udemy Course',
+            thumbnail: null,
+            author: 'Instructor unavailable',
+            publisher: 'Udemy',
+            generatedFallback: true
+          };
+        } else if (originalUrl.includes('udemy.com/share/')) {
+          // Fallback for share URLs that fail to resolve or have weird paths
+          enrichment = {
+            title: 'Udemy Course',
             thumbnail: null,
             author: 'Instructor unavailable',
             publisher: 'Udemy',

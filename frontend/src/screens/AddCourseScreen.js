@@ -34,6 +34,7 @@ export default function AddCourseScreen({ navigation }) {
   const [description, setDescription] = useState('');
   const [learnings, setLearnings] = useState('');
   const [postTags, setPostTags] = useState('');
+  const [courseThumbnail, setCourseThumbnail] = useState('');
   
   // Internal State
   const [uploadingCert, setUploadingCert] = useState(false);
@@ -179,7 +180,13 @@ export default function AddCourseScreen({ navigation }) {
     try {
       setLoading(true);
       await api.post('/completed', {
-        title, platform, url, image, duration, certificateUrl, certificatePublicId,
+        title, 
+        platform, 
+        url, 
+        image: courseThumbnail || image, 
+        duration, 
+        certificateUrl, 
+        certificatePublicId,
         rating: Number(rating), review, description,
         learnings: learnings.split(',').map(i => i.trim()).filter(Boolean),
         tags: postTags.split(',').map(i => i.trim().toLowerCase()).filter(Boolean),
@@ -234,6 +241,15 @@ export default function AddCourseScreen({ navigation }) {
               icon="🔗"
             />
 
+            <InputField
+              label="Course Thumbnail URL (Optional)"
+              placeholder="Paste image URL (e.g. https://...)"
+              value={courseThumbnail}
+              onChangeText={setCourseThumbnail}
+              icon="🖼️"
+              containerStyle={{ marginTop: SPACING.md }}
+            />
+
             {isValidHttpUrl(url) && (
               <View style={styles.fetchActionRow}>
                 <PrimaryButton
@@ -266,8 +282,8 @@ export default function AddCourseScreen({ navigation }) {
 
             {metadataFetched && !isFetchingMetadata && (
               <View style={styles.previewCard}>
-                {image ? (
-                  <Image source={{ uri: image }} style={styles.previewThumb} />
+                {(courseThumbnail || image) ? (
+                  <Image source={{ uri: courseThumbnail || image }} style={styles.previewThumb} />
                 ) : (
                   <View style={[styles.previewThumb, { justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.surfaceSubtle }]}>
                     <Ionicons name="school-outline" size={48} color={COLORS.textMuted} />
