@@ -147,6 +147,8 @@ const normalizeShape = (data = {}, platform = 'other', sourceUrl = '') => {
     thumbnail,
     image: thumbnail,
     author: asText(data.author) || '',
+    publisher: asText(data.publisher || data.provider) || '',
+    logo: asText(data.logo || '' ) || '',
     duration: asText(data.duration) || '',
     description: asText(data.description) || '',
     platform,
@@ -387,6 +389,8 @@ export const getMetadata = async (inputUrl) => {
           platform: normalized.platform,
           sourceUrl: normalized.sourceUrl,
           description: normalized.description || '',
+          publisher: normalized.publisher || '',
+          logo: normalized.logo || '',
           cachedAt: Date.now(),
         },
         { upsert: true, new: true }

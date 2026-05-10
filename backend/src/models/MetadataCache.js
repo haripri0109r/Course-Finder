@@ -27,6 +27,14 @@ const metadataCacheSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  publisher: {
+    type: String,
+    default: '',
+  },
+  logo: {
+    type: String,
+    default: '',
+  },
   duration: {
     type: String,
     default: 'N/A',
