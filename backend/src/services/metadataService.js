@@ -3,11 +3,6 @@ import * as cheerio from 'cheerio';
 import { DEFAULT_IMAGE } from '../config/constants.js';
 import { MetadataCache, AnalyticsEvent } from '../models/index.js';
 import { extractYouTubeId } from '../utils/extractYouTubeId.js';
-import axios from 'axios';
-import * as cheerio from 'cheerio';
-import { DEFAULT_IMAGE } from '../config/constants.js';
-import { MetadataCache, AnalyticsEvent } from '../models/index.js';
-import { extractYouTubeId } from '../utils/extractYouTubeId.js';
 
 const inFlightRequests = new Map();
 
@@ -20,6 +15,11 @@ const PLATFORM_LABELS = {
   freecodecamp: 'freeCodeCamp',
   khanacademy: 'Khan Academy',
   pluralsight: 'Pluralsight',
+  linkedin: 'LinkedIn Learning',
+  udacity: 'Udacity',
+  simplilearn: 'Simplilearn',
+  greatlearning: 'Great Learning',
+  geeksforgeeks: 'GeeksforGeeks',
   other: 'Other',
 };
 
@@ -33,6 +33,11 @@ export const detectPlatform = (url = '') => {
   if (value.includes('freecodecamp.org')) return 'freecodecamp';
   if (value.includes('khanacademy.org')) return 'khanacademy';
   if (value.includes('pluralsight.com')) return 'pluralsight';
+  if (value.includes('linkedin.com/learning')) return 'linkedin';
+  if (value.includes('udacity.com')) return 'udacity';
+  if (value.includes('simplilearn.com')) return 'simplilearn';
+  if (value.includes('greatlearning.in') || value.includes('greatlearning.com')) return 'greatlearning';
+  if (value.includes('geeksforgeeks.org')) return 'geeksforgeeks';
   return 'other';
 };
 
