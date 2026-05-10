@@ -157,6 +157,9 @@ const savePushToken = async (req, res) => {
     const userId = req.user._id;
     const { pushToken } = req.body;
 
+    console.log("📱 SAVE TOKEN - USER:", userId);
+    console.log("📱 SAVE TOKEN - TOKEN:", pushToken);
+
     if (!pushToken) {
       return res.status(400).json({
         success: false,
@@ -164,19 +167,21 @@ const savePushToken = async (req, res) => {
       });
     }
 
-    const user = await User.findById(userId);
+    // Atomic $addToSet — avoids triggering pre-save hooks and validation
+    const result = await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { expoPushTokens: pushToken } },
+      { new: true }
+    );
 
-    if (!user) {
+    if (!result) {
       return res.status(404).json({
         success: false,
         message: 'User not found',
       });
     }
 
-    if (!user.expoPushTokens.includes(pushToken)) {
-      user.expoPushTokens.push(pushToken);
-      await user.save();
-    }
+    console.log("📱 SAVE TOKEN - UPDATED TOKENS:", result.expoPushTokens);
 
     return res.status(200).json({
       success: true,

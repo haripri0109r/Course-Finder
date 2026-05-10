@@ -49,13 +49,29 @@ export const createNotification = async ({
   commentId
 }) => {
   try {
-    const notification = await Notification.create({
-      userId,
-      actorId,
-      type,
-      postId,
-      commentId
-    });
+    console.log("📨 CREATE NOTIFICATION STARTED");
+    console.log("  USER (recipient):", userId);
+    console.log("  ACTOR:", actorId);
+    console.log("  TYPE:", type);
+
+    let notification;
+    try {
+      notification = await Notification.create({
+        userId,
+        actorId,
+        type,
+        postId,
+        commentId
+      });
+    } catch (dbErr) {
+      // Duplicate notification (unique index) — still send push/socket
+      if (dbErr.code === 11000) {
+        console.log("⚠️ Duplicate notification skipped (DB), still sending push");
+        notification = { _id: 'dup', postId, type, createdAt: new Date() };
+      } else {
+        throw dbErr;
+      }
+    }
 
     const user = await User.findById(actorId).select("name");
     const recipient = await User.findById(userId).select("expoPushTokens");
@@ -71,7 +87,7 @@ export const createNotification = async ({
     }
 
     // --- Send Expo Push Notification to ALL user devices ---
-    console.log("TOKENS FROM DB:", recipient?.expoPushTokens);
+    console.log("📱 RECIPIENT TOKENS:", recipient?.expoPushTokens);
     if (recipient && recipient.expoPushTokens && recipient.expoPushTokens.length > 0) {
       let bodyText = "New activity detected";
       if (type === "follow") bodyText = `${user?.name || "Someone"} started following you.`;
@@ -90,6 +106,8 @@ export const createNotification = async ({
           }
         );
       }
+    } else {
+      console.log("⚠️ No tokens found for recipient — push skipped");
     }
   } catch (err) {
     console.error("❌ Notification create error:", err.message);
