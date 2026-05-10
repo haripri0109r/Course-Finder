@@ -230,6 +230,15 @@ const fetchCourseraMetadata = async (url) => {
 
 // Generic extraction: OpenGraph, Twitter, Standard meta, JSON-LD
 const scrapeGenericPlatform = async (url) => {
+  // First try a robust metadata API (Microlink) to avoid fragile scraping
+  try {
+    const ml = await fetchMicrolink(url);
+    if (ml && (ml.title || ml.thumbnail || ml.description)) return ml;
+  } catch {
+    // continue to fallback
+  }
+
+  // Fallback: scrape page directly
   try {
     const $ = await scrapePage(url);
     const jsonLd = getJsonLdObjects($);
@@ -270,6 +279,36 @@ const scrapeGenericPlatform = async (url) => {
 
     return { title, thumbnail, author, duration, description };
   } catch {
+    return {};
+  }
+};
+
+// Try Microlink API for robust metadata extraction. Optional API key via MICROLINK_KEY.
+const fetchMicrolink = async (url) => {
+  try {
+    const params = { url };
+    if (process.env.MICROLINK_KEY) params.key = process.env.MICROLINK_KEY;
+    // request minimal but useful data
+    const res = await axios.get('https://api.microlink.io', {
+      params,
+      timeout: 8000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+        Accept: 'application/json',
+        Referer: 'https://www.google.com/',
+      },
+    });
+    const data = res.data?.data || res.data;
+    if (!data) return {};
+
+    const title = data.title || '';
+    const thumbnail = data.image?.url || data.image || data.logo?.url || '';
+    const description = data.description || '';
+    const author = data.author?.name || data.author || data.publisher?.name || data.publisher || '';
+    const provider = data.provider || '';
+
+    return { title, thumbnail, description, author, provider };
+  } catch (err) {
     return {};
   }
 };
