@@ -34,8 +34,18 @@ const uploadLimiter = rateLimit({
 
 // All completed-course routes are protected
 router.use(authenticate);
+
 // Logs
-router.post('/completed', authenticate, upload.single('file'), sanitizeImage, addCompletedCourse);
+router.post('/completed', 
+  authenticate, 
+  upload.fields([
+    { name: 'thumbnail', maxCount: 1 },
+    { name: 'certificate', maxCount: 1 }
+  ]), 
+  sanitizeImage, 
+  addCompletedCourse
+);
+
 router.post('/completed/upload-certificate', authenticate, upload.single('file'), uploadCertificate);
 router.post('/completed/analytics/cert-view', authenticate, trackCertView);
 router.get('/completed/me', authenticate, cacheHeaders, getMyCompletedCourses);

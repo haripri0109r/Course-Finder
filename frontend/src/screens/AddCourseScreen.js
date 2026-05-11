@@ -35,6 +35,8 @@ export default function AddCourseScreen({ navigation }) {
   const [learnings, setLearnings] = useState('');
   const [postTags, setPostTags] = useState('');
   const [courseThumbnail, setCourseThumbnail] = useState('');
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [certificateFile, setCertificateFile] = useState(null);
   
   // Internal State
   const [uploadingCert, setUploadingCert] = useState(false);
@@ -141,56 +143,71 @@ export default function AddCourseScreen({ navigation }) {
     setGeneratedFallback(false);
   }, [url]);
 
-  const handlePickCertificate = async () => {
+  const handlePickThumbnail = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'] });
+      const result = await DocumentPicker.getDocumentAsync({ type: 'image/*' });
       if (!result.canceled && result.assets?.[0]) {
-        uploadFile(result.assets[0]);
+        setThumbnailFile(result.assets[0]);
+        showToast({ message: 'Thumbnail selected!', type: 'success' });
       }
     } catch (e) {
-      showToast({ message: 'Picker failed', type: 'error' });
+      showToast({ message: 'Thumbnail picker failed', type: 'error' });
     }
   };
 
-  const uploadFile = async (asset) => {
+  const handlePickCertificateFile = async () => {
     try {
-      setUploadingCert(true);
-      setUploadProgress(0);
-      const formData = new FormData();
-      formData.append('file', { uri: asset.uri, name: asset.name || 'cert.pdf', type: asset.mimeType || 'application/pdf' });
-      
-      const res = await api.post('/completed/upload-certificate', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: p => setUploadProgress(Math.round((p.loaded * 100) / p.total))
-      });
-      
-      if (res.data.success) {
-        setCertificateUrl(res.data.url);
-        setCertificatePublicId(res.data.public_id);
-        showToast({ message: 'Certificate synced!', type: 'success' });
+      const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'] });
+      if (!result.canceled && result.assets?.[0]) {
+        setCertificateFile(result.assets[0]);
+        showToast({ message: 'Certificate selected!', type: 'success' });
       }
     } catch (e) {
-      showToast({ message: 'Upload failed', type: 'error' });
-    } finally {
-      setUploadingCert(false);
+      showToast({ message: 'Certificate picker failed', type: 'error' });
     }
   };
 
   const handleSubmit = async () => {
     try {
       setLoading(true);
-      await api.post('/completed', {
-        title, 
-        platform, 
-        url, 
-        image: courseThumbnail || image, 
-        duration, 
-        certificateUrl, 
-        certificatePublicId,
-        rating: Number(rating), review, description,
-        learnings: learnings.split(',').map(i => i.trim()).filter(Boolean),
-        tags: postTags.split(',').map(i => i.trim().toLowerCase()).filter(Boolean),
+      const formData = new FormData();
+      
+      formData.append('title', title);
+      formData.append('platform', platform);
+      formData.append('url', url);
+      formData.append('image', courseThumbnail || image); // Priority to manual URL over fetched
+      formData.append('duration', duration);
+      formData.append('rating', rating);
+      formData.append('review', review);
+      formData.append('description', description);
+      
+      // Process and append arrays
+      const learningsArr = learnings.split(',').map(i => i.trim()).filter(Boolean);
+      learningsArr.forEach(l => formData.append('learnings[]', l));
+      
+      const tagsArr = postTags.split(',').map(i => i.trim().toLowerCase()).filter(Boolean);
+      tagsArr.forEach(t => formData.append('tags[]', t));
+
+      if (thumbnailFile) {
+        formData.append('thumbnail', {
+          uri: thumbnailFile.uri,
+          name: thumbnailFile.name || 'thumbnail.jpg',
+          type: thumbnailFile.mimeType || 'image/jpeg'
+        });
+      }
+
+      if (certificateFile) {
+        formData.append('certificate', {
+          uri: certificateFile.uri,
+          name: certificateFile.name || 'certificate.pdf',
+          type: certificateFile.mimeType || 'application/pdf'
+        });
+      }
+
+      await api.post('/completed', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
+
       showToast({ message: 'Course Shared Successfully! 🚀', type: 'success' });
       navigation.navigate('Home');
     } catch (e) {
@@ -282,8 +299,8 @@ export default function AddCourseScreen({ navigation }) {
 
             {metadataFetched && !isFetchingMetadata && (
               <View style={styles.previewCard}>
-                {(courseThumbnail || image) ? (
-                  <Image source={{ uri: courseThumbnail || image }} style={styles.previewThumb} />
+                {(thumbnailFile?.uri || courseThumbnail || image) ? (
+                  <Image source={{ uri: thumbnailFile?.uri || courseThumbnail || image }} style={styles.previewThumb} />
                 ) : (
                   <View style={[styles.previewThumb, { justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.surfaceSubtle }]}>
                     <Ionicons name="school-outline" size={48} color={COLORS.textMuted} />
@@ -341,18 +358,36 @@ export default function AddCourseScreen({ navigation }) {
       case 3:
         return (
           <View style={styles.stepContent}>
-            <SectionHeader title="Proof of Completion" subtitle="Sync your certificate (Optional)" />
+            <SectionHeader title="Course Media" subtitle="Upload custom thumbnail and certificate" />
+            
+            <Text style={styles.label}>Course Thumbnail</Text>
             <TouchableOpacity 
-              style={[styles.uploadZone, certificateUrl && styles.uploadZoneSuccess]} 
-              onPress={handlePickCertificate}
-              disabled={uploadingCert}
+              style={[styles.miniUploadZone, thumbnailFile && styles.uploadZoneSuccess]} 
+              onPress={handlePickThumbnail}
+            >
+              {thumbnailFile ? (
+                <Image source={{ uri: thumbnailFile.uri }} style={styles.miniPreview} />
+              ) : (
+                <>
+                  <Ionicons name="image-outline" size={24} color={COLORS.textMuted} />
+                  <Text style={styles.miniUploadText}>Pick Custom Thumbnail</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.label}>Completion Certificate</Text>
+            <TouchableOpacity 
+              style={[styles.uploadZone, certificateFile && styles.uploadZoneSuccess]} 
+              onPress={handlePickCertificateFile}
             >
               <View style={styles.uploadIconCircle}>
-                <Text style={styles.uploadEmoji}>{certificateUrl ? '🏆' : '📂'}</Text>
+                <Text style={styles.uploadEmoji}>{certificateFile ? '🏆' : '📂'}</Text>
               </View>
-              <Text style={styles.uploadTitle}>{certificateUrl ? 'Certificate Linked' : 'Upload Certificate'}</Text>
+              <Text style={styles.uploadTitle}>
+                {certificateFile ? certificateFile.name : 'Upload Certificate'}
+              </Text>
               <Text style={styles.uploadSub}>
-                {uploadingCert ? `Uploading ${uploadProgress}%...` : 'PDF or Image (Max 5MB)'}
+                {certificateFile ? `${(certificateFile.size / 1024 / 1024).toFixed(2)} MB` : 'PDF or Image (Max 10MB)'}
               </Text>
             </TouchableOpacity>
             
@@ -363,7 +398,7 @@ export default function AddCourseScreen({ navigation }) {
                 <View style={styles.finalMeta}>
                   <Text style={styles.finalPlatform}>{platform}</Text>
                   <View style={styles.metaDot} />
-                  <Text style={styles.finalRating}>⭐ {rating}.0</Text>
+                  <Text style={styles.finalRating}>⭐ {rating || '0'}.0</Text>
                 </View>
               </View>
             </View>
@@ -572,6 +607,28 @@ const styles = StyleSheet.create({
   finalPlatform: { ...FONTS.tiny, color: COLORS.accentLight },
   metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 8 },
   finalRating: { ...FONTS.tiny, color: COLORS.white },
+  miniUploadZone: {
+    height: 100,
+    borderRadius: RADIUS.lg,
+    borderStyle: 'dashed',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: SPACING.xs,
+    overflow: 'hidden',
+  },
+  miniPreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  miniUploadText: {
+    ...FONTS.tiny,
+    color: COLORS.textMuted,
+    marginTop: 8,
+  },
   footer: { 
     position: 'absolute', 
     bottom: 0, left: 0, right: 0, 

@@ -48,17 +48,52 @@ const syncCourseStats = async (courseId) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const addCompletedCourse = async (req, res) => {
+  // If multipart/form-data, Multer puts files in req.files and body in req.body
   const { 
     title, platform, url, level, rating, review, image, duration, 
     certificateUrl, certificatePublicId,
     description, learnings, tags 
-  } = req.query.api_mode === 'v1' ? req.body : req.body; // Unified for now
+  } = req.body;
 
-  // 1. Backend Safety Fallback (Critical)
   let finalTitle = title;
-  let finalImage = image;
+  let finalImage = image; // manual image URL
   let finalPlatform = platform;
+  let finalCertUrl = certificateUrl;
+  let finalCertPublicId = certificatePublicId;
 
+  // 1. Handle File Uploads (Priority 1)
+  if (req.files) {
+    // Handle Thumbnail Upload
+    if (req.files['thumbnail'] && req.files['thumbnail'][0]) {
+      try {
+        const thumbResult = await uploadBufferToCloudinary(
+          req.files['thumbnail'][0].buffer, 
+          req.files['thumbnail'][0].mimetype,
+          'course-finder/thumbnails'
+        );
+        finalImage = thumbResult.secure_url;
+      } catch (err) {
+        console.error("Thumbnail upload failed:", err.message);
+      }
+    }
+
+    // Handle Certificate Upload
+    if (req.files['certificate'] && req.files['certificate'][0]) {
+      try {
+        const certResult = await uploadBufferToCloudinary(
+          req.files['certificate'][0].buffer, 
+          req.files['certificate'][0].mimetype,
+          'course-finder/certificates'
+        );
+        finalCertUrl = certResult.secure_url;
+        finalCertPublicId = certResult.public_id;
+      } catch (err) {
+        console.error("Certificate upload failed:", err.message);
+      }
+    }
+  }
+
+  // 2. Metadata Safety Fallback (Priority 2 & 3)
   if (!finalTitle || !finalImage || !finalPlatform) {
     try {
       const metadataModule = await import('../services/metadataService.js');
@@ -66,6 +101,7 @@ const addCompletedCourse = async (req, res) => {
       const metadata = fetched?.data || fetched || {};
 
       finalTitle = finalTitle || metadata.title;
+      // finalImage is already set if uploaded or manual URL provided
       finalImage = finalImage || metadata.image || metadata.thumbnail;
       finalPlatform = finalPlatform || metadata.provider || metadata.platform;
     } catch (err) {
@@ -73,7 +109,7 @@ const addCompletedCourse = async (req, res) => {
     }
   }
 
-  // 2. Validate required fields
+  // 3. Validate required fields
   if (!finalTitle || !finalPlatform || !url) {
     return res.status(400).json({
       success: false,
@@ -81,7 +117,7 @@ const addCompletedCourse = async (req, res) => {
     });
   }
 
-  // 2. Find or create the Course document
+  // 4. Find or create the Course document
   let course = await Course.findOne({ url: url.trim() });
 
   if (!course) {
@@ -94,15 +130,15 @@ const addCompletedCourse = async (req, res) => {
       level: level || 'beginner',
     });
     console.log("New Course Created:", course);
-  } else if (image && !course.image) {
-    course.image = image.trim();
+  } else if (finalImage && !course.image) {
+    course.image = finalImage.trim();
     await course.save();
     console.log("Existing Course Image Updated:", course);
   } else {
     console.log("Existing Course Found:", course);
   }
 
-  // 3. Check for duplicate (unique index on user + course will throw 11000)
+  // 5. Check for duplicate (unique index on user + course will throw 11000)
   const alreadyAdded = await CompletedCourse.findOne({
     user: req.user._id,
     course: course._id,
@@ -110,14 +146,14 @@ const addCompletedCourse = async (req, res) => {
 
   if (alreadyAdded) {
     let updated = false;
-    if (certificateUrl && certificateUrl.trim() !== alreadyAdded.certificateUrl) {
+    if (finalCertUrl && finalCertUrl.trim() !== alreadyAdded.certificateUrl) {
       // If there's an old certificate, we should safely delete it
       if (alreadyAdded.certificatePublicId) {
         const oldIsPdf = alreadyAdded.certificateUrl.endsWith('.pdf') || alreadyAdded.certificateUrl.includes('/raw/');
         deleteFromCloudinary(alreadyAdded.certificatePublicId, oldIsPdf ? 'raw' : 'image');
       }
-      alreadyAdded.certificateUrl = certificateUrl.trim();
-      alreadyAdded.certificatePublicId = certificatePublicId ? certificatePublicId.trim() : null;
+      alreadyAdded.certificateUrl = finalCertUrl.trim();
+      alreadyAdded.certificatePublicId = finalCertPublicId ? finalCertPublicId.trim() : null;
       updated = true;
     }
     if (rating && rating !== alreadyAdded.rating) {
@@ -144,13 +180,13 @@ const addCompletedCourse = async (req, res) => {
     });
   }
 
-  // 4. Normalize and handle Learning Post metadata
+  // 6. Normalize and handle Learning Post metadata
   const TECH_KEYWORDS = ["react", "javascript", "python", "ai", "node", "mongodb", "frontend", "backend", "fullstack", "ui", "ux"];
   
   let finalTags = Array.isArray(tags) ? tags : [];
   if (finalTags.length === 0) {
     // Auto-tagging fallback
-    const corpus = (title + " " + (description || "")).toLowerCase();
+    const corpus = (finalTitle + " " + (description || "")).toLowerCase();
     finalTags = TECH_KEYWORDS.filter(word => corpus.includes(word));
   }
   // Sanitize tags
@@ -159,24 +195,24 @@ const addCompletedCourse = async (req, res) => {
   const finalDescription = description || "Completed this course and gained valuable insights 🚀";
   const finalLearnings = Array.isArray(learnings) ? learnings.slice(0, 5) : [];
 
-  // 5. Create the CompletedCourse entry
+  // 7. Create the CompletedCourse entry
   const completed = await CompletedCourse.create({
     user: req.user._id,
     course: course._id,
     rating: rating || undefined,
     review: review || '',
     duration: duration || '',
-    certificateUrl: certificateUrl ? certificateUrl.trim() : '',
-    certificatePublicId: certificatePublicId ? certificatePublicId.trim() : null,
+    certificateUrl: finalCertUrl ? finalCertUrl.trim() : '',
+    certificatePublicId: finalCertPublicId ? finalCertPublicId.trim() : null,
     description: finalDescription,
     learnings: finalLearnings,
     tags: finalTags,
   });
 
-  // 5. Sync aggregated stats on the Course document
+  // 8. Sync aggregated stats on the Course document
   await syncCourseStats(course._id);
 
-  // 6. Return populated response
+  // 9. Return populated response
   const populated = await completed.populate({
     path: 'course',
     select: 'title platform url tags level averageRating totalCompletions image',
@@ -413,10 +449,6 @@ const unlikeCompletion = async (req, res) => {
   });
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// @route   GET /api/completed/recent
-// @access  Private
-// ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   GET /api/completed/recent
 // @access  Private
