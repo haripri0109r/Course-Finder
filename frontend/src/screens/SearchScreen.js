@@ -223,7 +223,7 @@ function createStyles(colors) {
       marginTop: 4,
     },
     listContainer: {
-      paddingBottom: 112,
+      paddingBottom: 120,
       paddingTop: SPACING.lg,
     },
   });
@@ -260,7 +260,7 @@ export default function SearchScreen({ navigation }) {
   };
 
   const DiscoveryView = () => (
-    <ScrollView style={styles.discovery} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.discovery} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
       <View style={styles.discoverySection}>
         <View style={styles.rowHeader}>
           <Text style={styles.sectionTitle}>Recent searches</Text>
@@ -381,12 +381,14 @@ export default function SearchScreen({ navigation }) {
           <View style={styles.searchField}>
             <Ionicons name="search-outline" style={styles.searchFieldIcon} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { outlineStyle: 'none' }]}
               placeholder="Courses, authors, skills…"
               placeholderTextColor={colors.textMuted}
               underlineColorAndroid="transparent"
               selectionColor={colors.accent}
               cursorColor={colors.accent}
+              importantForAutofill="no"
+              autoComplete="off"
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={() => handleSearch()}

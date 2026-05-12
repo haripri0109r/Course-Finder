@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useContext } from 'react';
+import React, { useState, useCallback, useContext, useMemo } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, Platform, SafeAreaView, StatusBar } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
+import { useAppTheme } from '../context/ThemeContext';
 import api from '../services/api';
 import CourseCard from '../components/CourseCard';
 import SkeletonCard from '../components/SkeletonCard';
@@ -10,9 +11,25 @@ import EmptyState from '../components/EmptyState';
 import SectionHeader from '../components/SectionHeader';
 import { showToast } from '../components/Toast';
 import { prefetchImages } from '../utils/prefetch';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: { 
+      paddingHorizontal: SPACING.xl, 
+      paddingVertical: SPACING.xl,
+      backgroundColor: colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    list: { paddingTop: SPACING.lg, paddingBottom: 40 },
+  });
+}
 
 export default function SavedScreen({ navigation }) {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
   const [savedItems, setSavedItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +83,7 @@ export default function SavedScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <SectionHeader 
           title="Your Library" 
@@ -92,7 +109,7 @@ export default function SavedScreen({ navigation }) {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
         ListEmptyComponent={
           !loading && (
@@ -109,15 +126,3 @@ export default function SavedScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { 
-    paddingHorizontal: SPACING.xl, 
-    paddingVertical: SPACING.xl,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-  },
-  list: { paddingTop: SPACING.lg, paddingBottom: 40 },
-});

@@ -25,12 +25,14 @@ export default function SearchBar({
     >
       <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
       <TextInput
-        style={[styles.input, { color: colors.textPrimary }]}
+        style={[styles.input, { color: colors.textPrimary, outlineStyle: 'none' }]}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         underlineColorAndroid="transparent"
         selectionColor={colors.accent}
         cursorColor={colors.accent}
+        importantForAutofill="no"
+        autoComplete="off"
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}

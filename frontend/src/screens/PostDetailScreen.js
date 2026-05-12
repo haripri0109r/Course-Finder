@@ -735,12 +735,14 @@ const PostDetailScreen = ({ route, navigation }) => {
           <View style={styles.inputArea}>
             <Avatar name={currentUser?.name} size="sm" />
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, { outlineStyle: 'none' }]}
               placeholder="Share a thoughtful comment…"
               placeholderTextColor={colors.textMuted}
               underlineColorAndroid="transparent"
               selectionColor={colors.accent}
               cursorColor={colors.accent}
+              importantForAutofill="no"
+              autoComplete="off"
               value={commentText}
               onChangeText={setCommentText}
               multiline

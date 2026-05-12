@@ -36,7 +36,7 @@ function createStyles(colors) {
       backgroundColor: colors.background,
     },
     list: {
-      paddingBottom: 112,
+      paddingBottom: 120,
     },
     header: {
       backgroundColor: colors.surface,

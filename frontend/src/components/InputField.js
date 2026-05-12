@@ -72,11 +72,13 @@ export default function InputField({
         {icon ? <Text style={[styles.icon, { color: colors.textMuted }]}>{icon}</Text> : null}
 
         <TextInput
-          style={[styles.input, { color: colors.textPrimary }, rest.multiline && styles.textArea]}
+          style={[styles.input, { color: colors.textPrimary, outlineStyle: 'none' }, rest.multiline && styles.textArea]}
           placeholderTextColor={colors.textMuted}
           underlineColorAndroid="transparent"
           selectionColor={colors.accent}
           cursorColor={colors.accent}
+          importantForAutofill="no"
+          autoComplete="off"
           onFocus={handleFocus}
           onBlur={handleBlur}
           {...rest}

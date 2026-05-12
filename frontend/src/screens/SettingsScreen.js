@@ -220,11 +220,10 @@ export default function SettingsScreen({ navigation }) {
 
   const confirmDeleteAccount = () => {
     Alert.alert(
-      'Delete account?',
-      'This is irreversible. Account deletion is not wired on the backend yet.',
+      'Delete account',
+      'Account deletion requires contacting support. This ensures your data is handled securely.',
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => comingSoon('Delete account') },
+        { text: 'OK', style: 'default' },
       ]
     );
   };
@@ -296,7 +295,7 @@ export default function SettingsScreen({ navigation }) {
             icon="key-outline"
             title="Change password"
             subtitle="Update your password"
-            onPress={() => comingSoon('Change password')}
+            onPress={() => Alert.alert('Change password', 'Password reset is available from the login screen via "Forgot password".', [{ text: 'OK' }])}
           />
           <View style={styles.divider} />
           <Row

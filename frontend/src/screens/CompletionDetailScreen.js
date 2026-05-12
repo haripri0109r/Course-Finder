@@ -238,7 +238,7 @@ export default function CompletionDetailScreen({ route, navigation }) {
 
       <View style={styles.inputArea}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { outlineStyle: 'none' }]}
           placeholder="Share your thoughts..."
           value={commentText}
           onChangeText={setCommentText}
@@ -247,6 +247,8 @@ export default function CompletionDetailScreen({ route, navigation }) {
           underlineColorAndroid="transparent"
           selectionColor={COLORS.accent}
           cursorColor={COLORS.accent}
+          importantForAutofill="no"
+          autoComplete="off"
         />
         <AnimatedPressable 
           style={[styles.sendBtn, !commentText.trim() && styles.disabledSend]} 

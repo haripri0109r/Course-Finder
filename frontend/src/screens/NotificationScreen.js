@@ -48,7 +48,7 @@ function createStyles(colors, isDark) {
       textTransform: 'none',
     },
     listContent: {
-      paddingBottom: 112,
+      paddingBottom: 120,
       paddingTop: SPACING.md,
     },
     notificationItem: {
