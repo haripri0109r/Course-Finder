@@ -1,11 +1,11 @@
 import React, { useContext } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS, FONTS } from '../utils/theme';
+import { View, Text, Platform } from 'react-native';
+import { FONTS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
+import FloatingTabBar from '../components/FloatingTabBar';
 
-// Screens
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
 import AddCourseScreen from '../screens/AddCourseScreen';
@@ -13,6 +13,7 @@ import NotificationScreen from '../screens/NotificationScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import CourseViewerScreen from '../screens/CourseViewerScreen';
+import SavedScreen from '../screens/SavedScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import { AuthContext } from '../context/AuthContext';
@@ -23,63 +24,49 @@ const Stack = createNativeStackNavigator();
 function TabNavigator() {
   return (
     <Tab.Navigator
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.accent,
-        tabBarInactiveTintColor: COLORS.textSecondary,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarItemStyle: styles.tabItem,
-        tabBarStyle: styles.tabBar,
+        tabBarShowLabel: false,
+        tabBarStyle: {
+          position: 'absolute',
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
+          height: Platform.OS === 'ios' ? 98 : 90,
+        },
       }}
     >
-      <Tab.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'home' : 'home-outline'} size={19} color={color} />
-          ),
-        }}
-      />
+      <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen
         name="Search"
         component={SearchScreen}
-        options={{
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'search' : 'search-outline'} size={19} color={color} />
-          ),
-        }}
+        options={{ tabBarAccessibilityLabel: 'Explore courses' }}
       />
       <Tab.Screen
         name="Add"
         component={AddCourseScreen}
-        options={{
-          tabBarLabel: 'Create',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'add' : 'add-outline'} size={19} color={color} />
-          ),
-        }}
+        options={{ tabBarAccessibilityLabel: 'Add course completion' }}
       />
-      <Tab.Screen
-        name="Inbox"
-        component={NotificationScreen}
-        options={{
-          tabBarLabel: 'Inbox',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'notifications' : 'notifications-outline'} size={19} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={19} color={color} />
-          ),
-        }}
-      />
+      <Tab.Screen name="Inbox" component={NotificationScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
+  );
+}
+
+function LoadingShell() {
+  const { colors } = useAppTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+      }}
+    >
+      <Text style={[FONTS.body, { color: colors.textSecondary }]}>Loading...</Text>
+    </View>
   );
 }
 
@@ -88,11 +75,7 @@ export default function AppNavigator() {
   const isAuthenticated = !!user;
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
-        <Text style={FONTS.body}>Loading...</Text>
-      </View>
-    );
+    return <LoadingShell />;
   }
 
   return (
@@ -105,34 +88,16 @@ export default function AppNavigator() {
       ) : (
         <>
           <Stack.Screen name="Main" component={TabNavigator} />
-          <Stack.Screen 
-            name="PostDetail" 
-            component={PostDetailScreen} 
+          <Stack.Screen
+            name="PostDetail"
+            component={PostDetailScreen}
             options={{ presentation: 'modal' }}
           />
           <Stack.Screen name="CourseViewer" component={CourseViewerScreen} />
+          <Stack.Screen name="Saved" component={SavedScreen} />
           <Stack.Screen name="UserProfile" component={ProfileScreen} />
         </>
       )}
     </Stack.Navigator>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: COLORS.surface,
-    borderTopColor: COLORS.border,
-    borderTopWidth: 1,
-    height: Platform.OS === 'ios' ? 58 : 54,
-    paddingTop: 2,
-    paddingBottom: Platform.OS === 'ios' ? 4 : 2,
-  },
-  tabItem: {
-    paddingTop: 1,
-  },
-  tabLabel: {
-    ...FONTS.small,
-    fontSize: 9,
-    marginBottom: 1,
-  },
-});

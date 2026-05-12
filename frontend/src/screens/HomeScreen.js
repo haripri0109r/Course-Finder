@@ -1,7 +1,17 @@
-import React, { useState, useContext, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl, SafeAreaView, StatusBar, TouchableOpacity } from 'react-native';
+import React, { useState, useContext, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  RefreshControl,
+  SafeAreaView,
+  StatusBar,
+  TouchableOpacity,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
+import { useAppTheme } from '../context/ThemeContext';
 import api from '../services/api';
 import CourseCard from '../components/CourseCard';
 import SkeletonCard from '../components/SkeletonCard';
@@ -10,9 +20,174 @@ import SectionHeader from '../components/SectionHeader';
 import CourseImage from '../components/CourseImage';
 import EmptyState from '../components/EmptyState';
 import { prefetchImages } from '../utils/prefetch';
-import { COLORS, SPACING, FONTS, RADIUS } from '../utils/theme';
+import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    listContent: {
+      paddingBottom: 112,
+    },
+    header: {
+      backgroundColor: colors.background,
+      paddingBottom: SPACING.sm,
+      marginBottom: SPACING.md,
+    },
+    navBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: SPACING.xl,
+      paddingTop: SPACING.sm,
+      paddingBottom: SPACING.sm,
+    },
+    userSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    appTitle: {
+      ...FONTS.bodyBold,
+      fontSize: 17,
+      marginLeft: SPACING.sm,
+      color: colors.textPrimary,
+    },
+    appEyebrow: {
+      ...FONTS.tiny,
+      color: colors.textMuted,
+      marginLeft: SPACING.sm,
+      marginTop: 2,
+      letterSpacing: 1.2,
+    },
+    notificationBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: RADIUS.md,
+      backgroundColor: colors.surface,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    notifDot: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.danger,
+      borderWidth: 1,
+      borderColor: colors.surface,
+    },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      height: 44,
+      borderRadius: RADIUS.md,
+      paddingHorizontal: SPACING.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginHorizontal: SPACING.xl,
+      ...SHADOW.sm,
+    },
+    searchIcon: {
+      marginRight: SPACING.sm,
+      fontSize: 18,
+      color: colors.textSecondary,
+    },
+    searchText: {
+      ...FONTS.body,
+      color: colors.textSecondary,
+      fontSize: 14,
+    },
+    moduleSection: {
+      marginTop: SPACING.md,
+      paddingHorizontal: SPACING.xl,
+    },
+    continueRow: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: RADIUS.lg,
+      backgroundColor: colors.surface,
+      padding: SPACING.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    continueMeta: {
+      flex: 1,
+      paddingRight: SPACING.sm,
+    },
+    continueEyebrow: {
+      ...FONTS.tiny,
+      color: colors.accent,
+      marginBottom: 4,
+    },
+    continueTitle: {
+      ...FONTS.bodyBold,
+      fontSize: 15,
+      color: colors.textPrimary,
+    },
+    continueSub: {
+      ...FONTS.small,
+      color: colors.textSecondary,
+      marginTop: 4,
+    },
+    playBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceSubtle,
+    },
+    trendingList: {
+      paddingBottom: SPACING.xs,
+    },
+    trendItem: {
+      width: 216,
+      borderRadius: RADIUS.lg,
+      marginRight: SPACING.md,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+      paddingBottom: SPACING.sm,
+    },
+    trendImage: {
+      width: '100%',
+      height: 112,
+      resizeMode: 'cover',
+    },
+    trendTitle: {
+      ...FONTS.captionBold,
+      color: colors.textPrimary,
+      fontSize: 13,
+      marginTop: SPACING.sm,
+      marginHorizontal: SPACING.sm,
+    },
+    trendSub: {
+      ...FONTS.small,
+      color: colors.textSecondary,
+      marginTop: 4,
+      marginHorizontal: SPACING.sm,
+    },
+    feedHeader: {
+      paddingHorizontal: SPACING.xl,
+      marginTop: SPACING.sm,
+    },
+  });
+}
 
 export default function HomeScreen({ navigation }) {
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
   const [cursor, setCursor] = useState(null);
   const [posts, setPosts] = useState([]);
@@ -20,28 +195,30 @@ export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const postKey = (item) => item?.id || item?._id;
+
   const fetchPosts = async (isRefresh = false) => {
     try {
       if (!isRefresh && cursor === null && posts.length > 0) return;
       if (loading) return;
-      
+
       setLoading(true);
-      const targetCursor = isRefresh ? "" : (cursor || "");
+      const targetCursor = isRefresh ? '' : cursor || '';
       const res = await api.get(`/posts/feed?cursor=${targetCursor}`);
       const newPosts = res.data?.posts || [];
       const nextCursor = res.data?.nextCursor || null;
 
-      setPosts(prev => {
+      setPosts((prev) => {
         if (isRefresh) return newPosts;
-        const existingIds = new Set(prev.map(p => p._id));
-        const filtered = newPosts.filter(p => !existingIds.has(p._id));
+        const existingIds = new Set(prev.map((p) => p._id || p.id));
+        const filtered = newPosts.filter((p) => !existingIds.has(p._id || p.id));
         return [...prev, ...filtered];
       });
 
       setCursor(nextCursor);
       prefetchImages(newPosts);
     } catch (error) {
-      console.log("Feed fetch error:", error);
+      console.log('Feed fetch error:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -55,7 +232,7 @@ export default function HomeScreen({ navigation }) {
         const trendRes = await api.getTrending();
         if (trendRes?.data?.success) setTrending(trendRes.data.data);
       } catch (e) {
-        console.log("Trending sync failed", e);
+        console.log('Trending sync failed', e);
       }
     };
     syncTrending();
@@ -67,18 +244,25 @@ export default function HomeScreen({ navigation }) {
   };
 
   const handleLike = async (item) => {
+    const id = postKey(item);
     const isLiked = item.isLikedByMe;
-    setPosts(prev => prev.map(a => 
-      a._id === item._id 
-        ? { ...a, isLikedByMe: !isLiked, likesCount: isLiked ? a.likesCount - 1 : a.likesCount + 1 }
-        : a
-    ));
+    setPosts((prev) =>
+      prev.map((a) =>
+        (a._id || a.id) === (item._id || item.id)
+          ? {
+              ...a,
+              isLikedByMe: !isLiked,
+              likesCount: isLiked ? a.likesCount - 1 : a.likesCount + 1,
+            }
+          : a
+      )
+    );
 
     try {
-      if (isLiked) await api.unlikeCompletion(item.id);
-      else await api.likeCompletion(item.id);
+      if (isLiked) await api.unlikeCompletion(id);
+      else await api.likeCompletion(id);
     } catch (err) {
-      // Rollback logic could go here
+      // rollback optional
     }
   };
 
@@ -87,46 +271,82 @@ export default function HomeScreen({ navigation }) {
       <View style={styles.navBar}>
         <View style={styles.userSection}>
           <Avatar name={currentUser?.name} size="sm" />
-          <Text style={styles.appTitle}>Course Finder</Text>
+          <View>
+            <Text style={styles.appTitle}>Course Finder</Text>
+            <Text style={styles.appEyebrow}>LEARNING NETWORK</Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.notificationBtn} onPress={() => navigation.navigate('Inbox')}>
-          <Ionicons name="notifications-outline" size={18} color={COLORS.textPrimary} />
+        <TouchableOpacity
+          style={styles.notificationBtn}
+          onPress={() => navigation.navigate('Inbox')}
+        >
+          <Ionicons name="notifications-outline" size={20} color={colors.textPrimary} />
           <View style={styles.notifDot} />
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.searchBar} onPress={() => navigation.navigate('Search')} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={styles.searchBar}
+        onPress={() => navigation.navigate('Search')}
+        activeOpacity={0.85}
+      >
         <Ionicons name="search-outline" style={styles.searchIcon} />
         <Text style={styles.searchText}>Search courses, skills, authors</Text>
       </TouchableOpacity>
 
       <View style={styles.moduleSection}>
-        <SectionHeader title="Continue learning" actionLabel="Open" onAction={() => navigation.navigate('Saved')} />
+        <SectionHeader
+          title="Continue learning"
+          subtitle="Pick up momentum"
+          actionLabel="Saved"
+          onAction={() => navigation.navigate('Saved')}
+        />
         <View style={styles.continueRow}>
           <View style={styles.continueMeta}>
-            <Text style={styles.continueTitle}>Frontend Architecture Fundamentals</Text>
-            <Text style={styles.continueSub}>45 min remaining · 7/12 lessons</Text>
+            <Text style={styles.continueEyebrow}>IN PROGRESS</Text>
+            <Text style={styles.continueTitle}>Your next milestone</Text>
+            <Text style={styles.continueSub}>
+              Resume where you left off or explore recommendations.
+            </Text>
           </View>
           <TouchableOpacity style={styles.playBtn} activeOpacity={0.75}>
-            <Ionicons name="play" size={14} color={COLORS.accent} />
+            <Ionicons name="play" size={16} color={colors.accent} />
           </TouchableOpacity>
         </View>
       </View>
 
       {trending.length > 0 && (
         <View style={styles.moduleSection}>
-          <SectionHeader title="Recommended courses" actionLabel="See all" onAction={() => navigation.navigate('Search')} />
+          <SectionHeader
+            title="Recommended for you"
+            actionLabel="Explore"
+            onAction={() => navigation.navigate('Search')}
+          />
           <FlatList
             horizontal
             data={trending}
-            keyExtractor={(item, index) => `trend-${item?.id || item?._id || index}`}
+            keyExtractor={(item, index) =>
+              `trend-${item?.id || item?._id || index}`
+            }
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.trendingList}
             renderItem={({ item }) => (
-              <TouchableOpacity activeOpacity={0.9} style={styles.trendItem} onPress={() => navigation.navigate('PostDetail', { postId: item.id })}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={styles.trendItem}
+                onPress={() =>
+                  navigation.navigate('PostDetail', {
+                    postId: item.id || item._id,
+                  })
+                }
+              >
                 <CourseImage uri={item.image} style={styles.trendImage} />
-                <Text style={styles.trendTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.trendSub}>{item.platform} · {item.duration || 'Course'}</Text>
+                <Text style={styles.trendTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                <Text style={styles.trendSub}>
+                  {item.platform} · {item.duration || 'Course'}
+                </Text>
               </TouchableOpacity>
             )}
           />
@@ -134,19 +354,23 @@ export default function HomeScreen({ navigation }) {
       )}
 
       <View style={styles.feedHeader}>
-        <SectionHeader title="Community feed" />
+        <SectionHeader title="Feed" subtitle="Achievements from your network" />
       </View>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <FlatList
-        data={(loading && posts.length === 0) ? [1, 2, 3] : posts}
-        keyExtractor={(item, index) => (loading && posts.length === 0) ? `skel-${index}` : (item?._id || item?.id || index).toString()}
-        renderItem={({ item }) => 
-          (loading && posts.length === 0) ? (
+        data={loading && posts.length === 0 ? [1, 2, 3] : posts}
+        keyExtractor={(item, index) =>
+          loading && posts.length === 0
+            ? `skel-${index}`
+            : String(item?._id || item?.id || index)
+        }
+        renderItem={({ item }) =>
+          loading && posts.length === 0 ? (
             <View style={{ paddingHorizontal: SPACING.xl }}>
               <SkeletonCard />
             </View>
@@ -154,9 +378,9 @@ export default function HomeScreen({ navigation }) {
             <View style={{ paddingHorizontal: SPACING.xl }}>
               <CourseCard
                 item={item}
-                onBookmark={() => toggleBookmark(item.id)}
+                onBookmark={() => toggleBookmark(postKey(item))}
                 onLike={() => handleLike(item)}
-                isBookmarked={bookmarks.has(item.id)}
+                isBookmarked={bookmarks.has(postKey(item))}
               />
             </View>
           )
@@ -167,14 +391,17 @@ export default function HomeScreen({ navigation }) {
         onEndReached={() => fetchPosts()}
         onEndReachedThreshold={0.5}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.accent}
+          />
         }
         ListEmptyComponent={
           !loading && (
-            <EmptyState 
-              icon="○"
+            <EmptyState
               title="Your feed is quiet"
-              subtitle="Follow more learners to see their progress here."
+              subtitle="When people you follow share courses and certificates, they’ll appear here."
               actionTitle="Explore"
               onAction={() => navigation.navigate('Search')}
             />
@@ -184,150 +411,3 @@ export default function HomeScreen({ navigation }) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.background 
-  },
-  listContent: { 
-    paddingBottom: 84,
-  },
-  header: { 
-    backgroundColor: COLORS.background,
-    paddingBottom: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  navBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
-    paddingBottom: SPACING.sm,
-  },
-  userSection: { 
-    flexDirection: 'row', 
-    alignItems: 'center' 
-  },
-  appTitle: {
-    ...FONTS.bodyBold,
-    fontSize: 16,
-    marginLeft: SPACING.sm,
-    color: COLORS.textPrimary,
-  },
-  notificationBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  notifDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.danger,
-    borderWidth: 1,
-    borderColor: COLORS.surface,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    height: 42,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  searchIcon: { 
-    marginRight: SPACING.md, 
-    fontSize: 18,
-    color: COLORS.textSecondary,
-  },
-  searchText: { 
-    ...FONTS.body, 
-    color: COLORS.textSecondary,
-    fontSize: 13,
-  },
-  moduleSection: {
-    marginTop: SPACING.md,
-    paddingHorizontal: SPACING.xl,
-  },
-  continueRow: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surface,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  continueMeta: {
-    flex: 1,
-    paddingRight: SPACING.sm,
-  },
-  continueTitle: {
-    ...FONTS.bodyBold,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  continueSub: {
-    ...FONTS.small,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  playBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.surface,
-  },
-  trendingList: { 
-    paddingBottom: SPACING.xs, 
-  },
-  trendItem: {
-    width: 210,
-    borderRadius: RADIUS.md,
-    marginRight: SPACING.md,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-    paddingBottom: SPACING.sm,
-  },
-  trendImage: { 
-    width: '100%', 
-    height: 108,
-    resizeMode: 'cover',
-  },
-  trendTitle: { 
-    ...FONTS.captionBold,
-    color: COLORS.textPrimary, 
-    fontSize: 13,
-    marginTop: SPACING.sm,
-    marginHorizontal: SPACING.sm,
-  },
-  trendSub: {
-    ...FONTS.small,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    marginHorizontal: SPACING.sm,
-  },
-  feedHeader: { 
-    paddingHorizontal: SPACING.xl, 
-    marginTop: SPACING.sm,
-  },
-});

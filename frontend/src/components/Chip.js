@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, RADIUS, SPACING, FONTS } from '../utils/theme';
+import { RADIUS, SPACING, FONTS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 /**
  * Tag/Filter chip — used for categories, tags, filters
@@ -15,28 +16,35 @@ export default function Chip({
   style,
   disabled = false,
 }) {
+  const { colors } = useAppTheme();
   const isInteractive = !!onPress;
 
-  const chipStyle = selected
-    ? styles.selected
+  const bgStyle = selected
+    ? { backgroundColor: colors.accent }
     : variant === 'outline'
-    ? styles.outline
-    : styles.soft;
+      ? {
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          borderColor: colors.border,
+        }
+      : { backgroundColor: colors.surfaceSubtle };
 
   const textColor = selected
-    ? COLORS.textInverse
+    ? colors.white
     : variant === 'outline'
-    ? COLORS.textSecondary
-    : COLORS.primary;
+      ? colors.textSecondary
+      : colors.textPrimary;
 
   return (
     <TouchableOpacity
-      style={[styles.base, chipStyle, disabled && styles.disabled, style]}
+      style={[styles.base, bgStyle, disabled && styles.disabled, style]}
       onPress={onPress}
       activeOpacity={0.7}
       disabled={!isInteractive || disabled}
     >
-      {icon && <Text style={[styles.icon, { color: textColor }]}>{icon}</Text>}
+      {icon ? (
+        <Text style={[styles.icon, { color: textColor }]}>{icon}</Text>
+      ) : null}
       <Text style={[styles.label, { color: textColor }]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -51,17 +59,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.full,
     marginRight: SPACING.sm,
     marginBottom: SPACING.sm,
-  },
-  soft: {
-    backgroundColor: COLORS.surfaceSubtle,
-  },
-  outline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  selected: {
-    backgroundColor: COLORS.accent,
   },
   icon: {
     fontSize: 14,

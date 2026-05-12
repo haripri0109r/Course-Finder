@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, View, Animated } from 'react-native';
-import { COLORS, RADIUS, SHADOW, SPACING, FONTS } from '../utils/theme';
+import { RADIUS, SHADOW, SPACING, FONTS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 /**
  * Product-grade button system with subtle micro-interactions.
@@ -20,6 +21,7 @@ export default function PrimaryButton({
   disabled = false,
   fullWidth = false,
 }) {
+  const { colors } = useAppTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const isDisabled = loading || disabled;
 
@@ -38,11 +40,11 @@ export default function PrimaryButton({
   };
 
   const variantStyles = {
-    primary: { bg: COLORS.accent, text: COLORS.white, border: COLORS.accent },
-    secondary: { bg: COLORS.surface, text: COLORS.textPrimary, border: COLORS.border },
-    outline: { bg: 'transparent', text: COLORS.textPrimary, border: COLORS.borderMedium },
-    ghost: { bg: 'transparent', text: COLORS.textSecondary, border: 'transparent' },
-    danger: { bg: COLORS.danger, text: COLORS.white, border: COLORS.danger },
+    primary: { bg: colors.accent, text: colors.white, border: colors.accent },
+    secondary: { bg: colors.surface, text: colors.textPrimary, border: colors.border },
+    outline: { bg: 'transparent', text: colors.textPrimary, border: colors.borderMedium },
+    ghost: { bg: 'transparent', text: colors.textSecondary, border: 'transparent' },
+    danger: { bg: colors.danger, text: colors.white, border: colors.danger },
   };
 
   const sizeStyles = {

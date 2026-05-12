@@ -2,28 +2,25 @@ import { Platform, Dimensions } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
-export const COLORS = {
-  // Brand
+/** Light theme — default export `COLORS` keeps existing imports working */
+export const LIGHT_COLORS = {
   primary: '#0F172A',
   accent: '#2563EB',
   accentLight: '#DBEAFE',
   accentDark: '#1D4ED8',
-  
-  // Neutral
+
   background: '#F8FAFC',
   surface: '#FFFFFF',
   surfaceCard: '#FFFFFF',
   surfaceSubtle: '#F1F5F9',
-  
-  // Text
-  textPrimary: '#0F172A',   // Slate 900
+
+  textPrimary: '#0F172A',
   textSecondary: '#64748B',
-  textMuted: '#94A3B8',     // Slate 400
+  textMuted: '#94A3B8',
   textInverse: '#FFFFFF',
   white: '#FFFFFF',
   black: '#000000',
 
-  // Status
   success: '#16A34A',
   successSoft: '#ECFDF5',
   danger: '#DC2626',
@@ -33,13 +30,11 @@ export const COLORS = {
   info: '#3B82F6',
   infoSoft: '#EFF6FF',
 
-  // Border & Dividers
-  border: '#E2E8F0',        // Slate 200
-  borderLight: '#F1F5F9',   // Slate 100
-  borderMedium: '#CBD5E1',  // Slate 300
+  border: '#E2E8F0',
+  borderLight: '#F1F5F9',
+  borderMedium: '#CBD5E1',
   shimmer: '#E2E8F0',
-  
-  // Platform specific (Semantic)
+
   platforms: {
     Udemy: '#A435F0',
     Coursera: '#0056D2',
@@ -47,11 +42,57 @@ export const COLORS = {
     LinkedIn: '#0A66C2',
     Other: '#64748B',
   },
-  // Backward-compatible aliases used across existing screens/components.
   primarySoft: '#E2E8F0',
   secondary: '#64748B',
   card: '#FFFFFF',
 };
+
+/** Premium dark — layered slate, not a flat invert */
+export const DARK_COLORS = {
+  primary: '#F8FAFC',
+  accent: '#60A5FA',
+  accentLight: 'rgba(96, 165, 250, 0.15)',
+  accentDark: '#3B82F6',
+
+  background: '#020617',
+  surface: '#0F172A',
+  surfaceCard: '#1E293B',
+  surfaceSubtle: '#1E293B',
+
+  textPrimary: '#F1F5F9',
+  textSecondary: '#94A3B8',
+  textMuted: '#64748B',
+  textInverse: '#020617',
+  white: '#FFFFFF',
+  black: '#000000',
+
+  success: '#4ADE80',
+  successSoft: 'rgba(74, 222, 128, 0.12)',
+  danger: '#F87171',
+  dangerSoft: 'rgba(248, 113, 113, 0.12)',
+  warning: '#FBBF24',
+  warningSoft: 'rgba(251, 191, 36, 0.12)',
+  info: '#60A5FA',
+  infoSoft: 'rgba(96, 165, 250, 0.12)',
+
+  border: '#334155',
+  borderLight: '#1E293B',
+  borderMedium: '#475569',
+  shimmer: '#334155',
+
+  platforms: {
+    Udemy: '#C084FC',
+    Coursera: '#60A5FA',
+    YouTube: '#F87171',
+    LinkedIn: '#38BDF8',
+    Other: '#94A3B8',
+  },
+  primarySoft: '#334155',
+  secondary: '#94A3B8',
+  card: '#1E293B',
+};
+
+export const COLORS = LIGHT_COLORS;
 
 export const SPACING = {
   xs: 8,

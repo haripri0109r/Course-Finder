@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { AuthProvider } from './src/context/AuthContext';
+import { ThemeProvider } from './src/context/ThemeContext';
 import { NavigationContainer } from '@react-navigation/native';
 import AppNavigator from './src/navigation/AppNavigator';
 import { NotificationProvider } from './src/context/NotificationContext';
@@ -35,21 +36,23 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <NotificationProvider>
-          <NavigationContainer ref={navigationRef}>
-            <ErrorBoundary>
-              <AppNavigator />
-            </ErrorBoundary>
-          </NavigationContainer>
-          {isConnected === false && (
-          <View style={styles.offlineBanner}>
-            <Text style={styles.offlineText}>📡 No Internet Connection</Text>
-          </View>
-        )}
-        </NotificationProvider>
-        <Toast />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <NavigationContainer ref={navigationRef}>
+              <ErrorBoundary>
+                <AppNavigator />
+              </ErrorBoundary>
+            </NavigationContainer>
+            {isConnected === false && (
+            <View style={styles.offlineBanner}>
+              <Text style={styles.offlineText}>📡 No Internet Connection</Text>
+            </View>
+          )}
+          </NotificationProvider>
+          <Toast />
+        </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

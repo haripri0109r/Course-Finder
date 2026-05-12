@@ -10,11 +10,13 @@ import Chip from '../components/Chip';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { showToast } from '../components/Toast';
 import { COLORS, SPACING, FONTS, RADIUS, SHADOW, LAYOUT } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 const PLATFORMS = ['Udemy', 'Coursera', 'YouTube', 'Other'];
 const STEPS = ['Content', 'Details', 'Feedback', 'Verification'];
 
 export default function AddCourseScreen({ navigation }) {
+  const { colors, isDark } = useAppTheme();
   const [currentStep, setCurrentStep] = useState(0);
   
   // Form State
@@ -408,8 +410,8 @@ export default function AddCourseScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
           <Text style={{ fontSize: 20 }}>✕</Text>

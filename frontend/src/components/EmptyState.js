@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS, SPACING, FONTS, RADIUS } from '../utils/theme';
+import { SPACING, FONTS, RADIUS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 import PrimaryButton from './PrimaryButton';
 
 /**
@@ -14,13 +15,33 @@ export default function EmptyState({
   onAction,
   compact = false,
 }) {
+  const { colors } = useAppTheme();
+
   return (
     <View style={[styles.container, compact && styles.compact]}>
-      <View style={styles.emojiContainer}>
-        <Text style={styles.emoji}>{icon}</Text>
+      <View style={[styles.artRow, { borderColor: colors.border }]}>
+        <View style={[styles.artCircle, { backgroundColor: colors.accentLight }]} />
+        <View style={[styles.artBar, { backgroundColor: colors.surfaceSubtle }]} />
+        <View style={[styles.artSquare, { borderColor: colors.border }]} />
       </View>
-      <Text style={styles.title}>{title}</Text>
-      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+      {icon ? (
+        <View
+          style={[
+            styles.emojiContainer,
+            { backgroundColor: colors.surfaceSubtle },
+          ]}
+        >
+          <Text style={[styles.emoji, { color: colors.textSecondary }]}>
+            {icon}
+          </Text>
+        </View>
+      ) : null}
+      <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+      {subtitle ? (
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {subtitle}
+        </Text>
+      ) : null}
       {actionTitle && onAction && (
         <PrimaryButton
           title={actionTitle}
@@ -37,24 +58,51 @@ export default function EmptyState({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    paddingVertical: 64,
+    paddingVertical: 56,
     paddingHorizontal: SPACING['3xl'],
   },
   compact: {
-    paddingVertical: 40,
+    paddingVertical: 36,
+  },
+  artRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginBottom: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    maxWidth: 220,
+  },
+  artCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginHorizontal: 5,
+  },
+  artBar: {
+    width: 56,
+    height: 10,
+    borderRadius: 5,
+    marginHorizontal: 5,
+  },
+  artSquare: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 2,
+    marginHorizontal: 5,
   },
   emojiContainer: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surfaceSubtle,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.md,
   },
   emoji: {
-    fontSize: 20,
-    color: COLORS.textSecondary,
+    fontSize: 22,
   },
   title: {
     ...FONTS.h3,
@@ -63,10 +111,9 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...FONTS.body,
-    color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
-    maxWidth: 280,
+    maxWidth: 300,
   },
   actionBtn: {
     marginTop: SPACING.xl,

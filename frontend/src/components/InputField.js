@@ -1,6 +1,15 @@
-import React, { useState, useRef } from 'react';
-import { View, TextInput, StyleSheet, Text, TouchableOpacity, Platform, Animated } from 'react-native';
-import { COLORS, RADIUS, SPACING, FONTS } from '../utils/theme';
+import React, { useState, useRef, useMemo } from 'react';
+import {
+  View,
+  TextInput,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  Platform,
+  Animated,
+} from 'react-native';
+import { RADIUS, SPACING, FONTS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 export default function InputField({
   label,
@@ -11,6 +20,7 @@ export default function InputField({
   onSuffixPress,
   ...rest
 }) {
+  const { colors } = useAppTheme();
   const [isFocused, setIsFocused] = useState(false);
   const focusAnim = useRef(new Animated.Value(0)).current;
 
@@ -34,58 +44,51 @@ export default function InputField({
 
   const borderColor = focusAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [error ? COLORS.danger : COLORS.border, COLORS.accent],
+    outputRange: [error ? colors.danger : colors.border, colors.accent],
   });
 
   const bgColor = focusAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.background, COLORS.surface],
+    outputRange: [colors.background, colors.surface],
   });
+
+  const labelStyle = useMemo(() => {
+    if (error) return { color: colors.danger };
+    if (isFocused) return { color: colors.accent };
+    return { color: colors.textSecondary };
+  }, [error, isFocused, colors]);
 
   return (
     <View style={[styles.container, containerStyle]}>
-      {label && (
-        <Text style={[
-          styles.label, 
-          isFocused && styles.labelFocused,
-          !!error && styles.labelError
-        ]}>
-          {label}
-        </Text>
-      )}
-      
+      {label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
+
       <Animated.View
         style={[
           styles.inputWrapper,
           { borderColor, backgroundColor: bgColor },
-          error && styles.errorWrapper,
+          error && { borderColor: colors.danger },
         ]}
       >
-        {icon && <Text style={styles.icon}>{icon}</Text>}
-        
+        {icon ? <Text style={[styles.icon, { color: colors.textMuted }]}>{icon}</Text> : null}
+
         <TextInput
-          style={[
-            styles.input,
-            rest.multiline && styles.textArea,
-          ]}
-          placeholderTextColor={COLORS.textMuted}
+          style={[styles.input, { color: colors.textPrimary }, rest.multiline && styles.textArea]}
+          placeholderTextColor={colors.textMuted}
           onFocus={handleFocus}
           onBlur={handleBlur}
           {...rest}
         />
-        
-        {suffix && (
-          <TouchableOpacity
-            onPress={onSuffixPress}
-            style={styles.suffixBtn}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.suffixText}>{suffix}</Text>
+
+        {suffix ? (
+          <TouchableOpacity onPress={onSuffixPress} style={styles.suffixBtn} activeOpacity={0.7}>
+            <Text style={[styles.suffixText, { color: colors.textSecondary }]}>{suffix}</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </Animated.View>
-      
-      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      {error ? (
+        <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+      ) : null}
     </View>
   );
 }
@@ -98,15 +101,8 @@ const styles = StyleSheet.create({
   label: {
     ...FONTS.captionBold,
     marginBottom: SPACING.xs,
-    color: COLORS.textSecondary,
     textTransform: 'none',
     letterSpacing: 0.1,
-  },
-  labelFocused: {
-    color: COLORS.accent,
-  },
-  labelError: {
-    color: COLORS.danger,
   },
   inputWrapper: {
     borderRadius: RADIUS.md,
@@ -116,19 +112,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     minHeight: 48,
   },
-  errorWrapper: {
-    borderColor: COLORS.danger,
-  },
   icon: {
     fontSize: 16,
     marginRight: SPACING.md,
-    opacity: 0.6,
+    opacity: 0.85,
   },
   input: {
     flex: 1,
     ...FONTS.body,
     fontSize: 14,
-    color: COLORS.textPrimary,
     paddingVertical: Platform.OS === 'ios' ? 12 : 8,
     minHeight: 44,
   },
@@ -142,11 +134,10 @@ const styles = StyleSheet.create({
   },
   suffixText: {
     fontSize: 18,
-    opacity: 0.6,
+    opacity: 0.85,
   },
   errorText: {
     ...FONTS.small,
-    color: COLORS.danger,
     marginTop: 6,
   },
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { COLORS, SPACING, FONTS } from '../utils/theme';
+import { SPACING, FONTS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 /**
  * Section header with optional right-side action link
@@ -13,18 +14,29 @@ export default function SectionHeader({
   onAction,
   style,
 }) {
+  const { colors } = useAppTheme();
+
   return (
     <View style={[styles.container, style]}>
       <View style={styles.left}>
-        {icon && <Text style={styles.icon}>{icon}</Text>}
-        <View>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        {icon ? (
+          <Text style={[styles.icon, { color: colors.textSecondary }]}>{icon}</Text>
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+          {subtitle ? (
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
       </View>
       {actionLabel && onAction && (
-        <TouchableOpacity onPress={onAction} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Text style={styles.action}>{actionLabel}</Text>
+        <TouchableOpacity
+          onPress={onAction}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={[styles.action, { color: colors.accent }]}>{actionLabel}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -42,15 +54,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    paddingRight: SPACING.sm,
   },
   icon: {
     fontSize: 16,
     marginRight: SPACING.sm,
-    color: COLORS.textSecondary,
   },
   title: {
     ...FONTS.h3,
     fontSize: 18,
+    fontWeight: '700',
   },
   subtitle: {
     ...FONTS.small,
@@ -58,6 +71,5 @@ const styles = StyleSheet.create({
   },
   action: {
     ...FONTS.captionBold,
-    color: COLORS.accent,
   },
 });

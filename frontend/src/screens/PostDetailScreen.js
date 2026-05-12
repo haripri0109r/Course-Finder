@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,30 +11,324 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  StatusBar
+  StatusBar,
+  Linking,
 } from 'react-native';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW, LAYOUT } from '../utils/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 import { DEFAULT_IMAGE } from '../config/constants';
 import PrimaryButton from '../components/PrimaryButton';
-import AnimatedPressable from '../components/AnimatedPressable';
 import Avatar from '../components/Avatar';
 import SectionHeader from '../components/SectionHeader';
 import CourseImage from '../components/CourseImage';
+import EmptyState from '../components/EmptyState';
 import { timeAgo } from '../utils/format';
 import { showToast } from '../components/Toast';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 
+const TABS = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'certificate', label: 'Certificate' },
+  { key: 'notes', label: 'Notes' },
+  { key: 'activity', label: 'Activity' },
+];
+
+function createStyles(colors, isDark) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.surface },
+    center: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      padding: SPACING.xl,
+    },
+    flex: { flex: 1 },
+    scrollContent: { flexGrow: 1, paddingBottom: 120 },
+    hero: { height: 360, backgroundColor: colors.primary },
+    heroImg: { width: '100%', height: '100%', opacity: isDark ? 0.85 : 0.75 },
+    heroOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: isDark ? 'rgba(2,6,23,0.45)' : 'rgba(15, 23, 42, 0.35)',
+    },
+    heroNav: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.lg,
+      zIndex: 10,
+    },
+    navBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: Platform.OS === 'android' ? 10 : 4,
+    },
+    heroBody: {
+      position: 'absolute',
+      bottom: 36,
+      left: SPACING.xl,
+      right: SPACING.xl,
+    },
+    platformChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.accent,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: RADIUS.full,
+      marginBottom: 10,
+    },
+    platformText: {
+      ...FONTS.tiny,
+      color: colors.white,
+      fontSize: 10,
+      letterSpacing: 0.6,
+    },
+    heroTitle: {
+      ...FONTS.h1,
+      color: colors.white,
+      fontSize: 26,
+      lineHeight: 32,
+      fontWeight: '800',
+    },
+    mainContent: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: RADIUS.xxl,
+      borderTopRightRadius: RADIUS.xxl,
+      marginTop: -RADIUS.xxl,
+      padding: SPACING.xl,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderBottomWidth: 0,
+    },
+    tabRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: SPACING.lg,
+    },
+    tabBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+      marginRight: 8,
+      marginBottom: 8,
+    },
+    tabLabel: {
+      ...FONTS.captionBold,
+      fontSize: 12,
+    },
+    authorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: SPACING.lg,
+    },
+    authorInfo: { flex: 1, marginLeft: SPACING.md },
+    authorName: { ...FONTS.bodyBold, color: colors.textPrimary },
+    authorMeta: { ...FONTS.caption, color: colors.textMuted },
+    ratingBadge: {
+      backgroundColor: colors.accentLight,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: RADIUS.md,
+    },
+    ratingText: { ...FONTS.captionBold, color: colors.accent },
+    metaGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: SPACING.lg,
+      justifyContent: 'space-between',
+    },
+    metaCard: {
+      flexGrow: 1,
+      minWidth: '47%',
+      padding: SPACING.md,
+      marginBottom: 10,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceSubtle,
+    },
+    metaCardLabel: {
+      ...FONTS.tiny,
+      color: colors.textMuted,
+      marginBottom: 4,
+    },
+    metaCardValue: {
+      ...FONTS.bodyBold,
+      color: colors.textPrimary,
+      fontSize: 15,
+    },
+    sectionTitle: {
+      ...FONTS.label,
+      color: colors.textMuted,
+      marginBottom: 10,
+      letterSpacing: 0.6,
+    },
+    insightText: {
+      ...FONTS.body,
+      color: colors.textPrimary,
+      lineHeight: 24,
+      marginBottom: SPACING.lg,
+    },
+    learningsContainer: { marginBottom: SPACING.lg },
+    learningItem: {
+      flexDirection: 'row',
+      marginBottom: 10,
+      alignItems: 'flex-start',
+    },
+    learningCheck: {
+      color: colors.success,
+      fontWeight: '800',
+      marginRight: 12,
+    },
+    learningText: {
+      ...FONTS.body,
+      color: colors.textSecondary,
+      flex: 1,
+    },
+    tagRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: SPACING.md,
+    },
+    tagItem: {
+      ...FONTS.captionBold,
+      color: colors.accent,
+      marginRight: 12,
+      marginBottom: 6,
+    },
+    certImage: {
+      width: '100%',
+      height: 220,
+      borderRadius: RADIUS.lg,
+      backgroundColor: colors.surfaceSubtle,
+      marginBottom: SPACING.md,
+    },
+    pdfCard: {
+      padding: SPACING.lg,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceSubtle,
+      marginBottom: SPACING.md,
+    },
+    pdfTitle: { ...FONTS.bodyBold, color: colors.textPrimary },
+    pdfSub: { ...FONTS.small, color: colors.textSecondary, marginTop: 6 },
+    placeholderActions: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: SPACING.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      marginBottom: SPACING.lg,
+    },
+    placeholderCol: {
+      alignItems: 'center',
+      flex: 1,
+    },
+    placeholderLabel: {
+      ...FONTS.small,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: 6,
+    },
+    separator: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: SPACING.lg,
+    },
+    discHeader: { marginBottom: SPACING.md },
+    inputArea: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: SPACING.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: RADIUS.md,
+      padding: SPACING.sm,
+      backgroundColor: colors.surfaceSubtle,
+    },
+    textInput: {
+      flex: 1,
+      marginHorizontal: SPACING.sm,
+      ...FONTS.body,
+      fontSize: 14,
+      maxHeight: 88,
+      color: colors.textPrimary,
+      paddingTop: Platform.OS === 'ios' ? 8 : 4,
+    },
+    postBtnText: {
+      ...FONTS.bodyBold,
+      fontSize: 14,
+      color: colors.textMuted,
+      paddingTop: 6,
+    },
+    commentRow: { flexDirection: 'row', marginBottom: SPACING.lg },
+    commentBody: { flex: 1, marginLeft: SPACING.md },
+    commentTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
+    commentAuthor: { ...FONTS.captionBold, color: colors.textPrimary },
+    commentTime: {
+      ...FONTS.tiny,
+      color: colors.textMuted,
+      textTransform: 'none',
+    },
+    commentText: {
+      ...FONTS.body,
+      fontSize: 14,
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
+    commentActions: { flexDirection: 'row', marginTop: 8 },
+    actText: {
+      ...FONTS.tiny,
+      color: colors.textMuted,
+      marginRight: 16,
+      textTransform: 'none',
+    },
+    footer: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: colors.surface,
+      padding: SPACING.xl,
+      paddingBottom: Platform.OS === 'ios' ? 36 : SPACING.xl,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      ...SHADOW.lg,
+    },
+    cta: { borderRadius: RADIUS.lg },
+    errorTitle: { ...FONTS.h3, color: colors.textPrimary, marginBottom: 16 },
+  });
+}
+
 const PostDetailScreen = ({ route, navigation }) => {
   const { postId } = route.params;
   const { bookmarks, toggleBookmark, user: currentUser } = useContext(AuthContext);
+  const { colors, isDark } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [comments, setComments] = useState([]);
-  const [commentText, setCommentText] = useState("");
+  const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
   const fetchedRef = useRef(false);
 
   useEffect(() => {
@@ -47,13 +341,13 @@ const PostDetailScreen = ({ route, navigation }) => {
         setLoading(true);
         const [postData, commentsData] = await Promise.all([
           api.getPost(postId),
-          api.getComments(postId)
+          api.getComments(postId),
         ]);
 
         if (isMounted) {
           setPost(postData);
           setComments(commentsData);
-          api.incrementViewCount(postId).catch(() => { });
+          api.incrementViewCount(postId).catch(() => {});
         }
       } catch (err) {
         if (isMounted) setError(err);
@@ -63,45 +357,59 @@ const PostDetailScreen = ({ route, navigation }) => {
     };
 
     fetchDetail();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [postId]);
 
   const handleOpenCourse = () => {
     if (!post?.url) return;
-    navigation.navigate("CourseViewer", {
+    navigation.navigate('CourseViewer', {
       url: post.url,
       title: post.title,
       id: post.id,
+      courseId: post.id,
     });
   };
 
-  const handleAddComment = async (parentId = null) => {
+  const handleAddComment = async () => {
     if (!commentText.trim() || isSubmitting) return;
 
     const originalText = commentText;
-    setCommentText("");
+    setCommentText('');
     setIsSubmitting(true);
 
     try {
       const res = await api.addComment({
         postId,
         text: originalText.trim(),
-        parentId
+        parentId: null,
       });
-      setComments(prev => [res, ...prev]);
+      setComments((prev) => [res, ...prev]);
       showToast({ message: 'Comment shared!', type: 'success' });
     } catch (err) {
       setCommentText(originalText);
-      showToast({ message: "Failed to post comment", type: "error" });
+      showToast({ message: 'Failed to post comment', type: 'error' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const certUri =
+    post?.certificateUrl ||
+    (typeof post?.certificate === 'string' ? post.certificate : null);
+
+  const openCertificateExternal = () => {
+    if (!certUri) return;
+    Linking.openURL(certUri).catch(() =>
+      showToast({ message: 'Unable to open file', type: 'error' })
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={COLORS.accent} />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -109,35 +417,163 @@ const PostDetailScreen = ({ route, navigation }) => {
   if (error || !post) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorEmoji}>⚠️</Text>
-        <Text style={styles.errorTitle}>Detail unavailable</Text>
-        <PrimaryButton title="Go Back" onPress={() => navigation.goBack()} variant="outline" size="sm" />
+        <Ionicons name="alert-circle-outline" size={48} color={colors.danger} />
+        <Text style={styles.errorTitle}>We couldn’t load this achievement.</Text>
+        <PrimaryButton
+          title="Go back"
+          onPress={() => navigation.goBack()}
+          variant="outline"
+          size="sm"
+        />
       </View>
     );
   }
 
   const isBookmarked = bookmarks.has(post.id);
 
+  const renderTabBody = () => {
+    if (activeTab === 'overview') {
+      return (
+        <>
+          <Text style={styles.sectionTitle}>About this course</Text>
+          <Text style={styles.insightText}>
+            {post.description || 'No additional description provided.'}
+          </Text>
+
+          {post.learnings?.length > 0 ? (
+            <View style={styles.learningsContainer}>
+              <Text style={styles.sectionTitle}>What you learned</Text>
+              {post.learnings.map((l, i) => (
+                <View key={i} style={styles.learningItem}>
+                  <Text style={styles.learningCheck}>✓</Text>
+                  <Text style={styles.learningText}>{l}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.tagRow}>
+            {post.tags?.map((t, i) => (
+              <Text key={i} style={styles.tagItem}>
+                #{t}
+              </Text>
+            ))}
+          </View>
+
+          <View style={styles.placeholderActions}>
+            <View style={styles.placeholderCol}>
+              <Ionicons name="happy-outline" size={22} color={colors.textSecondary} />
+              <Text style={styles.placeholderLabel}>Reactions{'\n'}(soon)</Text>
+            </View>
+            <View style={styles.placeholderCol}>
+              <Ionicons name="chatbubbles-outline" size={22} color={colors.textSecondary} />
+              <Text style={styles.placeholderLabel}>Thread{'\n'}below</Text>
+            </View>
+            <View style={styles.placeholderCol}>
+              <Ionicons name="share-social-outline" size={22} color={colors.textSecondary} />
+              <Text style={styles.placeholderLabel}>Share{'\n'}updates</Text>
+            </View>
+          </View>
+        </>
+      );
+    }
+
+    if (activeTab === 'certificate') {
+      if (!certUri) {
+        return (
+          <EmptyState
+            title="No certificate attached"
+            subtitle="Certificates uploaded with a post appear here in full fidelity."
+            compact
+          />
+        );
+      }
+      const lower = String(certUri).toLowerCase();
+      const isPdf = lower.includes('.pdf') || lower.includes('application/pdf');
+      if (isPdf) {
+        return (
+          <View style={styles.pdfCard}>
+            <Text style={styles.pdfTitle}>PDF certificate</Text>
+            <Text style={styles.pdfSub}>
+              Preview opens best in your system viewer. You can download or share from there.
+            </Text>
+            <PrimaryButton
+              title="Open certificate"
+              onPress={openCertificateExternal}
+              style={{ marginTop: SPACING.md }}
+              size="sm"
+            />
+          </View>
+        );
+      }
+      return (
+        <>
+          <Image source={{ uri: certUri }} style={styles.certImage} resizeMode="contain" />
+          <PrimaryButton title="Open fullscreen" onPress={openCertificateExternal} size="sm" variant="outline" />
+        </>
+      );
+    }
+
+    if (activeTab === 'notes') {
+      return (
+        <Text style={styles.insightText}>
+          {post.review ||
+            post.notes ||
+            'No learner notes yet. Your review from publishing appears here when available.'}
+        </Text>
+      );
+    }
+
+    return (
+      <View>
+        <Text style={styles.insightText}>
+          Track engagement and learning updates around this achievement — richer analytics are on the roadmap.
+        </Text>
+        <View style={styles.metaGrid}>
+          <View style={styles.metaCard}>
+            <Text style={styles.metaCardLabel}>VIEWS</Text>
+            <Text style={styles.metaCardValue}>{post.viewsCount ?? '—'}</Text>
+          </View>
+          <View style={styles.metaCard}>
+            <Text style={styles.metaCardLabel}>ENGAGEMENT</Text>
+            <Text style={styles.metaCardValue}>
+              {post.likesCount ?? 0} likes · {comments.length} replies
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.surface }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <StatusBar barStyle="light-content" />
-      
-      <ScrollView 
-        style={styles.flex} 
+      <ScrollView
+        style={styles.flex}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Hero Section */}
         <View style={styles.hero}>
           <CourseImage uri={post.image || DEFAULT_IMAGE} style={styles.heroImg} />
           <View style={styles.heroOverlay} />
-          
+
           <SafeAreaView style={styles.heroNav}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.navBtn}>
-              <Text style={styles.navText}>✕</Text>
+              <Ionicons name="close" size={22} color={colors.white} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => toggleBookmark(post.id)} style={styles.navBtn}>
-              <Text style={{ fontSize: 20 }}>{isBookmarked ? '🔖' : '📑'}</Text>
+            <TouchableOpacity
+              onPress={() => toggleBookmark(post.id)}
+              style={styles.navBtn}
+            >
+              <Ionicons
+                name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                size={22}
+                color={colors.white}
+              />
             </TouchableOpacity>
           </SafeAreaView>
 
@@ -150,149 +586,125 @@ const PostDetailScreen = ({ route, navigation }) => {
         </View>
 
         <View style={styles.mainContent}>
-          {/* Top Author Row */}
           <View style={styles.authorRow}>
-            <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: post.userId })}>
-              <Avatar name={post.authorName} size="md" />
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate('UserProfile', { userId: post.userId })
+              }
+            >
+              <Avatar name={post.authorName} uri={post.userId?.profilePicture} size="md" />
             </TouchableOpacity>
             <View style={styles.authorInfo}>
               <Text style={styles.authorName}>{post.authorName}</Text>
-              <Text style={styles.authorMeta}>{timeAgo(post.createdAt)} • {post.duration || 'Short Course'}</Text>
+              <Text style={styles.authorMeta}>
+                {timeAgo(post.createdAt)} · {post.duration || 'Course'}
+              </Text>
             </View>
             <View style={styles.ratingBadge}>
-              <Text style={styles.ratingText}>⭐ {post.rating?.toFixed(1)}</Text>
+              <Text style={styles.ratingText}>★ {post.rating?.toFixed(1) || '—'}</Text>
             </View>
           </View>
 
-          {/* About */}
-          <Text style={styles.sectionTitle}>Course Insight</Text>
-          <Text style={styles.insightText}>{post.description || "No additional insights shared."}</Text>
-
-          {/* Learnings */}
-          {post.learnings?.length > 0 && (
-            <View style={styles.learningsContainer}>
-              {post.learnings.map((l, i) => (
-                <View key={i} style={styles.learningItem}>
-                  <Text style={styles.learningCheck}>✓</Text>
-                  <Text style={styles.learningText}>{l}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Tags */}
-          <View style={styles.tagRow}>
-            {post.tags?.map((t, i) => (
-              <Text key={i} style={styles.tagItem}>#{t}</Text>
-            ))}
+          <View style={styles.tabRow}>
+            {TABS.map((t) => {
+              const on = activeTab === t.key;
+              return (
+                <TouchableOpacity
+                  key={t.key}
+                  onPress={() => setActiveTab(t.key)}
+                  style={[
+                    styles.tabBtn,
+                    {
+                      borderColor: on ? colors.accent : colors.border,
+                      backgroundColor: on ? colors.accentLight : colors.surfaceSubtle,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      { color: on ? colors.accent : colors.textSecondary },
+                    ]}
+                  >
+                    {t.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
+
+          {renderTabBody()}
 
           <View style={styles.separator} />
 
-          {/* Discussion */}
-          <SectionHeader title={`Discussion (${comments.length})`} style={styles.discHeader} />
-          
+          <SectionHeader
+            title={`Discussion (${comments.length})`}
+            subtitle="Professional, constructive feedback"
+            style={styles.discHeader}
+          />
+
           <View style={styles.inputArea}>
             <Avatar name={currentUser?.name} size="sm" />
             <TextInput
               style={styles.textInput}
-              placeholder="Add a comment..."
-              placeholderTextColor={COLORS.textMuted}
+              placeholder="Share a thoughtful comment…"
+              placeholderTextColor={colors.textMuted}
               value={commentText}
               onChangeText={setCommentText}
               multiline
             />
-            <TouchableOpacity 
-              onPress={() => handleAddComment()}
+            <TouchableOpacity
+              onPress={handleAddComment}
               disabled={!commentText.trim() || isSubmitting}
             >
-              <Text style={[styles.postBtnText, commentText.trim() && { color: COLORS.accent }]}>Post</Text>
+              <Text
+                style={[
+                  styles.postBtnText,
+                  commentText.trim() && { color: colors.accent },
+                ]}
+              >
+                Post
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Threaded Comments */}
           {comments.map((c) => (
             <View key={c._id} style={styles.commentRow}>
-              <Avatar name={c.userId?.name} size="sm" />
+              <Avatar name={c.userId?.name} uri={c.userId?.profilePicture} size="sm" />
               <View style={styles.commentBody}>
                 <View style={styles.commentTop}>
-                  <Text style={styles.commentAuthor}>{c.userId?.name || 'Learner'}</Text>
+                  <Text style={styles.commentAuthor}>
+                    {c.userId?.name || 'Learner'}
+                  </Text>
                   <Text style={styles.commentTime}>{timeAgo(c.createdAt)}</Text>
                 </View>
                 <Text style={styles.commentText}>{c.text}</Text>
                 <View style={styles.commentActions}>
-                  <TouchableOpacity><Text style={styles.actText}>Like</Text></TouchableOpacity>
-                  <TouchableOpacity onPress={() => setCommentText(`@${c.userId?.name} `)}><Text style={styles.actText}>Reply</Text></TouchableOpacity>
+                  <TouchableOpacity>
+                    <Text style={styles.actText}>Like</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setCommentText(`@${c.userId?.name} `)}
+                  >
+                    <Text style={styles.actText}>Reply</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
           ))}
-
-          <View style={{ height: 120 }} />
         </View>
       </ScrollView>
 
-      {/* Persistent CTA */}
       <View style={styles.footer}>
-        <PrimaryButton 
-          title="Go to Course" 
-          onPress={handleOpenCourse} 
-          fullWidth 
-          icon="🌐" 
+        <PrimaryButton
+          title="Open course"
+          onPress={handleOpenCourse}
+          fullWidth
           style={styles.cta}
         />
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.surface },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  flex: { flex: 1 },
-  scrollContent: { flexGrow: 1 },
-  hero: { height: 400, backgroundColor: COLORS.primary },
-  heroImg: { width: '100%', height: '100%', opacity: 0.6 },
-  heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 23, 42, 0.3)' },
-  heroNav: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: SPACING.xl, zIndex: 10 },
-  navBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', marginTop: Platform.OS === 'android' ? 10 : 0 },
-  navText: { color: COLORS.white, fontSize: 18, fontWeight: 'bold' },
-  heroBody: { position: 'absolute', bottom: 40, left: SPACING.xl, right: SPACING.xl },
-  platformChip: { alignSelf: 'flex-start', backgroundColor: COLORS.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: RADIUS.xs, marginBottom: 12 },
-  platformText: { ...FONTS.tiny, color: COLORS.white, fontSize: 10 },
-  heroTitle: { ...FONTS.display, color: COLORS.white, fontSize: 28, lineHeight: 36 },
-  mainContent: { backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xxl, borderTopRightRadius: RADIUS.xxl, marginTop: -RADIUS.xxl, padding: SPACING.xl },
-  authorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xxl },
-  authorInfo: { flex: 1, marginLeft: SPACING.md },
-  authorName: { ...FONTS.bodyBold, color: COLORS.primary },
-  authorMeta: { ...FONTS.caption, color: COLORS.textMuted },
-  ratingBadge: { backgroundColor: COLORS.accentLight, paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.md },
-  ratingText: { ...FONTS.captionBold, color: COLORS.accent },
-  sectionTitle: { ...FONTS.label, color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
-  insightText: { ...FONTS.body, color: COLORS.textPrimary, lineHeight: 24, marginBottom: SPACING.xxl },
-  learningsContainer: { marginBottom: SPACING.xxl },
-  learningItem: { flexDirection: 'row', marginBottom: 10, alignItems: 'flex-start' },
-  learningCheck: { color: COLORS.success, fontWeight: '800', marginRight: 12 },
-  learningText: { ...FONTS.body, color: COLORS.textSecondary, flex: 1 },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: SPACING['3xl'] },
-  tagItem: { ...FONTS.captionBold, color: COLORS.accent, marginRight: 12 },
-  separator: { height: 1, backgroundColor: COLORS.borderLight, marginBottom: SPACING.xxl },
-  discHeader: { marginBottom: SPACING.xl },
-  inputArea: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING['3xl'] },
-  textInput: { flex: 1, marginHorizontal: SPACING.md, ...FONTS.body, fontSize: 14, maxHeight: 80 },
-  postBtnText: { ...FONTS.bodyBold, color: COLORS.border, fontSize: 14 },
-  commentRow: { flexDirection: 'row', marginBottom: SPACING.xxl },
-  commentBody: { flex: 1, marginLeft: SPACING.md },
-  commentTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  commentAuthor: { ...FONTS.captionBold, color: COLORS.primary },
-  commentTime: { ...FONTS.tiny, color: COLORS.textMuted, textTransform: 'none' },
-  commentText: { ...FONTS.body, fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 },
-  commentActions: { flexDirection: 'row', marginTop: 8 },
-  actText: { ...FONTS.tiny, color: COLORS.textMuted, marginRight: 16, textTransform: 'none' },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.surface, padding: SPACING.xl, paddingBottom: Platform.OS === 'ios' ? 40 : SPACING.xl, borderTopWidth: 1, borderTopColor: COLORS.borderLight, ...SHADOW.lg },
-  cta: { borderRadius: RADIUS.lg },
-  errorEmoji: { fontSize: 40, marginBottom: 12 },
-  errorTitle: { ...FONTS.h3, marginBottom: 20 },
-});
 
 export default PostDetailScreen;
