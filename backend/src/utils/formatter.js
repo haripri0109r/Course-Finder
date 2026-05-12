@@ -50,5 +50,8 @@ export const formatCourse = (item = {}, currentUserId = null) => {
     learnings: Array.isArray(item.learnings) ? item.learnings : [],
     tags: Array.isArray(item.tags) ? item.tags : [],
     likes: likes, // Temporary inclusion to prevent frontend crashes during refactor
+
+    certificateUrl: item.certificateUrl || '',
+    certificatePublicId: item.certificatePublicId || '',
   };
 };

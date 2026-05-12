@@ -1,10 +1,12 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, Platform, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FONTS } from '../utils/theme';
 import { useAppTheme } from '../context/ThemeContext';
 import FloatingTabBar from '../components/FloatingTabBar';
+import { ONBOARDING_STORAGE_KEY } from '../constants/onboarding';
 
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -16,6 +18,9 @@ import CourseViewerScreen from '../screens/CourseViewerScreen';
 import SavedScreen from '../screens/SavedScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ProfileEditScreen from '../screens/ProfileEditScreen';
+import OnboardingScreen from '../screens/OnboardingScreen';
 import { AuthContext } from '../context/AuthContext';
 
 const Tab = createBottomTabNavigator();
@@ -65,7 +70,8 @@ function LoadingShell() {
         backgroundColor: colors.background,
       }}
     >
-      <Text style={[FONTS.body, { color: colors.textSecondary }]}>Loading...</Text>
+      <ActivityIndicator size="large" color={colors.accent} />
+      <Text style={[FONTS.body, { color: colors.textSecondary, marginTop: 12 }]}>Loading…</Text>
     </View>
   );
 }
@@ -73,9 +79,42 @@ function LoadingShell() {
 export default function AppNavigator() {
   const { user, isLoading } = useContext(AuthContext);
   const isAuthenticated = !!user;
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
-  if (isLoading) {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const v = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY);
+        if (!cancelled) {
+          setOnboardingComplete(v === 'true');
+          setOnboardingChecked(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setOnboardingComplete(false);
+          setOnboardingChecked(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (isLoading || !onboardingChecked) {
     return <LoadingShell />;
+  }
+
+  if (!onboardingComplete) {
+    return (
+      <OnboardingScreen
+        onComplete={() => {
+          setOnboardingComplete(true);
+        }}
+      />
+    );
   }
 
   return (
@@ -84,6 +123,7 @@ export default function AppNavigator() {
         <>
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         </>
       ) : (
         <>
@@ -96,6 +136,7 @@ export default function AppNavigator() {
           <Stack.Screen name="CourseViewer" component={CourseViewerScreen} />
           <Stack.Screen name="Saved" component={SavedScreen} />
           <Stack.Screen name="UserProfile" component={ProfileScreen} />
+          <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
         </>
       )}
     </Stack.Navigator>

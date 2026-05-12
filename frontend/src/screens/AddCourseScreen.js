@@ -1,6 +1,19 @@
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Image,
+  Animated,
+} from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import InputField from '../components/InputField';
@@ -9,40 +22,45 @@ import SectionHeader from '../components/SectionHeader';
 import Chip from '../components/Chip';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { showToast } from '../components/Toast';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW, LAYOUT } from '../utils/theme';
+import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import { useAppTheme } from '../context/ThemeContext';
 
 const PLATFORMS = ['Udemy', 'Coursera', 'YouTube', 'Other'];
-const STEPS = ['Content', 'Details', 'Feedback', 'Verification'];
+const STEPS = [
+  'Course URL',
+  'Autofetch',
+  'Details',
+  'Thumbnail',
+  'Certificate',
+  'Progress & notes',
+  'Review',
+];
+
+const MAX_BYTES = 10 * 1024 * 1024;
 
 export default function AddCourseScreen({ navigation }) {
   const { colors, isDark } = useAppTheme();
   const [currentStep, setCurrentStep] = useState(0);
-  
-  // Form State
+  const fade = useRef(new Animated.Value(1)).current;
+
   const [title, setTitle] = useState('');
   const [platform, setPlatform] = useState('');
   const [url, setUrl] = useState('');
   const [author, setAuthor] = useState('');
   const [providerBadge, setProviderBadge] = useState('');
   const [publisher, setPublisher] = useState('');
-  const [logo, setLogo] = useState('');
   const [rating, setRating] = useState('');
   const [review, setReview] = useState('');
   const [image, setImage] = useState('');
   const [duration, setDuration] = useState('');
-  const [certificateUrl, setCertificateUrl] = useState('');
-  const [certificatePublicId, setCertificatePublicId] = useState('');
   const [description, setDescription] = useState('');
   const [learnings, setLearnings] = useState('');
   const [postTags, setPostTags] = useState('');
   const [courseThumbnail, setCourseThumbnail] = useState('');
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [certificateFile, setCertificateFile] = useState(null);
-  
-  // Internal State
-  const [uploadingCert, setUploadingCert] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [progressPercent, setProgressPercent] = useState('100');
+
   const [loading, setLoading] = useState(false);
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [metadataError, setMetadataError] = useState('');
@@ -51,21 +69,11 @@ export default function AddCourseScreen({ navigation }) {
   const [generatedFallback, setGeneratedFallback] = useState(false);
   const [errors, setErrors] = useState({});
 
-  const nextStep = () => {
-    if (currentStep === 0 && !url.trim()) {
-      setErrors({ url: 'Course URL is required' });
-      return;
-    }
-    if (currentStep === 1 && (!title.trim() || !platform)) {
-      setErrors({ title: !title.trim() ? 'Title is required' : null, platform: !platform ? 'Select platform' : null });
-      return;
-    }
-    setErrors({});
-    if (currentStep < STEPS.length - 1) setCurrentStep(currentStep + 1);
-  };
-
-  const prevStep = () => {
-    if (currentStep > 0) setCurrentStep(currentStep - 1);
+  const transitionToStep = (next) => {
+    Animated.timing(fade, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+      setCurrentStep(next);
+      Animated.timing(fade, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    });
   };
 
   const isValidHttpUrl = (value = '') => /^https?:\/\//i.test(value.trim());
@@ -80,7 +88,14 @@ export default function AddCourseScreen({ navigation }) {
     return 'Other';
   };
 
-  // Metadata Fetch
+  const validateAssetSize = (asset, label) => {
+    if (asset?.size != null && asset.size > MAX_BYTES) {
+      showToast({ message: `${label} must be under 10 MB`, type: 'error' });
+      return false;
+    }
+    return true;
+  };
+
   const fetchMetadata = async () => {
     if (!isValidHttpUrl(url)) {
       setMetadataError('Enter a valid URL to fetch details.');
@@ -96,15 +111,24 @@ export default function AddCourseScreen({ navigation }) {
       const metadata = res.data?.metadata || res.data?.data || null;
 
       if (res.data?.success && metadata) {
-        const { title: t, thumbnail, author: a, duration: d, platform: p, providerBadge: b, description: desc, publisher: pub, logo: lg, generatedFallback: isGenerated } = metadata;
+        const {
+          title: t,
+          thumbnail,
+          author: a,
+          duration: d,
+          platform: p,
+          providerBadge: b,
+          description: desc,
+          publisher: pub,
+          generatedFallback: isGenerated,
+        } = metadata;
         if (t) setTitle(t);
         if (thumbnail) setImage(thumbnail);
-        else setImage(null); // Explicitly set null for safety
+        else setImage('');
         if (a) setAuthor(a);
         if (d) setDuration(d);
         if (desc) setDescription(desc);
         if (pub) setPublisher(pub);
-        if (lg) setLogo(lg);
         setProviderBadge(b || '');
         setPlatform(mapPlatformToDisplay(p, b));
         setGeneratedFallback(isGenerated || false);
@@ -117,11 +141,11 @@ export default function AddCourseScreen({ navigation }) {
         setMetadataManualMode(true);
         setMetadataFetched(false);
         if (res.data?.reason === 'provider_blocked') {
-          setMetadataError('This provider blocks automatic metadata extraction. Please continue with manual entry.');
+          setMetadataError('This provider blocks automatic metadata extraction. Continue with manual entry.');
         } else if (res.data?.reason === 'invalid_udemy_course') {
-          setMetadataError('This link does not provide usable course details. Please enter details manually.');
+          setMetadataError('This link does not provide usable course details. Continue with manual entry.');
         } else if (res.data?.reason === 'low_quality_metadata') {
-          setMetadataError('This link does not provide usable course details. Please enter them manually.');
+          setMetadataError('This link does not provide usable course details. Enter them manually.');
         } else {
           setMetadataError('Automatic extraction unavailable for this link.');
         }
@@ -132,7 +156,9 @@ export default function AddCourseScreen({ navigation }) {
     } catch (e) {
       const timedOut = e?.code === 'ECONNABORTED';
       setMetadataFetched(false);
-      setMetadataError(timedOut ? 'Automatic extraction unavailable for this link.' : 'Could not fetch metadata. Please fill manually.');
+      setMetadataError(
+        timedOut ? 'Request timed out. Try again or continue manually.' : 'Could not fetch metadata. You can continue manually.'
+      );
     } finally {
       setIsFetchingMetadata(false);
     }
@@ -147,54 +173,146 @@ export default function AddCourseScreen({ navigation }) {
 
   const handlePickThumbnail = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: 'image/*' });
+      const result = await DocumentPicker.getDocumentAsync({ type: 'image/*', copyToCacheDirectory: true });
       if (!result.canceled && result.assets?.[0]) {
-        setThumbnailFile(result.assets[0]);
-        showToast({ message: 'Thumbnail selected!', type: 'success' });
+        const a = result.assets[0];
+        if (!validateAssetSize(a, 'Thumbnail')) return;
+        setThumbnailFile(a);
+        showToast({ message: 'Thumbnail selected', type: 'success' });
       }
     } catch (e) {
       showToast({ message: 'Thumbnail picker failed', type: 'error' });
     }
   };
 
+  const pickThumbnailFromLibrary = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showToast({ message: 'Photo library permission required', type: 'error' });
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.9,
+      allowsEditing: true,
+      aspect: [16, 9],
+    });
+    if (!res.canceled && res.assets?.[0]) {
+      const a = res.assets[0];
+      const fakeAsset = {
+        uri: a.uri,
+        name: a.fileName || 'thumbnail.jpg',
+        mimeType: a.mimeType || 'image/jpeg',
+        size: a.fileSize,
+      };
+      if (fakeAsset.size != null && !validateAssetSize(fakeAsset, 'Thumbnail')) return;
+      setThumbnailFile(fakeAsset);
+      showToast({ message: 'Thumbnail selected', type: 'success' });
+    }
+  };
+
   const handlePickCertificateFile = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'] });
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        copyToCacheDirectory: true,
+      });
       if (!result.canceled && result.assets?.[0]) {
-        setCertificateFile(result.assets[0]);
-        showToast({ message: 'Certificate selected!', type: 'success' });
+        const a = result.assets[0];
+        const mime = (a.mimeType || '').toLowerCase();
+        const name = (a.name || '').toLowerCase();
+        const ok = mime.startsWith('image/') || mime === 'application/pdf' || name.endsWith('.pdf');
+        if (!ok) {
+          showToast({ message: 'Certificate must be an image or PDF', type: 'error' });
+          return;
+        }
+        if (!validateAssetSize(a, 'Certificate')) return;
+        setCertificateFile(a);
+        showToast({ message: 'Certificate selected', type: 'success' });
       }
     } catch (e) {
       showToast({ message: 'Certificate picker failed', type: 'error' });
     }
   };
 
+  const goManualFromFetchStep = () => {
+    setMetadataManualMode(true);
+    setMetadataFetched(false);
+    setMetadataError('');
+    showToast({ message: 'Manual entry — fill details in the next step.', type: 'info' });
+  };
+
+  const nextStep = () => {
+    setErrors({});
+    if (currentStep === 0) {
+      if (!url.trim() || !isValidHttpUrl(url)) {
+        setErrors({ url: 'A valid http(s) course URL is required' });
+        return;
+      }
+    }
+    if (currentStep === 1) {
+      if (!metadataFetched && !metadataManualMode) {
+        setErrors({ fetch: 'Fetch metadata or choose “Continue without fetch”' });
+        showToast({ message: 'Fetch course data or continue without autofetch', type: 'error' });
+        return;
+      }
+    }
+    if (currentStep === 2) {
+      if (!title.trim() || !platform) {
+        setErrors({
+          title: !title.trim() ? 'Title is required' : null,
+          platform: !platform ? 'Select a platform' : null,
+        });
+        return;
+      }
+    }
+    if (currentStep === 4 && certificateFile) {
+      if (!validateAssetSize(certificateFile, 'Certificate')) return;
+    }
+    if (currentStep === 5) {
+      const n = Number(progressPercent);
+      if (progressPercent.trim() === '' || Number.isNaN(n) || n < 0 || n > 100) {
+        setErrors({ progress: 'Progress must be a number from 0 to 100' });
+        return;
+      }
+    }
+
+    if (currentStep < STEPS.length - 1) {
+      transitionToStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 0) transitionToStep(currentStep - 1);
+  };
+
   const handleSubmit = async () => {
     try {
       setLoading(true);
       const formData = new FormData();
-      
+
       formData.append('title', title);
       formData.append('platform', platform);
       formData.append('url', url);
-      formData.append('image', courseThumbnail || image); // Priority to manual URL over fetched
+      formData.append('image', courseThumbnail || image);
       formData.append('duration', duration);
       formData.append('rating', rating);
       formData.append('review', review);
       formData.append('description', description);
-      
-      // Process and append arrays
-      const learningsArr = learnings.split(',').map(i => i.trim()).filter(Boolean);
-      learningsArr.forEach(l => formData.append('learnings[]', l));
-      
-      const tagsArr = postTags.split(',').map(i => i.trim().toLowerCase()).filter(Boolean);
-      tagsArr.forEach(t => formData.append('tags[]', t));
+      const p = Math.min(100, Math.max(0, Number(progressPercent) || 100));
+      formData.append('progress', String(p));
+
+      const learningsArr = learnings.split(',').map((i) => i.trim()).filter(Boolean);
+      learningsArr.forEach((l) => formData.append('learnings[]', l));
+
+      const tagsArr = postTags.split(',').map((i) => i.trim().toLowerCase()).filter(Boolean);
+      tagsArr.forEach((t) => formData.append('tags[]', t));
 
       if (thumbnailFile) {
         formData.append('thumbnail', {
           uri: thumbnailFile.uri,
           name: thumbnailFile.name || 'thumbnail.jpg',
-          type: thumbnailFile.mimeType || 'image/jpeg'
+          type: thumbnailFile.mimeType || 'image/jpeg',
         });
       }
 
@@ -202,55 +320,45 @@ export default function AddCourseScreen({ navigation }) {
         formData.append('certificate', {
           uri: certificateFile.uri,
           name: certificateFile.name || 'certificate.pdf',
-          type: certificateFile.mimeType || 'application/pdf'
+          type: certificateFile.mimeType || 'application/pdf',
         });
       }
 
       await api.post('/completed', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      showToast({ message: 'Course Shared Successfully! 🚀', type: 'success' });
+      showToast({ message: 'Course shared successfully', type: 'success' });
       navigation.navigate('Home');
     } catch (e) {
-      showToast({ message: 'Failed to share', type: 'error' });
+      const msg = e.response?.data?.message || 'Failed to publish. Check your connection and uploads.';
+      showToast({ message: msg, type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  const StepIndicator = () => (
-    <View style={styles.indicatorContainer}>
-      <View style={styles.stepIndicator}>
-        {STEPS.map((step, idx) => (
-          <View key={step} style={styles.stepWrapper}>
-            <View style={[
-              styles.stepDot, 
-              idx <= currentStep && styles.stepDotActive, 
-              idx < currentStep && styles.stepDotDone
-            ]}>
-              {idx < currentStep ? (
-                <Text style={styles.stepCheck}>✓</Text>
-              ) : (
-                <Text style={[styles.stepNum, idx === currentStep && styles.stepNumActive]}>{idx + 1}</Text>
-              )}
-            </View>
-            {idx < STEPS.length - 1 && (
-              <View style={[styles.stepLine, idx < currentStep && styles.stepLineActive]} />
-            )}
-          </View>
-        ))}
+  const StepBar = () => {
+    const pct = ((currentStep + 1) / STEPS.length) * 100;
+    return (
+      <View style={[styles.indicatorContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.stepCount, { color: colors.textSecondary }]}>
+          Step {currentStep + 1} of {STEPS.length}
+        </Text>
+        <Text style={[styles.stepLabel, { color: colors.accent }]}>{STEPS[currentStep]}</Text>
+        <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+          <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: colors.accent }]} />
+        </View>
       </View>
-      <Text style={styles.stepLabel}>{STEPS[currentStep]}</Text>
-    </View>
-  );
+    );
+  };
 
   const renderStep = () => {
     switch (currentStep) {
       case 0:
         return (
           <View style={styles.stepContent}>
-            <SectionHeader title="Course Source" subtitle="Paste the URL to automatically sync course details" />
+            <SectionHeader title="Paste course URL" subtitle="We will use this link on your portfolio and for metadata." />
             <InputField
               label="Course URL"
               placeholder="https://..."
@@ -259,196 +367,258 @@ export default function AddCourseScreen({ navigation }) {
               error={errors.url}
               icon="🔗"
             />
-
-            <InputField
-              label="Course Thumbnail URL (Optional)"
-              placeholder="Paste image URL (e.g. https://...)"
-              value={courseThumbnail}
-              onChangeText={setCourseThumbnail}
-              icon="🖼️"
-              containerStyle={{ marginTop: SPACING.md }}
-            />
-
-            {isValidHttpUrl(url) && (
-              <View style={styles.fetchActionRow}>
-                <PrimaryButton
-                  title="Fetch Details"
-                  onPress={fetchMetadata}
-                  loading={isFetchingMetadata}
-                  size="sm"
-                  style={styles.fetchBtn}
-                />
-              </View>
-            )}
+          </View>
+        );
+      case 1:
+        return (
+          <View style={styles.stepContent}>
+            <SectionHeader title="Autofetch metadata" subtitle="Pull title, instructor, and thumbnail when the provider allows it." />
+            <PrimaryButton title="Fetch metadata" onPress={fetchMetadata} loading={isFetchingMetadata} style={{ marginTop: SPACING.sm }} />
+            {errors.fetch ? <Text style={styles.fieldError}>{errors.fetch}</Text> : null}
+            <TouchableOpacity onPress={goManualFromFetchStep} style={styles.secondaryLink}>
+              <Text style={[styles.secondaryLinkText, { color: colors.accent }]}>Continue without fetch</Text>
+            </TouchableOpacity>
 
             {isFetchingMetadata && (
               <View style={styles.metadataSkeleton}>
-                <Text style={styles.fetchText}>Fetching course details...</Text>
+                <Text style={[styles.fetchText, { color: colors.accent }]}>Fetching course details…</Text>
                 <LoadingSkeleton height={120} radius={RADIUS.md} style={{ marginTop: SPACING.sm }} />
               </View>
             )}
 
             {!isFetchingMetadata && metadataError ? (
-              <View style={styles.metadataAlert}>
-                <Text style={styles.metadataAlertText}>{metadataError}</Text>
+              <View style={[styles.metadataAlert, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                <Text style={[styles.metadataAlertText, { color: colors.textSecondary }]}>{metadataError}</Text>
                 {!metadataManualMode && (
                   <TouchableOpacity onPress={fetchMetadata} style={styles.retryInlineBtn}>
-                    <Text style={styles.retryInlineText}>Retry</Text>
+                    <Text style={[styles.retryInlineText, { color: colors.accent }]}>Retry</Text>
                   </TouchableOpacity>
                 )}
               </View>
             ) : null}
 
             {metadataFetched && !isFetchingMetadata && (
-              <View style={styles.previewCard}>
+              <View style={[styles.previewCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
                 {(thumbnailFile?.uri || courseThumbnail || image) ? (
-                  <Image source={{ uri: thumbnailFile?.uri || courseThumbnail || image }} style={styles.previewThumb} />
+                  <Image
+                    source={{ uri: thumbnailFile?.uri || courseThumbnail || image }}
+                    style={styles.previewThumb}
+                  />
                 ) : (
-                  <View style={[styles.previewThumb, { justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.surfaceSubtle }]}>
-                    <Ionicons name="school-outline" size={48} color={COLORS.textMuted} />
-                    <Text style={{ ...FONTS.tiny, color: COLORS.textMuted, marginTop: 8 }}>Preview not available</Text>
+                  <View style={[styles.previewThumb, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.surfaceSubtle }]}>
+                    <Ionicons name="school-outline" size={48} color={colors.textMuted} />
+                    <Text style={{ ...FONTS.tiny, color: colors.textMuted, marginTop: 8 }}>Preview not available</Text>
                   </View>
                 )}
                 <View style={styles.previewMeta}>
-                  <Text style={styles.previewTitle} numberOfLines={2}>{title || 'Untitled Course'}</Text>
-                    {!!author && <Text style={styles.previewSub}>{author}</Text>}
-                    {!!publisher && <Text style={styles.previewSub}>{publisher}</Text>}
-                    <Text style={styles.previewSub}>{duration || 'Duration not available'}</Text>
+                  <Text style={[styles.previewTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {title || 'Untitled course'}
+                  </Text>
+                  {!!author && <Text style={[styles.previewSub, { color: colors.textSecondary }]}>{author}</Text>}
+                  {!!publisher && <Text style={[styles.previewSub, { color: colors.textSecondary }]}>{publisher}</Text>}
+                  <Text style={[styles.previewSub, { color: colors.textSecondary }]}>{duration || 'Duration unknown'}</Text>
                   <View style={styles.previewBadgeRow}>
-                    <Text style={styles.previewBadge}>{providerBadge || platform || 'Other'}</Text>
-                    {generatedFallback && <Text style={[styles.previewBadge, { backgroundColor: '#F59E0B', color: COLORS.white, borderColor: '#F59E0B' }]}>Auto-generated from URL</Text>}
+                    <Text style={[styles.previewBadge, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.surfaceSubtle }]}>
+                      {providerBadge || platform || 'Other'}
+                    </Text>
+                    {generatedFallback && (
+                      <Text style={[styles.previewBadge, { backgroundColor: '#F59E0B', color: COLORS.white, borderColor: '#F59E0B' }]}>
+                        Auto-generated from URL
+                      </Text>
+                    )}
                   </View>
                 </View>
               </View>
             )}
-          </View>
-        );
-      case 1:
-        return (
-          <View style={styles.stepContent}>
-            <SectionHeader title="Identify & Categorize" subtitle="Confirm the course details" />
-            <InputField label="Title" value={title} onChangeText={setTitle} error={errors.title} />
-            <Text style={styles.label}>Platform</Text>
-            <View style={styles.platformRow}>
-              {PLATFORMS.map(p => (
-                <Chip key={p} label={p} selected={platform === p} onPress={() => setPlatform(p)} variant={platform === p ? 'filled' : 'soft'} />
-              ))}
-            </View>
-            <InputField label="Estimated Duration" placeholder="e.g. 12 hours" value={duration} onChangeText={setDuration} icon="⌛" />
-            <InputField label="Instructor / Author" placeholder="e.g. Andrew Ng" value={author} onChangeText={setAuthor} icon="👤" />
-            <InputField label="Skills / Tags" placeholder="react, frontend, hooks" value={postTags} onChangeText={setPostTags} icon="🏷️" />
+
+            {metadataManualMode && !isFetchingMetadata && (
+              <Text style={[styles.manualHint, { color: colors.textSecondary }]}>
+                You can enter or adjust all fields in the next step.
+              </Text>
+            )}
           </View>
         );
       case 2:
         return (
           <View style={styles.stepContent}>
-            <SectionHeader title="Your Experience" subtitle="Rate and share your thoughts" />
-            <Text style={styles.label}>Overall Rating</Text>
-            <View style={styles.ratingRow}>
-              {[1, 2, 3, 4, 5].map(n => (
-                <TouchableOpacity key={n} onPress={() => setRating(String(n))} activeOpacity={0.7} style={styles.starBtn}>
-                  <Text style={[styles.star, Number(rating) >= n && styles.starActive]}>
-                    {Number(rating) >= n ? '★' : '☆'}
-                  </Text>
-                </TouchableOpacity>
+            <SectionHeader title="Edit details" subtitle="Confirm or complete course information." />
+            <InputField label="Title" value={title} onChangeText={setTitle} error={errors.title} />
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Platform</Text>
+            <View style={styles.platformRow}>
+              {PLATFORMS.map((p) => (
+                <Chip
+                  key={p}
+                  label={p}
+                  selected={platform === p}
+                  onPress={() => setPlatform(p)}
+                  variant={platform === p ? 'filled' : 'soft'}
+                />
               ))}
             </View>
-            <InputField label="Key Learnings" placeholder="What were your top takeaways?" value={learnings} onChangeText={setLearnings} multiline style={styles.multilineInput} />
-            <InputField label="Your Short Review" placeholder="Share a brief insight with the community" value={review} onChangeText={setReview} multiline style={styles.multilineInput} />
+            {errors.platform ? <Text style={styles.fieldError}>{errors.platform}</Text> : null}
+            <InputField label="Estimated duration" placeholder="e.g. 12 hours" value={duration} onChangeText={setDuration} icon="⌛" />
+            <InputField label="Instructor / author" placeholder="e.g. Andrew Ng" value={author} onChangeText={setAuthor} icon="👤" />
+            <InputField
+              label="Description"
+              placeholder="What is this course about?"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              style={styles.multilineInput}
+            />
           </View>
         );
       case 3:
         return (
           <View style={styles.stepContent}>
-            <SectionHeader title="Course Media" subtitle="Upload custom thumbnail and certificate" />
-            
-            <Text style={styles.label}>Course Thumbnail</Text>
-            <TouchableOpacity 
-              style={[styles.miniUploadZone, thumbnailFile && styles.uploadZoneSuccess]} 
-              onPress={handlePickThumbnail}
-            >
-              {thumbnailFile ? (
-                <Image source={{ uri: thumbnailFile.uri }} style={styles.miniPreview} />
-              ) : (
-                <>
-                  <Ionicons name="image-outline" size={24} color={COLORS.textMuted} />
-                  <Text style={styles.miniUploadText}>Pick Custom Thumbnail</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <Text style={styles.label}>Completion Certificate</Text>
-            <TouchableOpacity 
-              style={[styles.uploadZone, certificateFile && styles.uploadZoneSuccess]} 
+            <SectionHeader title="Thumbnail" subtitle="Optional URL, gallery pick, or file (max 10 MB)." />
+            <InputField
+              label="Thumbnail image URL (optional)"
+              placeholder="https://…"
+              value={courseThumbnail}
+              onChangeText={setCourseThumbnail}
+              icon="🖼️"
+            />
+            <View style={styles.uploadRow}>
+              <PrimaryButton title="Photo library" onPress={pickThumbnailFromLibrary} variant="outline" style={{ flex: 1, marginRight: SPACING.sm }} />
+              <PrimaryButton title="Pick file" onPress={handlePickThumbnail} variant="outline" style={{ flex: 1 }} />
+            </View>
+            {thumbnailFile ? (
+              <View style={styles.thumbPreviewWrap}>
+                <Image source={{ uri: thumbnailFile.uri }} style={styles.thumbPreview} />
+                <TouchableOpacity onPress={() => setThumbnailFile(null)} style={styles.removePill}>
+                  <Text style={styles.removePillText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        );
+      case 4:
+        return (
+          <View style={styles.stepContent}>
+            <SectionHeader title="Certificate" subtitle="PDF or image, max 10 MB. Optional but recommended." />
+            <TouchableOpacity
+              style={[styles.uploadZone, certificateFile && styles.uploadZoneSuccess, { borderColor: colors.border, backgroundColor: colors.background }]}
               onPress={handlePickCertificateFile}
             >
-              <View style={styles.uploadIconCircle}>
+              <View style={[styles.uploadIconCircle, { backgroundColor: colors.surface }]}>
                 <Text style={styles.uploadEmoji}>{certificateFile ? '🏆' : '📂'}</Text>
               </View>
-              <Text style={styles.uploadTitle}>
-                {certificateFile ? certificateFile.name : 'Upload Certificate'}
+              <Text style={[styles.uploadTitle, { color: colors.textPrimary }]}>
+                {certificateFile ? certificateFile.name : 'Upload certificate'}
               </Text>
-              <Text style={styles.uploadSub}>
-                {certificateFile ? `${(certificateFile.size / 1024 / 1024).toFixed(2)} MB` : 'PDF or Image (Max 10MB)'}
+              <Text style={[styles.uploadSub, { color: colors.textMuted }]}>
+                {certificateFile && certificateFile.size != null
+                  ? `${(certificateFile.size / 1024 / 1024).toFixed(2)} MB`
+                  : 'PDF or image'}
               </Text>
             </TouchableOpacity>
-            
+            {certificateFile ? (
+              <TouchableOpacity onPress={() => setCertificateFile(null)} style={styles.removePill}>
+                <Text style={styles.removePillText}>Remove certificate</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        );
+      case 5:
+        return (
+          <View style={styles.stepContent}>
+            <SectionHeader title="Progress & notes" subtitle="Tags, completion progress, rating, and what you learned." />
+            <InputField
+              label="Tags / categories (comma-separated)"
+              placeholder="react, system design, leadership"
+              value={postTags}
+              onChangeText={setPostTags}
+              icon="🏷️"
+            />
+            <InputField
+              label="Completion progress (0–100)"
+              placeholder="100"
+              value={progressPercent}
+              onChangeText={setProgressPercent}
+              keyboardType="number-pad"
+              error={errors.progress}
+              icon="📊"
+            />
+            <Text style={[styles.label, { color: colors.textPrimary }]}>Rating</Text>
+            <View style={styles.ratingRow}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <TouchableOpacity key={n} onPress={() => setRating(String(n))} activeOpacity={0.7} style={styles.starBtn}>
+                  <Text style={[styles.star, Number(rating) >= n && styles.starActive]}>{Number(rating) >= n ? '★' : '☆'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <InputField
+              label="Key learnings (comma-separated)"
+              placeholder="Hooks, performance, testing…"
+              value={learnings}
+              onChangeText={setLearnings}
+              multiline
+              style={styles.multilineInput}
+            />
+            <InputField
+              label="Short review"
+              placeholder="Share a takeaway for the community"
+              value={review}
+              onChangeText={setReview}
+              multiline
+              style={styles.multilineInput}
+            />
+          </View>
+        );
+      case 6:
+        return (
+          <View style={styles.stepContent}>
+            <SectionHeader title="Review & publish" subtitle="Everything below will appear on your portfolio." />
             <View style={styles.finalCard}>
-              <Text style={styles.finalHeader}>Ready to Post</Text>
-              <View style={styles.finalBody}>
-                <Text style={styles.finalTitle} numberOfLines={2}>{title}</Text>
-                <View style={styles.finalMeta}>
-                  <Text style={styles.finalPlatform}>{platform}</Text>
-                  <View style={styles.metaDot} />
-                  <Text style={styles.finalRating}>⭐ {rating || '0'}.0</Text>
-                </View>
+              <Text style={styles.finalHeader}>Summary</Text>
+              <Text style={styles.finalTitle} numberOfLines={3}>
+                {title || 'Untitled'}
+              </Text>
+              <View style={styles.finalMeta}>
+                <Text style={styles.finalPlatform}>{platform || '—'}</Text>
+                <View style={styles.metaDot} />
+                <Text style={styles.finalRating}>⭐ {rating || '—'}</Text>
+                <View style={styles.metaDot} />
+                <Text style={styles.finalRating}>{progressPercent}% done</Text>
               </View>
+              <Text style={styles.finalTiny} numberOfLines={2}>
+                {url}
+              </Text>
             </View>
           </View>
         );
+      default:
+        return null;
     }
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: colors.borderLight, backgroundColor: colors.surface }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-          <Text style={{ fontSize: 20 }}>✕</Text>
+          <Text style={{ fontSize: 20, color: colors.textPrimary }}>✕</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Log Achievement</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Log achievement</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <StepIndicator />
+      <StepBar />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {renderStep()}
+          <Animated.View style={{ opacity: fade }}>{renderStep()}</Animated.View>
         </ScrollView>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.borderLight }]}>
           {currentStep > 0 && (
-            <PrimaryButton 
-              title="Previous" 
-              onPress={prevStep} 
-              variant="outline" 
-              style={{ flex: 1, marginRight: SPACING.md }} 
-            />
+            <PrimaryButton title="Back" onPress={prevStep} variant="outline" style={{ flex: 1, marginRight: SPACING.md }} />
           )}
           {currentStep < STEPS.length - 1 ? (
-            <PrimaryButton 
-              title="Next Step" 
-              onPress={nextStep} 
-              style={{ flex: 2 }} 
-            />
+            <PrimaryButton title="Next" onPress={nextStep} style={{ flex: 2 }} />
           ) : (
-            <PrimaryButton 
-              title="Publish Log" 
-              onPress={handleSubmit} 
-              loading={loading} 
-              style={{ flex: 2 }} 
-            />
+            <PrimaryButton title="Publish" onPress={handleSubmit} loading={loading} style={{ flex: 2 }} />
           )}
         </View>
       </KeyboardAvoidingView>
@@ -457,78 +627,57 @@ export default function AddCourseScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.surface },
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+  container: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.xl, 
+    paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.lg,
-    borderBottomWidth: 1, 
-    borderBottomColor: COLORS.borderLight 
+    borderBottomWidth: 1,
   },
-  headerTitle: { ...FONTS.h3, color: COLORS.textPrimary },
+  headerTitle: { ...FONTS.h3 },
   closeBtn: { width: 40, height: 40, justifyContent: 'center' },
   indicatorContainer: {
-    backgroundColor: COLORS.background,
-    paddingVertical: SPACING.xl,
-    alignItems: 'center',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
   },
-  stepIndicator: { 
-    flexDirection: 'row', 
-    width: '60%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  stepDot: { 
-    width: 24, 
-    height: 24, 
-    borderRadius: 12, 
-    backgroundColor: COLORS.border, 
-    justifyContent: 'center', 
-    alignItems: 'center',
-    zIndex: 2,
-    ...SHADOW.xs,
-  },
-  stepDotActive: { backgroundColor: COLORS.accent },
-  stepDotDone: { backgroundColor: COLORS.success },
-  stepNum: { ...FONTS.tiny, color: COLORS.textMuted, fontSize: 10 },
-  stepNumActive: { color: COLORS.white },
-  stepCheck: { color: COLORS.white, fontSize: 12, fontWeight: 'bold' },
-  stepLine: { flex: 1, height: 2, backgroundColor: COLORS.border, marginHorizontal: -2 },
-  stepLineActive: { backgroundColor: COLORS.success },
+  stepCount: { ...FONTS.caption },
   stepLabel: {
     ...FONTS.tiny,
-    marginTop: 12,
-    color: COLORS.accent,
-    letterSpacing: 1,
+    marginTop: 6,
+    letterSpacing: 0.5,
+    fontWeight: '700',
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    marginTop: SPACING.md,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 6,
+    borderRadius: 3,
   },
   scroll: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: 140 },
   stepContent: { flex: 1 },
   label: { ...FONTS.label, marginBottom: SPACING.sm, marginTop: SPACING.lg },
-  fetchLoading: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md },
-  fetchText: { ...FONTS.caption, marginLeft: SPACING.md, color: COLORS.accent },
-  fetchActionRow: { marginTop: SPACING.sm, marginBottom: SPACING.sm, alignItems: 'flex-start' },
-  fetchBtn: { minWidth: 130 },
+  fieldError: { ...FONTS.tiny, color: COLORS.danger, marginTop: 4 },
+  fetchText: { ...FONTS.caption, marginLeft: 0 },
   metadataSkeleton: { marginTop: SPACING.sm },
   metadataAlert: {
     marginTop: SPACING.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: RADIUS.md,
     padding: SPACING.md,
-    backgroundColor: COLORS.surface,
   },
-  metadataAlertText: { ...FONTS.small, color: COLORS.textSecondary },
+  metadataAlertText: { ...FONTS.small },
   retryInlineBtn: { marginTop: SPACING.sm },
-  retryInlineText: { ...FONTS.captionBold, color: COLORS.accent },
+  retryInlineText: { ...FONTS.captionBold },
   previewCard: {
     marginTop: SPACING.md,
     borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
     overflow: 'hidden',
   },
   previewThumb: {
@@ -536,49 +685,48 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     backgroundColor: COLORS.surfaceSubtle,
   },
-  previewMeta: {
-    padding: SPACING.md,
-  },
-  previewTitle: {
-    ...FONTS.bodyBold,
-    color: COLORS.textPrimary,
-    fontSize: 14,
-  },
-  previewSub: {
-    ...FONTS.small,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  previewBadgeRow: {
-    marginTop: SPACING.sm,
-    alignItems: 'flex-start',
-  },
+  previewMeta: { padding: SPACING.md },
+  previewTitle: { ...FONTS.bodyBold, fontSize: 14 },
+  previewSub: { ...FONTS.small, marginTop: 4 },
+  previewBadgeRow: { marginTop: SPACING.sm, alignItems: 'flex-start', flexWrap: 'wrap' },
   previewBadge: {
     ...FONTS.small,
-    color: COLORS.textPrimary,
     borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: RADIUS.full,
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
-    backgroundColor: COLORS.surfaceSubtle,
+    marginRight: 8,
+    marginBottom: 4,
   },
+  manualHint: { ...FONTS.small, marginTop: SPACING.md },
+  secondaryLink: { marginTop: SPACING.md, alignItems: 'center' },
+  secondaryLinkText: { ...FONTS.captionBold },
   platformRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: SPACING.md },
   ratingRow: { flexDirection: 'row', marginBottom: SPACING.xl },
   starBtn: { marginRight: SPACING.md },
   star: { fontSize: 42, color: COLORS.border },
   starActive: { color: '#F59E0B' },
   multilineInput: { minHeight: 80, textAlignVertical: 'top' },
-  uploadZone: { 
-    height: 180, 
-    borderRadius: RADIUS.xxl, 
-    borderStyle: 'dashed', 
-    borderWidth: 2, 
-    borderColor: COLORS.border, 
-    backgroundColor: COLORS.background,
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginTop: SPACING.xl,
+  uploadRow: { flexDirection: 'row', marginTop: SPACING.md },
+  thumbPreviewWrap: { marginTop: SPACING.md, borderRadius: RADIUS.md, overflow: 'hidden' },
+  thumbPreview: { width: '100%', aspectRatio: 16 / 9, backgroundColor: COLORS.surfaceSubtle },
+  removePill: {
+    alignSelf: 'flex-start',
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.dangerSoft,
+  },
+  removePillText: { ...FONTS.captionBold, color: COLORS.danger },
+  uploadZone: {
+    height: 180,
+    borderRadius: RADIUS.xxl,
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: SPACING.lg,
     padding: SPACING.xl,
   },
   uploadZoneSuccess: { borderColor: COLORS.success, backgroundColor: COLORS.successSoft },
@@ -586,59 +734,36 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.md,
     ...SHADOW.sm,
   },
   uploadEmoji: { fontSize: 24 },
-  uploadTitle: { ...FONTS.bodyBold, color: COLORS.textPrimary },
-  uploadSub: { ...FONTS.caption, color: COLORS.textMuted, marginTop: 4 },
+  uploadTitle: { ...FONTS.bodyBold },
+  uploadSub: { ...FONTS.caption, marginTop: 4 },
   finalCard: {
-    marginTop: SPACING['4xl'],
+    marginTop: SPACING.lg,
     backgroundColor: COLORS.primary,
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
     ...SHADOW.lg,
   },
   finalHeader: { ...FONTS.tiny, color: 'rgba(255,255,255,0.6)', marginBottom: 12 },
-  finalBody: { flex: 1 },
   finalTitle: { ...FONTS.h3, color: COLORS.white, fontSize: 16 },
-  finalMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  finalMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' },
   finalPlatform: { ...FONTS.tiny, color: COLORS.accentLight },
   metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 8 },
   finalRating: { ...FONTS.tiny, color: COLORS.white },
-  miniUploadZone: {
-    height: 100,
-    borderRadius: RADIUS.lg,
-    borderStyle: 'dashed',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: SPACING.xs,
-    overflow: 'hidden',
-  },
-  miniPreview: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  miniUploadText: {
-    ...FONTS.tiny,
-    color: COLORS.textMuted,
-    marginTop: 8,
-  },
-  footer: { 
-    position: 'absolute', 
-    bottom: 0, left: 0, right: 0, 
-    flexDirection: 'row', 
-    padding: SPACING.xl, 
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1, 
-    borderTopColor: COLORS.borderLight,
+  finalTiny: { ...FONTS.tiny, color: 'rgba(255,255,255,0.75)', marginTop: SPACING.sm },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    padding: SPACING.xl,
+    borderTopWidth: 1,
     paddingBottom: Platform.OS === 'ios' ? 40 : SPACING.xl,
-  }
+  },
 });

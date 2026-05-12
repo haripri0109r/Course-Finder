@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
-  Linking,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
@@ -27,6 +27,22 @@ import { timeAgo } from '../utils/format';
 import { showToast } from '../components/Toast';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
+import CertificateViewerModal from '../components/CertificateViewerModal';
+import { getLocalComments, appendLocalComment } from '../services/localComments';
+
+function flattenCommentTree(roots) {
+  const out = [];
+  const walk = (nodes) => {
+    for (const n of nodes || []) {
+      if (!n) continue;
+      const { replies, ...rest } = n;
+      out.push(rest);
+      if (Array.isArray(replies) && replies.length) walk(replies);
+    }
+  };
+  walk(Array.isArray(roots) ? roots : []);
+  return out;
+}
 
 const TABS = [
   { key: 'overview', label: 'Overview' },
@@ -223,24 +239,26 @@ function createStyles(colors, isDark) {
     },
     pdfTitle: { ...FONTS.bodyBold, color: colors.textPrimary },
     pdfSub: { ...FONTS.small, color: colors.textSecondary, marginTop: 6 },
-    placeholderActions: {
+    actionRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingVertical: SPACING.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      marginBottom: SPACING.lg,
+      flexWrap: 'wrap',
+      marginTop: SPACING.lg,
     },
-    placeholderCol: {
+    actionPill: {
+      flexDirection: 'row',
       alignItems: 'center',
-      flex: 1,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceSubtle,
+      marginRight: SPACING.md,
+      marginBottom: SPACING.sm,
     },
-    placeholderLabel: {
-      ...FONTS.small,
-      color: colors.textMuted,
-      textAlign: 'center',
-      marginTop: 6,
+    actionPillText: {
+      ...FONTS.captionBold,
+      marginLeft: 8,
     },
     separator: {
       height: 1,
@@ -329,6 +347,9 @@ const PostDetailScreen = ({ route, navigation }) => {
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [certModalVisible, setCertModalVisible] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
   const fetchedRef = useRef(false);
 
   useEffect(() => {
@@ -344,9 +365,19 @@ const PostDetailScreen = ({ route, navigation }) => {
           api.getComments(postId),
         ]);
 
+        const serverList = flattenCommentTree(
+          Array.isArray(commentsData) ? commentsData : commentsData?.comments || commentsData?.data || []
+        );
+        const localList = await getLocalComments(postId);
+        const merged = [...localList, ...serverList].sort(
+          (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+        );
+
         if (isMounted) {
           setPost(postData);
-          setComments(commentsData);
+          setComments(merged);
+          setLiked(Boolean(postData?.isLikedByMe));
+          setLikesCount(postData?.likesCount ?? 0);
           api.incrementViewCount(postId).catch(() => {});
         }
       } catch (err) {
@@ -388,8 +419,18 @@ const PostDetailScreen = ({ route, navigation }) => {
       setComments((prev) => [res, ...prev]);
       showToast({ message: 'Comment shared!', type: 'success' });
     } catch (err) {
-      setCommentText(originalText);
-      showToast({ message: 'Failed to post comment', type: 'error' });
+      try {
+        const item = await appendLocalComment(postId, {
+          text: originalText.trim(),
+          userName: currentUser?.name || 'You',
+          userId: currentUser?._id || 'local',
+        });
+        setComments((prev) => [item, ...prev]);
+        showToast({ message: 'Saved locally — will sync when the server is available', type: 'info' });
+      } catch {
+        setCommentText(originalText);
+        showToast({ message: 'Failed to post comment', type: 'error' });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -399,11 +440,30 @@ const PostDetailScreen = ({ route, navigation }) => {
     post?.certificateUrl ||
     (typeof post?.certificate === 'string' ? post.certificate : null);
 
-  const openCertificateExternal = () => {
-    if (!certUri) return;
-    Linking.openURL(certUri).catch(() =>
-      showToast({ message: 'Unable to open file', type: 'error' })
-    );
+  const toggleLike = async () => {
+    if (!post?.id) return;
+    const next = !liked;
+    setLiked(next);
+    setLikesCount((c) => Math.max(0, c + (next ? 1 : -1)));
+    try {
+      if (next) await api.likeCompletion(post.id);
+      else await api.unlikeCompletion(post.id);
+    } catch {
+      setLiked(!next);
+      setLikesCount((c) => Math.max(0, c + (next ? -1 : 1)));
+      showToast({ message: 'Could not update like', type: 'error' });
+    }
+  };
+
+  const sharePost = async () => {
+    try {
+      await Share.share({
+        message: `${post.title}\n${post.url || ''}`.trim(),
+        title: post.title,
+      });
+    } catch {
+      /* dismissed */
+    }
   };
 
   if (loading) {
@@ -460,19 +520,15 @@ const PostDetailScreen = ({ route, navigation }) => {
             ))}
           </View>
 
-          <View style={styles.placeholderActions}>
-            <View style={styles.placeholderCol}>
-              <Ionicons name="happy-outline" size={22} color={colors.textSecondary} />
-              <Text style={styles.placeholderLabel}>Reactions{'\n'}(soon)</Text>
-            </View>
-            <View style={styles.placeholderCol}>
-              <Ionicons name="chatbubbles-outline" size={22} color={colors.textSecondary} />
-              <Text style={styles.placeholderLabel}>Thread{'\n'}below</Text>
-            </View>
-            <View style={styles.placeholderCol}>
-              <Ionicons name="share-social-outline" size={22} color={colors.textSecondary} />
-              <Text style={styles.placeholderLabel}>Share{'\n'}updates</Text>
-            </View>
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.actionPill} onPress={toggleLike} activeOpacity={0.85}>
+              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={22} color={liked ? colors.danger : colors.textPrimary} />
+              <Text style={[styles.actionPillText, { color: colors.textPrimary }]}>{likesCount}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionPill} onPress={sharePost} activeOpacity={0.85}>
+              <Ionicons name="share-social-outline" size={22} color={colors.textPrimary} />
+              <Text style={[styles.actionPillText, { color: colors.textPrimary }]}>Share</Text>
+            </TouchableOpacity>
           </View>
         </>
       );
@@ -490,27 +546,16 @@ const PostDetailScreen = ({ route, navigation }) => {
       }
       const lower = String(certUri).toLowerCase();
       const isPdf = lower.includes('.pdf') || lower.includes('application/pdf');
-      if (isPdf) {
-        return (
-          <View style={styles.pdfCard}>
-            <Text style={styles.pdfTitle}>PDF certificate</Text>
-            <Text style={styles.pdfSub}>
-              Preview opens best in your system viewer. You can download or share from there.
-            </Text>
-            <PrimaryButton
-              title="Open certificate"
-              onPress={openCertificateExternal}
-              style={{ marginTop: SPACING.md }}
-              size="sm"
-            />
-          </View>
-        );
-      }
       return (
-        <>
-          <Image source={{ uri: certUri }} style={styles.certImage} resizeMode="contain" />
-          <PrimaryButton title="Open fullscreen" onPress={openCertificateExternal} size="sm" variant="outline" />
-        </>
+        <View>
+          {!isPdf ? (
+            <Image source={{ uri: certUri }} style={styles.certImage} resizeMode="contain" />
+          ) : null}
+          <Text style={[styles.pdfSub, { color: colors.textSecondary, marginBottom: SPACING.sm }]}>
+            {isPdf ? 'Open the fullscreen viewer for PDF preview, download, and share.' : 'Pinch to zoom in fullscreen.'}
+          </Text>
+          <PrimaryButton title="Open viewer" onPress={() => setCertModalVisible(true)} size="sm" />
+        </View>
       );
     }
 
@@ -537,7 +582,7 @@ const PostDetailScreen = ({ route, navigation }) => {
           <View style={styles.metaCard}>
             <Text style={styles.metaCardLabel}>ENGAGEMENT</Text>
             <Text style={styles.metaCardValue}>
-              {post.likesCount ?? 0} likes · {comments.length} replies
+              {likesCount} likes · {comments.length} replies
             </Text>
           </View>
         </View>
@@ -589,10 +634,16 @@ const PostDetailScreen = ({ route, navigation }) => {
           <View style={styles.authorRow}>
             <TouchableOpacity
               onPress={() =>
-                navigation.navigate('UserProfile', { userId: post.userId })
+                navigation.navigate('UserProfile', {
+                  userId: typeof post.userId === 'object' ? post.userId?._id || post.userId?.id : post.userId,
+                })
               }
             >
-              <Avatar name={post.authorName} uri={post.userId?.profilePicture} size="md" />
+              <Avatar
+                name={post.authorName}
+                uri={typeof post.userId === 'object' ? post.userId?.profilePicture : undefined}
+                size="md"
+              />
             </TouchableOpacity>
             <View style={styles.authorInfo}>
               <Text style={styles.authorName}>{post.authorName}</Text>
@@ -670,11 +721,15 @@ const PostDetailScreen = ({ route, navigation }) => {
 
           {comments.map((c) => (
             <View key={c._id} style={styles.commentRow}>
-              <Avatar name={c.userId?.name} uri={c.userId?.profilePicture} size="sm" />
+              <Avatar
+                name={typeof c.userId === 'object' ? c.userId?.name : undefined}
+                uri={typeof c.userId === 'object' ? c.userId?.profilePicture : undefined}
+                size="sm"
+              />
               <View style={styles.commentBody}>
                 <View style={styles.commentTop}>
                   <Text style={styles.commentAuthor}>
-                    {c.userId?.name || 'Learner'}
+                    {(typeof c.userId === 'object' && c.userId?.name) || 'Learner'}
                   </Text>
                   <Text style={styles.commentTime}>{timeAgo(c.createdAt)}</Text>
                 </View>
@@ -684,7 +739,9 @@ const PostDetailScreen = ({ route, navigation }) => {
                     <Text style={styles.actText}>Like</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    onPress={() => setCommentText(`@${c.userId?.name} `)}
+                    onPress={() =>
+                      setCommentText(`@${(typeof c.userId === 'object' && c.userId?.name) || 'user'} `)
+                    }
                   >
                     <Text style={styles.actText}>Reply</Text>
                   </TouchableOpacity>
@@ -703,6 +760,13 @@ const PostDetailScreen = ({ route, navigation }) => {
           style={styles.cta}
         />
       </View>
+
+      <CertificateViewerModal
+        visible={certModalVisible}
+        onClose={() => setCertModalVisible(false)}
+        uri={certUri}
+        title={post.title}
+      />
     </KeyboardAvoidingView>
   );
 };

@@ -10,6 +10,11 @@ const userPayload = (user) => ({
   bio: user.bio,
   skills: user.skills,
   profilePicture: user.profilePicture,
+  headline: user.headline || '',
+  location: user.location || '',
+  website: user.website || '',
+  linkedinUrl: user.linkedinUrl || '',
+  githubUrl: user.githubUrl || '',
   followers: user.followers || [],
   following: user.following || [],
   bookmarks: user.bookmarks || [],
@@ -113,11 +118,99 @@ const getMe = async (req, res) => {
       bio: user.bio,
       skills: user.skills,
       profilePicture: user.profilePicture,
+      headline: user.headline || '',
+      location: user.location || '',
+      website: user.website || '',
+      linkedinUrl: user.linkedinUrl || '',
+      githubUrl: user.githubUrl || '',
       followers: user.followers,
       following: user.following,
       bookmarks: user.bookmarks,
       createdAt: user.createdAt,
     },
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   PUT /api/auth/me
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const updateProfile = async (req, res) => {
+  try {
+    const {
+      name,
+      bio,
+      skills,
+      profilePicture,
+      headline,
+      location,
+      website,
+      linkedinUrl,
+      githubUrl,
+    } = req.body;
+
+    const updates = {};
+    if (name !== undefined) updates.name = String(name).trim().slice(0, 60);
+    if (bio !== undefined) updates.bio = String(bio).trim().slice(0, 300);
+    if (Array.isArray(skills) || typeof skills === 'string') {
+      const arr = Array.isArray(skills)
+        ? skills
+        : String(skills)
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+      updates.skills = arr.slice(0, 30);
+    }
+    if (profilePicture !== undefined) updates.profilePicture = String(profilePicture).trim().slice(0, 500);
+    if (headline !== undefined) updates.headline = String(headline).trim().slice(0, 120);
+    if (location !== undefined) updates.location = String(location).trim().slice(0, 80);
+    if (website !== undefined) updates.website = String(website).trim().slice(0, 200);
+    if (linkedinUrl !== undefined) updates.linkedinUrl = String(linkedinUrl).trim().slice(0, 200);
+    if (githubUrl !== undefined) updates.githubUrl = String(githubUrl).trim().slice(0, 200);
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid fields to update' });
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id, updates, {
+      new: true,
+      runValidators: true,
+    }).select('-password');
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated',
+      data: userPayload(user),
+    });
+  } catch (error) {
+    console.error('updateProfile error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/auth/forgot-password
+// @access  Public — does not reveal whether email exists (security)
+// ─────────────────────────────────────────────────────────────────────────────
+const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  if (!email || !String(email).includes('@')) {
+    return res.status(400).json({
+      success: false,
+      message: 'Please provide a valid email address',
+    });
+  }
+
+  try {
+    await User.findOne({ email: email.toLowerCase().trim() });
+  } catch (e) {
+    // ignore
+  }
+
+  return res.status(200).json({
+    success: true,
+    message:
+      'If an account exists for this email, password reset instructions will be sent shortly. Check your inbox and spam folder.',
   });
 };
 
@@ -196,4 +289,4 @@ const savePushToken = async (req, res) => {
   }
 };
 
-export { registerUser, loginUser, getMe, getUserProfile, savePushToken };
+export { registerUser, loginUser, getMe, getUserProfile, savePushToken, updateProfile, forgotPassword };

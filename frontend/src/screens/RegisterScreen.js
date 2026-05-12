@@ -1,16 +1,30 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Switch,
+} from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 import { showToast } from '../components/Toast';
 
 export default function RegisterScreen({ navigation }) {
   const { register } = useContext(AuthContext);
+  const { colors, isDark } = useAppTheme();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -29,26 +43,27 @@ export default function RegisterScreen({ navigation }) {
     if (!validate()) return;
     try {
       setLoading(true);
-      await register(name, email, password);
+      await register(name.trim(), email.trim(), password, rememberMe);
       showToast({ message: 'Account created! Welcome 🎉', type: 'success' });
     } catch (err) {
-      showToast({ message: 'Registration failed', type: 'error' });
+      const msg = err.response?.data?.message || 'Registration failed';
+      showToast({ message: msg, type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <Text style={styles.title}>Join us</Text>
-            <Text style={styles.subtitle}>Start sharing your learning journey with the world.</Text>
+            <Text style={[styles.title, { color: colors.primary }]}>Join us</Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>Start sharing your learning journey with the world.</Text>
           </View>
 
-          <View style={styles.formCard}>
+          <View style={[styles.formCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
             <InputField
               label="Full Name"
               placeholder="Jane Doe"
@@ -79,6 +94,16 @@ export default function RegisterScreen({ navigation }) {
               icon="🔒"
             />
 
+            <View style={styles.rememberRow}>
+              <Text style={[styles.rememberLabel, { color: colors.textSecondary }]}>Stay signed in on this device</Text>
+              <Switch
+                value={rememberMe}
+                onValueChange={setRememberMe}
+                trackColor={{ false: colors.border, true: colors.accentLight }}
+                thumbColor={rememberMe ? colors.accent : colors.surface}
+              />
+            </View>
+
             <PrimaryButton 
               title="Create Account" 
               onPress={handleRegister} 
@@ -89,9 +114,9 @@ export default function RegisterScreen({ navigation }) {
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>Already have an account? </Text>
             <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Text style={styles.footerLink}>Sign in</Text>
+              <Text style={[styles.footerLink, { color: colors.accent }]}>Sign in</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -101,15 +126,23 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1 },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: SPACING.xl, justifyContent: 'center', paddingVertical: 40 },
   header: { alignItems: 'flex-start', marginBottom: SPACING['3xl'], paddingHorizontal: SPACING.sm },
-  title: { ...FONTS.display, fontSize: 32, color: COLORS.primary },
-  subtitle: { ...FONTS.body, color: COLORS.textMuted, marginTop: 8 },
-  formCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.xxl, padding: SPACING.xxl, ...SHADOW.sm, borderWidth: 1, borderColor: COLORS.borderLight },
+  title: { ...FONTS.display, fontSize: 32 },
+  subtitle: { ...FONTS.body, marginTop: 8 },
+  formCard: { borderRadius: RADIUS.xxl, padding: SPACING.xxl, ...SHADOW.sm, borderWidth: 1 },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  rememberLabel: { ...FONTS.small, flex: 1, marginRight: SPACING.md },
   submit: { marginTop: SPACING.lg },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING['3xl'] },
-  footerText: { ...FONTS.body, color: COLORS.textSecondary },
-  footerLink: { ...FONTS.bodyBold, color: COLORS.accent },
+  footerText: { ...FONTS.body },
+  footerLink: { ...FONTS.bodyBold },
 });

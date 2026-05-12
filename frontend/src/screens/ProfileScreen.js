@@ -438,7 +438,7 @@ export default function ProfileScreen({ route, navigation }) {
           {isOwnProfile ? (
             <PrimaryButton
               title="Edit profile"
-              onPress={() => {}}
+              onPress={() => navigation.navigate('ProfileEdit')}
               variant="secondary"
               size="sm"
               style={styles.headerBtn}

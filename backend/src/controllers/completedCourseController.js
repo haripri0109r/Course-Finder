@@ -52,7 +52,7 @@ const addCompletedCourse = async (req, res) => {
   const { 
     title, platform, url, level, rating, review, image, duration, 
     certificateUrl, certificatePublicId,
-    description, learnings, tags 
+    description, learnings, tags, progress
   } = req.body;
 
   let finalTitle = title;
@@ -195,6 +195,11 @@ const addCompletedCourse = async (req, res) => {
   const finalDescription = description || "Completed this course and gained valuable insights 🚀";
   const finalLearnings = Array.isArray(learnings) ? learnings.slice(0, 5) : [];
 
+  const progressNum =
+    progress !== undefined && progress !== ''
+      ? Math.min(100, Math.max(0, Number(progress)))
+      : 100;
+
   // 7. Create the CompletedCourse entry
   const completed = await CompletedCourse.create({
     user: req.user._id,
@@ -202,6 +207,7 @@ const addCompletedCourse = async (req, res) => {
     rating: rating || undefined,
     review: review || '',
     duration: duration || '',
+    progress: Number.isFinite(progressNum) ? progressNum : 100,
     certificateUrl: finalCertUrl ? finalCertUrl.trim() : '',
     certificatePublicId: finalCertPublicId ? finalCertPublicId.trim() : null,
     description: finalDescription,

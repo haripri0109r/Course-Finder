@@ -60,6 +60,8 @@ api.interceptors.response.use(
 
 api.login = (email, password) => api.post('/auth/login', { email, password });
 api.register = (payload) => api.post('/auth/register', payload);
+api.forgotPassword = (email) => api.post('/auth/forgot-password', { email });
+api.updateProfile = (payload) => api.put('/auth/me', payload);
 api.getMe = () => api.get('/auth/me');
 api.getUserProfile = (userId) => api.get(`/auth/profile/${userId}`);
 

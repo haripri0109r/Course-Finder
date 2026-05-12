@@ -1,16 +1,30 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Switch,
+} from 'react-native';
 import { AuthContext } from '../context/AuthContext';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 import { showToast } from '../components/Toast';
 
 export default function LoginScreen({ navigation }) {
   const { login } = useContext(AuthContext);
+  const { colors, isDark } = useAppTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
@@ -27,26 +41,30 @@ export default function LoginScreen({ navigation }) {
     if (!validate()) return;
     try {
       setLoading(true);
-      await login(email, password);
+      await login(email.trim(), password, rememberMe);
       showToast({ message: 'Welcome back!', type: 'success' });
     } catch (err) {
-      showToast({ message: 'Invalid credentials', type: 'error' });
+      const msg = err.response?.data?.message || 'Invalid credentials';
+      showToast({ message: msg, type: 'error' });
+      if (err.response?.status === 401) {
+        setErrors((e) => ({ ...e, password: 'Check your email and password' }));
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.surface }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
-            <View style={styles.logoCircle}>
+            <View style={[styles.logoCircle, { backgroundColor: colors.primary }]}>
               <Text style={styles.logoEmoji}>🎓</Text>
             </View>
-            <Text style={styles.welcomeText}>Welcome back</Text>
-            <Text style={styles.subText}>Sign in to continue your learning journey.</Text>
+            <Text style={[styles.welcomeText, { color: colors.textPrimary }]}>Welcome back</Text>
+            <Text style={[styles.subText, { color: colors.textSecondary }]}>Sign in to continue your learning journey.</Text>
           </View>
 
           <View style={styles.formSection}>
@@ -73,8 +91,13 @@ export default function LoginScreen({ navigation }) {
               onSuffixPress={() => setShowPassword(!showPassword)}
             />
 
-            <TouchableOpacity style={styles.forgotBtn}>
-              <Text style={styles.forgotText}>Forgot password?</Text>
+            <View style={styles.rememberRow}>
+              <Text style={[styles.rememberLabel, { color: colors.textSecondary }]}>Remember me</Text>
+              <Switch value={rememberMe} onValueChange={setRememberMe} trackColor={{ false: colors.border, true: colors.accentLight }} thumbColor={rememberMe ? colors.accent : colors.surface} />
+            </View>
+
+            <TouchableOpacity style={styles.forgotBtn} onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={[styles.forgotText, { color: colors.accent }]}>Forgot password?</Text>
             </TouchableOpacity>
 
             <PrimaryButton 
@@ -87,9 +110,9 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerLabel}>Don't have an account? </Text>
+            <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.footerLink}>Join now</Text>
+              <Text style={[styles.footerLink, { color: colors.accent }]}>Join now</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -99,9 +122,8 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.surface 
+  container: {
+    flex: 1,
   },
   flex: { 
     flex: 1 
@@ -116,30 +138,35 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     marginBottom: SPACING['4xl'] 
   },
-  logoCircle: { 
-    width: 72, 
-    height: 72, 
-    borderRadius: RADIUS.xl, 
-    backgroundColor: COLORS.primary, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  logoCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: RADIUS.xl,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: SPACING.xl,
     ...SHADOW.md,
   },
   logoEmoji: { 
     fontSize: 36 
   },
-  welcomeText: { 
-    ...FONTS.h1, 
-    fontSize: 32, 
-    color: COLORS.textPrimary 
+  welcomeText: {
+    ...FONTS.h1,
+    fontSize: 32,
   },
-  subText: { 
-    ...FONTS.body, 
-    color: COLORS.textSecondary, 
+  subText: {
+    ...FONTS.body,
     marginTop: 8,
     textAlign: 'center',
   },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  rememberLabel: { ...FONTS.body },
   formSection: { 
     width: '100%',
   },
@@ -147,10 +174,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end', 
     marginBottom: SPACING.xl 
   },
-  forgotText: { 
-    ...FONTS.tiny, 
-    color: COLORS.accent,
-    fontWeight: '600' 
+  forgotText: {
+    ...FONTS.tiny,
+    fontWeight: '600',
   },
   signInBtn: { 
     marginTop: SPACING.md 
@@ -160,12 +186,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     marginTop: SPACING['4xl'] 
   },
-  footerLabel: { 
-    ...FONTS.body, 
-    color: COLORS.textSecondary 
+  footerLabel: {
+    ...FONTS.body,
   },
-  footerLink: { 
-    ...FONTS.bodyBold, 
-    color: COLORS.accent 
+  footerLink: {
+    ...FONTS.bodyBold,
   },
 });

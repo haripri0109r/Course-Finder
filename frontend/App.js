@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { AuthProvider } from './src/context/AuthContext';
@@ -35,25 +36,27 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <NotificationProvider>
-            <NavigationContainer ref={navigationRef}>
-              <ErrorBoundary>
-                <AppNavigator />
-              </ErrorBoundary>
-            </NavigationContainer>
-            {isConnected === false && (
-            <View style={styles.offlineBanner}>
-              <Text style={styles.offlineText}>📡 No Internet Connection</Text>
-            </View>
-          )}
-          </NotificationProvider>
-          <Toast />
-        </AuthProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <NotificationProvider>
+              <NavigationContainer ref={navigationRef}>
+                <ErrorBoundary>
+                  <AppNavigator />
+                </ErrorBoundary>
+              </NavigationContainer>
+              {isConnected === false && (
+                <View style={styles.offlineBanner}>
+                  <Text style={styles.offlineText}>📡 No Internet Connection</Text>
+                </View>
+              )}
+            </NotificationProvider>
+            <Toast />
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

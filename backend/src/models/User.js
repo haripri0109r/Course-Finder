@@ -35,6 +35,31 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    headline: {
+      type: String,
+      default: '',
+      maxlength: [120, 'Headline cannot exceed 120 characters'],
+    },
+    location: {
+      type: String,
+      default: '',
+      maxlength: [80, 'Location cannot exceed 80 characters'],
+    },
+    website: {
+      type: String,
+      default: '',
+      maxlength: [200, 'Website URL too long'],
+    },
+    linkedinUrl: {
+      type: String,
+      default: '',
+      maxlength: [200, 'LinkedIn URL too long'],
+    },
+    githubUrl: {
+      type: String,
+      default: '',
+      maxlength: [200, 'GitHub URL too long'],
+    },
     followers: [
       {
         type: mongoose.Schema.Types.ObjectId,

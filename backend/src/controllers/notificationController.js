@@ -23,7 +23,7 @@ export const getUnreadCount = async (req, res) => {
       isRead: false
     });
 
-    res.json({ count });
+    res.json({ success: true, unreadCount: count });
   } catch (err) {
     console.error("Unread count error:", err);
     res.json({ count: 0 });
