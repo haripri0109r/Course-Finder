@@ -1,4 +1,4 @@
-import React, { useContext, useState, useCallback, useMemo } from 'react';
+import React, { useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import StatsCard from '../components/StatsCard';
 import { showToast } from '../components/Toast';
 import { timeAgo } from '../utils/format';
 import { prefetchImages } from '../utils/prefetch';
+import { on as onEvent } from '../utils/eventBus';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 
 function createStyles(colors) {
@@ -271,7 +272,7 @@ function createStyles(colors) {
 }
 
 export default function ProfileScreen({ route, navigation }) {
-  const { logout, user: currentUser } = useContext(AuthContext);
+  const { user: currentUser } = useContext(AuthContext);
   const { colors, isDark, toggleTheme } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -283,6 +284,15 @@ export default function ProfileScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    // Keep profile timeline + stats in sync when a completion is deleted elsewhere.
+    const unsubscribe = onEvent('completionDeleted', ({ id }) => {
+      if (!id) return;
+      setCompleted((prev) => prev.filter((c) => String(c?.id || c?._id) !== String(id)));
+    });
+    return unsubscribe;
+  }, []);
 
   const fetchProfileData = async (isRefresh = false, signal = null) => {
     try {
@@ -346,13 +356,6 @@ export default function ProfileScreen({ route, navigation }) {
     }
   };
 
-  const handleLogout = () => {
-    Alert.alert('Logout', 'Ready to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: logout },
-    ]);
-  };
-
   const isFollowing = displayUser?.followers?.some(
     (f) => (typeof f === 'string' ? f : f._id) === currentUser._id
   );
@@ -408,8 +411,12 @@ export default function ProfileScreen({ route, navigation }) {
                   color={colors.textSecondary}
                 />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconAction} onPress={handleLogout}>
-                <Ionicons name="log-out-outline" size={18} color={colors.textSecondary} />
+              <TouchableOpacity
+                style={styles.iconAction}
+                onPress={() => navigation.navigate('Settings')}
+                accessibilityLabel="Open settings"
+              >
+                <Ionicons name="settings-outline" size={18} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
           ) : null}

@@ -74,6 +74,9 @@ export default function InputField({
         <TextInput
           style={[styles.input, { color: colors.textPrimary }, rest.multiline && styles.textArea]}
           placeholderTextColor={colors.textMuted}
+          underlineColorAndroid="transparent"
+          selectionColor={colors.accent}
+          cursorColor={colors.accent}
           onFocus={handleFocus}
           onBlur={handleBlur}
           {...rest}

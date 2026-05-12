@@ -28,6 +28,9 @@ export default function SearchBar({
         style={[styles.input, { color: colors.textPrimary }]}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
+        underlineColorAndroid="transparent"
+        selectionColor={colors.accent}
+        cursorColor={colors.accent}
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}

@@ -20,6 +20,7 @@ import SectionHeader from '../components/SectionHeader';
 import CourseImage from '../components/CourseImage';
 import EmptyState from '../components/EmptyState';
 import { prefetchImages } from '../utils/prefetch';
+import { on as onEvent } from '../utils/eventBus';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 
 function createStyles(colors) {
@@ -38,7 +39,7 @@ function createStyles(colors) {
     },
     navBar: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      justifyContent: 'flex-start',
       alignItems: 'center',
       paddingHorizontal: SPACING.xl,
       paddingTop: SPACING.sm,
@@ -60,27 +61,6 @@ function createStyles(colors) {
       marginLeft: SPACING.sm,
       marginTop: 2,
       letterSpacing: 1.2,
-    },
-    notificationBtn: {
-      width: 38,
-      height: 38,
-      borderRadius: RADIUS.md,
-      backgroundColor: colors.surface,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    notifDot: {
-      position: 'absolute',
-      top: 8,
-      right: 8,
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: colors.danger,
-      borderWidth: 1,
-      borderColor: colors.surface,
     },
     searchBar: {
       flexDirection: 'row',
@@ -238,6 +218,16 @@ export default function HomeScreen({ navigation }) {
     syncTrending();
   }, []);
 
+  useEffect(() => {
+    // Keep feed in sync when a completion is deleted elsewhere (e.g., detail screen).
+    const unsubscribe = onEvent('completionDeleted', ({ id }) => {
+      if (!id) return;
+      setPosts((prev) => prev.filter((p) => (p?._id || p?.id) !== id));
+      setTrending((prev) => prev.filter((t) => (t?._id || t?.id) !== id));
+    });
+    return unsubscribe;
+  }, []);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchPosts(true);
@@ -276,13 +266,6 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.appEyebrow}>LEARNING NETWORK</Text>
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.notificationBtn}
-          onPress={() => navigation.navigate('Inbox')}
-        >
-          <Ionicons name="notifications-outline" size={20} color={colors.textPrimary} />
-          <View style={styles.notifDot} />
-        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -381,6 +364,10 @@ export default function HomeScreen({ navigation }) {
                 onBookmark={() => toggleBookmark(postKey(item))}
                 onLike={() => handleLike(item)}
                 isBookmarked={bookmarks.has(postKey(item))}
+                onDeleted={(deletedId) => {
+                  setPosts((prev) => prev.filter((p) => (p?._id || p?.id) !== deletedId));
+                  setTrending((prev) => prev.filter((t) => (t?._id || t?.id) !== deletedId));
+                }}
               />
             </View>
           )

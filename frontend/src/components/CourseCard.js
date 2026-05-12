@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   Share,
   Pressable,
+  Modal,
+  Alert,
+  Linking,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +19,8 @@ import Avatar from './Avatar';
 import { timeAgo } from '../utils/format';
 import CourseImage from './CourseImage';
 import { showToast } from './Toast';
+import api from '../services/api';
+import { emit } from '../utils/eventBus';
 
 function ProgressBar({ progress, colors }) {
   const pct = Math.min(100, Math.max(0, progress));
@@ -40,10 +45,13 @@ const CourseCard = ({
   onBookmark = () => {},
   onLike = () => {},
   isBookmarked = false,
+  onDeleted = () => {},
 }) => {
   const navigation = useNavigation();
   const { colors } = useAppTheme();
   const { user: currentUser } = useContext(AuthContext);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const postId = item.id || item._id;
   const isOwn =
@@ -97,16 +105,24 @@ const CourseCard = ({
     });
   };
 
-  const openCourse = () => {
-    if (!item.url) {
-      showToast({ message: 'No course link on this post', type: 'info' });
+  const isValidHttpUrl = (value = '') => /^https?:\/\//i.test(String(value || '').trim());
+
+  const openCourse = async () => {
+    const courseUrl = String(item?.url || '').trim();
+    if (!isValidHttpUrl(courseUrl)) {
+      showToast({ message: 'Invalid course URL', type: 'error' });
       return;
     }
-    navigation.navigate('CourseViewer', {
-      url: item.url,
-      title: item.title,
-      courseId: postId,
-    });
+    try {
+      const supported = await Linking.canOpenURL(courseUrl);
+      if (!supported) {
+        showToast({ message: 'Cannot open this URL on your device', type: 'error' });
+        return;
+      }
+      await Linking.openURL(courseUrl);
+    } catch {
+      showToast({ message: 'Failed to open the course link', type: 'error' });
+    }
   };
 
   const viewCertificate = () => {
@@ -130,6 +146,103 @@ const CourseCard = ({
   const onEdit = () => {
     showToast({ message: 'Edit coming soon.', type: 'info' });
   };
+
+  const handleDelete = async () => {
+    if (!postId || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await api.deleteCompletion(postId);
+      showToast({ message: 'Course removed', type: 'success' });
+      emit('completionDeleted', { id: postId });
+      onDeleted(postId);
+    } catch (e) {
+      showToast({
+        message: e?.response?.data?.message || 'Could not delete this course',
+        type: 'error',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert('Delete course log?', 'This will remove the post from your profile and feed.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: handleDelete },
+    ]);
+  };
+
+  const ActionSheet = useMemo(() => {
+    return (
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuOpen(false)}
+      >
+        <Pressable
+          style={styles.sheetBackdrop}
+          onPress={() => setMenuOpen(false)}
+        />
+        <View
+          style={[
+            styles.sheet,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          {isOwn ? (
+            <>
+              <SheetAction
+                label="Edit"
+                icon="create-outline"
+                onPress={() => {
+                  setMenuOpen(false);
+                  onEdit();
+                }}
+                colors={colors}
+              />
+              <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
+            </>
+          ) : null}
+
+          <SheetAction
+            label="Share"
+            icon="share-social-outline"
+            onPress={() => {
+              setMenuOpen(false);
+              handleShare();
+            }}
+            colors={colors}
+          />
+
+          {isOwn ? (
+            <>
+              <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
+              <SheetAction
+                label={isDeleting ? 'Deleting…' : 'Delete'}
+                icon="trash-outline"
+                destructive
+                disabled={isDeleting}
+                onPress={() => {
+                  setMenuOpen(false);
+                  confirmDelete();
+                }}
+                colors={colors}
+              />
+            </>
+          ) : null}
+
+          <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
+          <SheetAction
+            label="Cancel"
+            icon="close"
+            onPress={() => setMenuOpen(false)}
+            colors={colors}
+          />
+        </View>
+      </Modal>
+    );
+  }, [menuOpen, colors, isOwn, isDeleting, postId]);
 
   return (
     <Pressable
@@ -160,7 +273,11 @@ const CourseCard = ({
             </Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.moreIconBtn} hitSlop={12}>
+        <TouchableOpacity
+          style={styles.moreIconBtn}
+          hitSlop={12}
+          onPress={() => setMenuOpen(true)}
+        >
           <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
@@ -310,19 +427,28 @@ const CourseCard = ({
           <Ionicons name="document-text-outline" size={16} color={colors.accent} />
           <Text style={[styles.secondaryLabel, { color: colors.accent, marginLeft: 6 }]}>Certificate</Text>
         </TouchableOpacity>
-        {isOwn ? (
-          <>
-            <View style={[styles.secondarySep, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={styles.secondaryBtn} onPress={onEdit}>
-              <Ionicons name="create-outline" size={16} color={colors.textSecondary} />
-              <Text style={[styles.secondaryLabel, { color: colors.textSecondary, marginLeft: 6 }]}>Edit</Text>
-            </TouchableOpacity>
-          </>
-        ) : null}
       </View>
+
+      {ActionSheet}
     </Pressable>
   );
 };
+
+function SheetAction({ label, icon, onPress, colors, destructive = false, disabled = false }) {
+  const textColor = destructive ? colors.danger : colors.textPrimary;
+  const iconColor = destructive ? colors.danger : colors.textSecondary;
+  return (
+    <TouchableOpacity
+      style={[styles.sheetItem, disabled && { opacity: 0.6 }]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.85}
+    >
+      <Ionicons name={icon} size={18} color={iconColor} />
+      <Text style={[styles.sheetLabel, { color: textColor }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
 const styles = StyleSheet.create({
   card: {
@@ -356,6 +482,33 @@ const styles = StyleSheet.create({
   },
   moreIconBtn: {
     padding: SPACING.xs,
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sheet: {
+    position: 'absolute',
+    left: SPACING.xl,
+    right: SPACING.xl,
+    bottom: SPACING.xl,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  sheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  sheetLabel: {
+    ...FONTS.bodyBold,
+    fontSize: 14,
+    marginLeft: 10,
+  },
+  sheetDivider: {
+    height: StyleSheet.hairlineWidth,
   },
   mediaContainer: {
     width: '100%',

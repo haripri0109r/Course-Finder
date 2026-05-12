@@ -74,6 +74,7 @@ api.getTrending = () => api.get('/completed/trending');
 api.getCompletedCourse = (id) => api.get(`/completed/${id}`);
 api.fetchMetadata = (url) => api.post('/courses/fetch-metadata', { url });
 api.incrementViewCount = (id) => api.post(`/completed/${id}/view`);
+api.deleteCompletion = (id) => api.delete(`/completed/${id}`);
 
 api.likeCompletion = (id) => api.post(`/completed/${id}/like`);
 api.unlikeCompletion = (id) => api.post(`/completed/${id}/unlike`);

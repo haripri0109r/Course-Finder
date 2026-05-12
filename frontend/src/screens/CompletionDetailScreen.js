@@ -244,6 +244,9 @@ export default function CompletionDetailScreen({ route, navigation }) {
           onChangeText={setCommentText}
           multiline
           placeholderTextColor={COLORS.textMuted}
+          underlineColorAndroid="transparent"
+          selectionColor={COLORS.accent}
+          cursorColor={COLORS.accent}
         />
         <AnimatedPressable 
           style={[styles.sendBtn, !commentText.trim() && styles.disabledSend]} 

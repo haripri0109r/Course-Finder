@@ -384,6 +384,9 @@ export default function SearchScreen({ navigation }) {
               style={styles.searchInput}
               placeholder="Courses, authors, skills…"
               placeholderTextColor={colors.textMuted}
+              underlineColorAndroid="transparent"
+              selectionColor={colors.accent}
+              cursorColor={colors.accent}
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={() => handleSearch()}

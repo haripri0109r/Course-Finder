@@ -13,6 +13,8 @@ import {
   Platform,
   StatusBar,
   Share,
+  Alert,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
@@ -29,6 +31,7 @@ import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import CertificateViewerModal from '../components/CertificateViewerModal';
 import { getLocalComments, appendLocalComment } from '../services/localComments';
+import { emit } from '../utils/eventBus';
 
 function flattenCommentTree(roots) {
   const out = [];
@@ -394,13 +397,44 @@ const PostDetailScreen = ({ route, navigation }) => {
   }, [postId]);
 
   const handleOpenCourse = () => {
-    if (!post?.url) return;
-    navigation.navigate('CourseViewer', {
-      url: post.url,
-      title: post.title,
-      id: post.id,
-      courseId: post.id,
+    const courseUrl = String(post?.url || '').trim();
+    if (!/^https?:\/\//i.test(courseUrl)) {
+      showToast({ message: 'Invalid course URL', type: 'error' });
+      return;
+    }
+    Linking.openURL(courseUrl).catch(() => {
+      showToast({ message: 'Failed to open the course link', type: 'error' });
     });
+  };
+
+  const ownerId =
+    typeof post?.userId === 'object'
+      ? post?.userId?._id || post?.userId?.id
+      : post?.userId;
+  const isOwnPost = !!(currentUser?._id && ownerId && String(ownerId) === String(currentUser._id));
+
+  const confirmDelete = () => {
+    if (!post?.id) return;
+    Alert.alert('Delete course log?', 'This will remove the post from your profile and feed.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.deleteCompletion(post.id);
+            emit('completionDeleted', { id: post.id });
+            showToast({ message: 'Course removed', type: 'success' });
+            navigation.goBack();
+          } catch (e) {
+            showToast({
+              message: e?.response?.data?.message || 'Could not delete this course',
+              type: 'error',
+            });
+          }
+        },
+      },
+    ]);
   };
 
   const handleAddComment = async () => {
@@ -610,16 +644,20 @@ const PostDetailScreen = ({ route, navigation }) => {
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.navBtn}>
               <Ionicons name="close" size={22} color={colors.white} />
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => toggleBookmark(post.id)}
-              style={styles.navBtn}
-            >
-              <Ionicons
-                name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
-                size={22}
-                color={colors.white}
-              />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {isOwnPost ? (
+                <TouchableOpacity onPress={confirmDelete} style={[styles.navBtn, { marginRight: 10 }]}>
+                  <Ionicons name="trash-outline" size={22} color={colors.white} />
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity onPress={() => toggleBookmark(post.id)} style={styles.navBtn}>
+                <Ionicons
+                  name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                  size={22}
+                  color={colors.white}
+                />
+              </TouchableOpacity>
+            </View>
           </SafeAreaView>
 
           <View style={styles.heroBody}>
@@ -700,6 +738,9 @@ const PostDetailScreen = ({ route, navigation }) => {
               style={styles.textInput}
               placeholder="Share a thoughtful comment…"
               placeholderTextColor={colors.textMuted}
+              underlineColorAndroid="transparent"
+              selectionColor={colors.accent}
+              cursorColor={colors.accent}
               value={commentText}
               onChangeText={setCommentText}
               multiline

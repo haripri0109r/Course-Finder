@@ -14,13 +14,13 @@ import AddCourseScreen from '../screens/AddCourseScreen';
 import NotificationScreen from '../screens/NotificationScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
-import CourseViewerScreen from '../screens/CourseViewerScreen';
 import SavedScreen from '../screens/SavedScreen';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ProfileEditScreen from '../screens/ProfileEditScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import { AuthContext } from '../context/AuthContext';
 
 const Tab = createBottomTabNavigator();
@@ -133,10 +133,10 @@ export default function AppNavigator() {
             component={PostDetailScreen}
             options={{ presentation: 'modal' }}
           />
-          <Stack.Screen name="CourseViewer" component={CourseViewerScreen} />
           <Stack.Screen name="Saved" component={SavedScreen} />
           <Stack.Screen name="UserProfile" component={ProfileScreen} />
           <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </>
       )}
     </Stack.Navigator>
