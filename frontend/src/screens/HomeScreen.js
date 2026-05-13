@@ -30,7 +30,7 @@ function createStyles(colors) {
       backgroundColor: colors.background,
     },
     listContent: {
-      paddingBottom: 120,
+      paddingBottom: SPACING.md,
     },
     header: {
       backgroundColor: colors.background,

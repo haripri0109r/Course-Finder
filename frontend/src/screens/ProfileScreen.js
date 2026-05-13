@@ -6,10 +6,10 @@ import {
   FlatList,
   Alert,
   RefreshControl,
-  SafeAreaView,
   TouchableOpacity,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
@@ -36,7 +36,7 @@ function createStyles(colors) {
       backgroundColor: colors.background,
     },
     list: {
-      paddingBottom: 120,
+      paddingBottom: SPACING.md,
     },
     header: {
       backgroundColor: colors.surface,

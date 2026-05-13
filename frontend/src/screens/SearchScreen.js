@@ -223,7 +223,7 @@ function createStyles(colors) {
       marginTop: 4,
     },
     listContainer: {
-      paddingBottom: 120,
+      paddingBottom: SPACING.md,
       paddingTop: SPACING.lg,
     },
   });
@@ -260,7 +260,7 @@ export default function SearchScreen({ navigation }) {
   };
 
   const DiscoveryView = () => (
-    <ScrollView style={styles.discovery} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+    <ScrollView style={styles.discovery} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SPACING.md }}>
       <View style={styles.discoverySection}>
         <View style={styles.rowHeader}>
           <Text style={styles.sectionTitle}>Recent searches</Text>
