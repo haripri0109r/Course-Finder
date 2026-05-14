@@ -18,6 +18,7 @@ import { AuthContext } from '../context/AuthContext';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import PrimaryButton from '../components/PrimaryButton';
 import { showToast } from '../components/Toast';
+import Avatar from '../components/Avatar';
 
 const PREFS_KEY = '@cf_settings_prefs_v1';
 
@@ -132,6 +133,30 @@ function createStyles(colors) {
       borderTopWidth: 1,
       borderTopColor: colors.border,
       backgroundColor: colors.surface,
+    },
+    userCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: SPACING.lg,
+      backgroundColor: colors.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: SPACING.xl,
+      ...SHADOW.xs,
+    },
+    userCardInfo: {
+      flex: 1,
+      marginLeft: SPACING.md,
+    },
+    userCardName: {
+      ...FONTS.bodyBold,
+      color: colors.textPrimary,
+    },
+    userCardSub: {
+      ...FONTS.tiny,
+      color: colors.textSecondary,
+      marginTop: 2,
     },
   });
 }
@@ -256,6 +281,18 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <TouchableOpacity 
+          style={styles.userCard}
+          onPress={() => navigation.navigate('Profile')}
+        >
+          <Avatar name={currentUser?.name} uri={currentUser?.profilePicture} size="md" />
+          <View style={styles.userCardInfo}>
+            <Text style={styles.userCardName}>{currentUser?.name || 'Learner'}</Text>
+            <Text style={styles.userCardSub}>{currentUser?.email}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <View style={styles.card}>
           <Row

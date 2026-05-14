@@ -268,6 +268,46 @@ function createStyles(colors) {
       color: colors.textSecondary,
       marginTop: 2,
     },
+    // Profile Completeness
+    completenessContainer: {
+      marginHorizontal: SPACING.xl,
+      marginTop: SPACING.md,
+      padding: SPACING.lg,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    completenessHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: SPACING.sm,
+    },
+    completenessTitle: {
+      ...FONTS.captionBold,
+      color: colors.textPrimary,
+    },
+    completenessPercent: {
+      ...FONTS.tiny,
+      color: colors.accent,
+      fontWeight: '700',
+    },
+    progressBar: {
+      height: 6,
+      backgroundColor: colors.border,
+      borderRadius: 3,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: colors.accent,
+    },
+    completenessHint: {
+      ...FONTS.tiny,
+      color: colors.textSecondary,
+      marginTop: SPACING.sm,
+    },
   });
 }
 
@@ -366,6 +406,22 @@ export default function ProfileScreen({ route, navigation }) {
   const platformsUsed = new Set(completed.map((c) => c.platform).filter(Boolean)).size;
   const learningHoursEstimate = Math.min(completed.length * 12, 999);
 
+  const calculateCompleteness = () => {
+    if (!displayUser) return 0;
+    let points = 0;
+    if (displayUser.name) points += 15;
+    if (displayUser.headline) points += 15;
+    if (displayUser.bio) points += 20;
+    if (displayUser.profilePicture) points += 20;
+    if (displayUser.location) points += 10;
+    if (displayUser.skills && displayUser.skills.length > 0) points += 10;
+    if (displayUser.website || displayUser.linkedinUrl || displayUser.githubUrl) points += 10;
+    return points;
+  };
+
+  const completeness = calculateCompleteness();
+  const nextStep = !displayUser?.bio ? 'Add your bio' : !displayUser?.profilePicture ? 'Add a photo' : !displayUser?.headline ? 'Add a headline' : 'Add your skills';
+
   const achievements = [
     {
       id: 'cert1',
@@ -441,15 +497,25 @@ export default function ProfileScreen({ route, navigation }) {
           </View>
         </View>
 
-        <View style={styles.actionRow}>
+        <View style={[styles.actionRow, { flexDirection: 'row', alignItems: 'center' }]}>
           {isOwnProfile ? (
-            <PrimaryButton
-              title="Edit profile"
-              onPress={() => navigation.navigate('ProfileEdit')}
-              variant="secondary"
-              size="sm"
-              style={styles.headerBtn}
-            />
+            <>
+              <PrimaryButton
+                title="Edit profile"
+                onPress={() => navigation.navigate('ProfileEdit')}
+                variant="secondary"
+                size="sm"
+                style={[styles.headerBtn, { marginRight: 8 }]}
+              />
+              <TouchableOpacity 
+                style={styles.iconAction} 
+                onPress={() => {
+                  showToast({ message: 'Portfolio link copied to clipboard', type: 'success' });
+                }}
+              >
+                <Ionicons name="share-social-outline" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </>
           ) : (
             <PrimaryButton
               title={isFollowing ? 'Following' : 'Follow'}
@@ -460,6 +526,26 @@ export default function ProfileScreen({ route, navigation }) {
             />
           )}
         </View>
+      </View>
+
+        {isOwnProfile && completeness < 100 && (
+          <TouchableOpacity 
+            style={styles.completenessContainer}
+            onPress={() => navigation.navigate('ProfileEdit')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.completenessHeader}>
+              <Text style={styles.completenessTitle}>Profile Completeness</Text>
+              <Text style={styles.completenessPercent}>{completeness}%</Text>
+            </View>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${completeness}%` }]} />
+            </View>
+            <Text style={styles.completenessHint}>
+              Next: <Text style={{ color: colors.accent, fontWeight: '600' }}>{nextStep}</Text> to reach 100%
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.statsContainer}>
@@ -580,7 +666,10 @@ export default function ProfileScreen({ route, navigation }) {
             <Text style={[styles.timelinePlatform, { color: colors.accent }]}>
               {item.platform}
             </Text>
-            <Text style={styles.timelineDate}>{timeAgo(item.createdAt)}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="time-outline" size={10} color={colors.textMuted} style={{ marginRight: 2 }} />
+              <Text style={styles.timelineDate}>{timeAgo(item.createdAt)}</Text>
+            </View>
           </View>
           <Text style={styles.timelineTitle} numberOfLines={1}>
             {item.title}

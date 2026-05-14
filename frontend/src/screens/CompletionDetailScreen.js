@@ -17,11 +17,13 @@ import AnimatedPressable from '../components/AnimatedPressable';
 import SkeletonDetail from '../components/SkeletonDetail';
 import RetryBox from '../components/RetryBox';
 import { timeAgo } from '../utils/format';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 export default function CompletionDetailScreen({ route, navigation }) {
   const { id } = route.params;
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
+  const { colors, isDark } = useAppTheme();
   
   const [completion, setCompletion] = useState(null);
   const [comments, setComments] = useState([]);
@@ -147,9 +149,9 @@ export default function CompletionDetailScreen({ route, navigation }) {
     >
       <View style={styles.header}>
         <AnimatedPressable onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Text style={styles.backIcon}>←</Text>
+          <Text style={[styles.backIcon, { color: colors.textPrimary }]}>←</Text>
         </AnimatedPressable>
-        <Text style={styles.headerTitle}>Discussion</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Discussion</Text>
         <AnimatedPressable 
           onPress={handleBookmark} 
           style={styles.headerBtn}
@@ -164,7 +166,7 @@ export default function CompletionDetailScreen({ route, navigation }) {
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }
       >
         <AnimatedPressable 
@@ -180,10 +182,10 @@ export default function CompletionDetailScreen({ route, navigation }) {
           </View>
         </AnimatedPressable>
 
-        <View style={styles.contentCard}>
+        <View style={[styles.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={styles.courseTitle}>{completion.title}</Text>
           <View style={styles.courseHeaderRow}>
-            <Text style={styles.platform}>{completion.platform}</Text>
+            <Text style={[styles.platform, { color: colors.accent }]}>{completion.platform}</Text>
             {completion.duration && completion.duration !== 'N/A' && (
               <View style={styles.durationBadge}>
                 <Text style={styles.durationText}>⌛ {completion.duration}</Text>
@@ -198,7 +200,7 @@ export default function CompletionDetailScreen({ route, navigation }) {
 
           {completion.review ? (
             <View style={styles.reviewBox}>
-              <Text style={styles.reviewText}>{completion.review}</Text>
+              <Text style={[styles.reviewText, { color: colors.textSecondary }]}>{completion.review}</Text>
             </View>
           ) : null}
 
@@ -219,14 +221,14 @@ export default function CompletionDetailScreen({ route, navigation }) {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Community Feedback</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Community Feedback</Text>
         {comments.map((item) => (
-          <View key={item._id} style={styles.commentCard}>
+          <View key={item._id} style={[styles.commentCard, { backgroundColor: colors.surface, borderLeftColor: colors.accent }]}>
             <View style={styles.commentHeader}>
               <Text style={styles.commentAuthor}>{item.user?.name}</Text>
               <Text style={styles.commentTime}>{timeAgo(item.createdAt)}</Text>
             </View>
-            <Text style={styles.commentText}>{item.text}</Text>
+            <Text style={[styles.commentText, { color: colors.textSecondary }]}>{item.text}</Text>
           </View>
         ))}
         {comments.length === 0 && (
@@ -243,15 +245,15 @@ export default function CompletionDetailScreen({ route, navigation }) {
           value={commentText}
           onChangeText={setCommentText}
           multiline
-          placeholderTextColor={COLORS.textMuted}
+          placeholderTextColor={colors.textMuted}
           underlineColorAndroid="transparent"
-          selectionColor={COLORS.accent}
-          cursorColor={COLORS.accent}
+          selectionColor={colors.accent}
+          cursorColor={colors.accent}
           importantForAutofill="no"
           autoComplete="off"
         />
         <AnimatedPressable 
-          style={[styles.sendBtn, !commentText.trim() && styles.disabledSend]} 
+          style={[styles.sendBtn, !commentText.trim() && styles.disabledSend, { backgroundColor: colors.accent }]} 
           onPress={handleAddComment}
           disabled={!commentText.trim() || submitting}
         >
@@ -263,11 +265,11 @@ export default function CompletionDetailScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: colors.background },
   header: { 
     height: 110, paddingTop: 60, flexDirection: 'row', alignItems: 'center', 
-    justifyContent: 'space-between', paddingHorizontal: SPACING.lg, backgroundColor: COLORS.white,
-    borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, ...SHADOW.sm 
+    justifyContent: 'space-between', paddingHorizontal: SPACING.lg, backgroundColor: colors.surface,
+    borderBottomWidth: 1, borderBottomColor: colors.border, ...SHADOW.sm 
   },
   headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   backIcon: { fontSize: 24, fontWeight: 'bold' },
@@ -280,10 +282,10 @@ const styles = StyleSheet.create({
 
   scrollContent: { padding: SPACING.xl, paddingBottom: 120 },
   authorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xl },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.secondary, justifyContent: 'center', alignItems: 'center', marginRight: SPACING.md },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center', marginRight: SPACING.md },
   avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 20 },
   authorName: { ...FONTS.bodyBold, fontSize: 17 },
-  timestamp: { ...FONTS.small, color: COLORS.textMuted, marginTop: 2 },
+  timestamp: { ...FONTS.small, color: colors.textMuted, marginTop: 2 },
 
   contentCard: { backgroundColor: COLORS.card, padding: SPACING.xl, borderRadius: RADIUS.lg, ...SHADOW.md, marginBottom: SPACING.xxxl },
   courseTitle: { ...FONTS.h2, fontSize: 22, marginBottom: 4 },
@@ -294,7 +296,7 @@ const styles = StyleSheet.create({
   },
   platform: { ...FONTS.caption, color: COLORS.primary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
   durationBadge: {
-    backgroundColor: `${COLORS.secondary}15`,
+    backgroundColor: `${colors.secondary}15`,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
@@ -303,36 +305,36 @@ const styles = StyleSheet.create({
   durationText: {
     ...FONTS.small,
     fontSize: 11,
-    color: COLORS.secondary,
+    color: colors.secondary,
     fontWeight: '700',
   },
   ratingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg },
   stars: { fontSize: 20, marginRight: 8 },
-  ratingVal: { ...FONTS.caption, fontWeight: '700', color: COLORS.textPrimary },
-  reviewBox: { backgroundColor: COLORS.background, padding: SPACING.lg, borderRadius: RADIUS.md, marginBottom: SPACING.xl },
+  ratingVal: { ...FONTS.caption, fontWeight: '700', color: colors.textPrimary },
+  reviewBox: { backgroundColor: colors.background, padding: SPACING.lg, borderRadius: RADIUS.md, marginBottom: SPACING.xl },
   reviewText: { ...FONTS.body, fontStyle: 'italic', color: COLORS.textSecondary, lineHeight: 24 },
 
-  actionRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: COLORS.borderLight, paddingTop: SPACING.lg },
+  actionRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: SPACING.lg },
   actionBtn: { flexDirection: 'row', alignItems: 'center', marginRight: SPACING.xxl },
   actionEmoji: { fontSize: 20, marginRight: 8 },
-  actionText: { ...FONTS.small, fontWeight: '700', color: COLORS.textPrimary },
+  actionText: { ...FONTS.small, fontWeight: '700', color: colors.textPrimary },
 
   sectionTitle: { ...FONTS.h3, marginBottom: SPACING.lg, fontSize: 18 },
   commentCard: { backgroundColor: COLORS.card, padding: SPACING.lg, borderRadius: RADIUS.md, marginBottom: SPACING.md, borderLeftWidth: 4, borderLeftColor: COLORS.primaryLight, ...SHADOW.sm },
   commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  commentAuthor: { ...FONTS.small, fontWeight: '800', color: COLORS.textPrimary },
-  commentTime: { ...FONTS.small, color: COLORS.textMuted, fontSize: 10 },
+  commentAuthor: { ...FONTS.small, fontWeight: '800', color: colors.textPrimary },
+  commentTime: { ...FONTS.small, color: colors.textMuted, fontSize: 10 },
   commentText: { ...FONTS.body, fontSize: 15, color: COLORS.textSecondary, lineHeight: 22 },
   emptyComments: { paddingVertical: 40, alignItems: 'center' },
-  noComments: { ...FONTS.caption, textAlign: 'center', color: COLORS.textMuted },
+  noComments: { ...FONTS.caption, textAlign: 'center', color: colors.textMuted },
 
   inputArea: { 
-    position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.white, 
+    position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, 
     flexDirection: 'row', padding: SPACING.lg, paddingBottom: Platform.OS === 'ios' ? 40 : SPACING.lg, 
-    alignItems: 'center', borderTopWidth: 1, borderTopColor: COLORS.borderLight, ...SHADOW.md
+    alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, ...SHADOW.md
   },
-  input: { flex: 1, backgroundColor: COLORS.background, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.xl, paddingVertical: 12, marginRight: SPACING.md, maxHeight: 120, ...FONTS.body, fontSize: 15 },
+  input: { flex: 1, backgroundColor: colors.background, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.xl, paddingVertical: 12, marginRight: SPACING.md, maxHeight: 120, ...FONTS.body, fontSize: 15 },
   sendBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: RADIUS.pill, ...SHADOW.sm },
   disabledSend: { opacity: 0.4 },
-  sendText: { color: COLORS.white, fontWeight: '800', fontSize: 15 }
+  sendText: { color: colors.surface, fontWeight: '800', fontSize: 15 }
 });
