@@ -16,7 +16,9 @@ import * as userService from './userService.js';
 export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIMIT) => {
   try {
     // 1. Fetch User Personalization Profile
-    const user = await User.findById(userId).select('following interests likedTags viewedTags');
+    const user = await User.findById(userId)
+      .select('following interests likedTags viewedTags')
+      .lean();
     const followingIds = user?.following || [];
     const preferenceTags = [
       ...(user?.interests || []),
@@ -39,6 +41,7 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
           from: 'courses',
           localField: 'course',
           foreignField: '_id',
+          pipeline: [{ $project: { tags: 1, title: 1, platform: 1, image: 1 } }],
           as: 'courseDetails'
         }
       },
@@ -46,10 +49,10 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
       // Compute Base Metrics
       {
         $addFields: {
-          likesCount: { $size: { $ifNull: ["$likes", []] } },
           hoursSince: {
             $divide: [{ $subtract: ["$$NOW", "$createdAt"] }, 3600000]
           },
+          isLikedByMe: { $in: [new mongoose.Types.ObjectId(userId), { $ifNull: ["$likes", []] }] },
           isFollowed: { $in: ["$user", followingIds] },
           courseTags: { $ifNull: ["$courseDetails.tags", []] }
         }
@@ -67,7 +70,7 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
         $addFields: {
           baseScore: {
             $add: [
-              { $multiply: ["$likesCount", 2] },
+              { $multiply: [{ $ifNull: ["$likesCount", 0] }, 2] },
               { $ifNull: ["$viewsCount", 0] },
               "$recencyBoost"
             ]
@@ -113,7 +116,7 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
       { $limit: limit }
     ];
 
-    console.log("Fetching feed with cursor:", cursor);
+
 
     let items = [];
     try {
@@ -130,11 +133,13 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
         isPublic: true,
         ...(cursor && mongoose.Types.ObjectId.isValid(cursor) && { _id: { $lt: new mongoose.Types.ObjectId(cursor) } })
       })
+      .select('-likes') // Exclude heavy array
       .sort({ _id: -1 })
-      .limit(limit);
+      .limit(limit)
+      .lean();
     }
 
-    console.log("Posts returned:", items.length);
+
 
     // Populate post metadata (resiliently)
     const populated = await CompletedCourse.populate(items, [
@@ -175,7 +180,7 @@ export const getTrendingCompletions = async (userId) => {
       $addFields: {
         trendingScore: {
           $add: [
-            { $multiply: [{ $size: { $ifNull: ["$likes", []] } }, 2] },
+            { $multiply: [{ $ifNull: ["$likesCount", 0] }, 2] },
             { $ifNull: ["$viewsCount", 0] }
           ]
         }
@@ -216,11 +221,11 @@ export const trackUniqueView = async (userId, postId) => {
     userId,
     relatedPostId: postId,
     timestamp: { $gte: sixHoursAgo }
-  });
+  }).lean();
 
   if (recentEvent) {
     // Cooldown active
-    const post = await CompletedCourse.findById(postId).select('viewsCount');
+    const post = await CompletedCourse.findById(postId).select('viewsCount').lean();
     return { success: true, viewsCount: post?.viewsCount || 0, cooldown: true };
   }
 

@@ -22,8 +22,9 @@ const authenticate = async (req, res, next) => {
     // 2. Verify the token — throws if expired or tampered
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 3. Fetch the user (exclude password field)
-    const user = await User.findById(decoded.id).select('-password');
+    // 3. Fetch the user (exclude password field and heavy arrays)
+    const user = await User.findById(decoded.id)
+      .select('name email');
 
     if (!user) {
       return res.status(401).json({

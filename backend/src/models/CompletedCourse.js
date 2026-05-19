@@ -57,6 +57,11 @@ const completedCourseSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    likesCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
     viewsCount: {
       type: Number,
       default: 0,
@@ -95,6 +100,8 @@ completedCourseSchema.index({ user: 1, course: 1 }, { unique: true });
 completedCourseSchema.index({ createdAt: -1 });              // Global Feed Sorting
 completedCourseSchema.index({ viewsCount: -1 });             // Trending Ranking
 completedCourseSchema.index({ user: 1, createdAt: -1 });     // User Profile Feed Sorting (Compound)
+completedCourseSchema.index({ course: 1 });                  // Course Statistics / Lookup
+completedCourseSchema.index({ isPublic: 1, createdAt: -1 }); // Optimized Public Feed Index
 
 // ─── After saving, update the Course's averageRating + totalRatings ───────────
 completedCourseSchema.post('save', async function () {

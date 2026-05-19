@@ -73,8 +73,10 @@ export const createNotification = async ({
       }
     }
 
-    const user = await User.findById(actorId).select("name");
-    const recipient = await User.findById(userId).select("expoPushTokens");
+    const [user, recipient] = await Promise.all([
+      User.findById(actorId).select("name").lean(),
+      User.findById(userId).select("expoPushTokens").lean()
+    ]);
 
     if (global.io) {
       global.io.to(userId.toString()).emit("new_notification", {
@@ -94,8 +96,8 @@ export const createNotification = async ({
       else if (type === "like" || type === "post_like") bodyText = `${user?.name || "Someone"} liked your post.`;
       else if (type === "comment") bodyText = `${user?.name || "Someone"} commented on your post.`;
 
-      for (const token of recipient.expoPushTokens) {
-        await sendPushNotification(
+      await Promise.all(recipient.expoPushTokens.map(token => 
+        sendPushNotification(
           token,
           user?.name ? `New from ${user.name}` : 'Course Finder',
           bodyText,
@@ -104,8 +106,8 @@ export const createNotification = async ({
             postId,
             actorId
           }
-        );
-      }
+        )
+      ));
     } else {
       console.log("⚠️ No tokens found for recipient — push skipped");
     }

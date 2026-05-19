@@ -41,15 +41,15 @@ export const formatCourse = (item = {}, currentUserId = null) => {
     authorName: user.name || "Anonymous",
     userId: user._id?.toString() || "",
 
-    likesCount: likes.length,
-    isLikedByMe: currentUserId ? likes.some(id => id.toString() === currentUserId.toString()) : false,
+    likesCount: item.likesCount ?? likes.length,
+    isLikedByMe: item.isLikedByMe ?? (currentUserId ? likes.some(id => id.toString() === currentUserId.toString()) : false),
     duration: item.duration || course.duration || "N/A",
 
     // Learning Post Metadata
     description: item.description || "",
     learnings: Array.isArray(item.learnings) ? item.learnings : [],
     tags: Array.isArray(item.tags) ? item.tags : [],
-    likes: likes, // Temporary inclusion to prevent frontend crashes during refactor
+    // likes: likes, // REMOVED to slim payload
 
     certificateUrl: item.certificateUrl || '',
     certificatePublicId: item.certificatePublicId || '',

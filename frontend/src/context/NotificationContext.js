@@ -6,7 +6,7 @@ import { navigationRef } from '../navigation/navigationRef';
 import Constants from 'expo-constants';
 import { AuthContext } from "./AuthContext"; 
 import { showToast } from "../components/Toast";
-import socket from '../services/socket'; 
+import socket, { connectWithAuth, disconnectSocket } from '../services/socket'; 
 import api from '../services/api';
 
 Notifications.setNotificationHandler({
@@ -24,6 +24,8 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
 
   const soundRef = useRef(null);
   const isLoadedRef = useRef(false);
@@ -47,15 +49,36 @@ export const NotificationProvider = ({ children }) => {
     try {
       setLoading(true);
       const res = await api.getNotifications();
-      const data = res.data || [];
+      const data = res.data?.data || res.data || [];
       setNotifications(Array.isArray(data) ? data : []);
-      setUnreadCount(data.filter(n => !n.isRead).length);
+      setNextCursor(res.data?.nextCursor || null);
+      
+      // Fetch exact unread count from dedicated endpoint to ensure accuracy
+      const countRes = await api.getUnreadCount();
+      setUnreadCount(countRes.data?.unreadCount || 0);
     } catch (err) {
       console.log("Fetch notifications error:", err.message);
     } finally {
       setLoading(false);
     }
   }, [user?._id]);
+
+  const fetchMoreNotifications = async () => {
+    if (!nextCursor || loadingMore || !user?._id) return;
+    try {
+      setLoadingMore(true);
+      const res = await api.getNotifications(nextCursor);
+      const data = res.data?.data || res.data || [];
+      if (Array.isArray(data) && data.length > 0) {
+        setNotifications(prev => [...prev, ...data]);
+      }
+      setNextCursor(res.data?.nextCursor || null);
+    } catch (err) {
+      console.log("Fetch more notifications error:", err.message);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // --- INITIAL FETCH ON USER LOGIN ---
   useEffect(() => {
@@ -104,16 +127,17 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  // --- REGISTER USER TO SOCKET ---
+  // --- REGISTER USER TO SOCKET (with JWT auth) ---
   useEffect(() => {
-    if (!user?._id) return;
-
-    if (!socket.connected) {
-      socket.connect();
+    if (!user?._id) {
+      disconnectSocket();
+      return;
     }
 
-    socket.emit("register", user._id);
-    console.log("✅ Registered user to socket:", user._id);
+    // Connect with JWT token for server-side authentication
+    connectWithAuth().then(() => {
+      socket.emit("register", user._id);
+    });
 
   }, [user?._id]);
 
@@ -411,8 +435,10 @@ export const NotificationProvider = ({ children }) => {
       value={{ 
         notifications, 
         loading,
+        loadingMore,
         setNotifications: handleSetFetchedNotifications,
         fetchNotifications,
+        fetchMoreNotifications,
         handleNewNotification, 
         unreadCount, // Exposed so the Badge updates
         setUnreadCount,

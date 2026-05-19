@@ -1,17 +1,34 @@
 import Notification from '../models/Notification.js';
 
-// 📥 Get Notifications
+// 📥 Get Notifications (with pagination)
 export const getNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ userId: req.user.id })
-      .populate('actorId', 'name avatar')
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const cursor = req.query.cursor;
+
+    const query = { userId: req.user.id };
+    if (cursor) {
+      query._id = { $lt: cursor };
+    }
+
+    const notifications = await Notification.find(query)
+      .populate('actorId', 'name profilePicture')
       .sort({ createdAt: -1 })
+      .limit(limit)
       .lean();
 
-    res.json(notifications || []);
+    const nextCursor = notifications.length === limit
+      ? notifications[notifications.length - 1]._id
+      : null;
+
+    res.json({
+      success: true,
+      data: notifications || [],
+      nextCursor,
+    });
   } catch (err) {
     console.error("Fetch notifications error:", err);
-    res.json([]);
+    res.json({ success: true, data: [], nextCursor: null });
   }
 };
 
@@ -26,7 +43,7 @@ export const getUnreadCount = async (req, res) => {
     res.json({ success: true, unreadCount: count });
   } catch (err) {
     console.error("Unread count error:", err);
-    res.json({ count: 0 });
+    res.json({ success: true, unreadCount: 0 });
   }
 };
 

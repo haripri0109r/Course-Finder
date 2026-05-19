@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import { disconnectSocket } from '../services/socket';
 import { SESSION_ONLY_KEY } from '../constants/onboarding';
 
 export const AuthContext = createContext();
@@ -149,12 +150,23 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      disconnectSocket();
       await AsyncStorage.multiRemove(['userToken', SESSION_ONLY_KEY]);
       setUser(null);
       setBookmarks(new Set());
       setUnreadCount(0);
     } catch (e) {
       console.error('Logout error', e);
+    }
+  };
+
+  const deleteAccount = async () => {
+    try {
+      await api.deleteAccount();
+      await logout();
+    } catch (error) {
+      console.error('Delete account error:', error);
+      throw error;
     }
   };
 
@@ -172,6 +184,7 @@ export const AuthProvider = ({ children }) => {
         refreshUnreadCount,
         refreshUser,
         updateProfile,
+        deleteAccount,
       }}
     >
       {children}

@@ -64,6 +64,9 @@ api.forgotPassword = (email) => api.post('/auth/forgot-password', { email });
 api.updateProfile = (payload) => api.put('/auth/me', payload);
 api.getMe = () => api.get('/auth/me');
 api.getUserProfile = (userId) => api.get(`/auth/profile/${userId}`);
+api.deleteAccount = () => api.delete('/auth/me');
+api.changePassword = (currentPassword, newPassword) =>
+  api.post('/auth/change-password', { currentPassword, newPassword });
 
 api.getRecentActivity = (cursor = null) => api.get('/posts/feed', { params: { cursor, limit: 10 } });
 api.getPost = async (id) => {
@@ -94,15 +97,15 @@ api.likeComment = async (id) => {
   return res.data;
 };
 
+// Consolidated follow system (single source — auth routes)
 api.followUser = (id) => api.post(`/auth/follow/${id}`);
 api.unfollowUser = (id) => api.post(`/auth/unfollow/${id}`);
-api.toggleFollow = (id) => api.post(`/follow/${id}`);
 
 api.getSavedCompletions = () => api.get('/bookmarks');
 api.addBookmark = (id) => api.post(`/bookmarks/${id}`);
 api.removeBookmark = (id) => api.delete(`/bookmarks/${id}`);
 
-api.getNotifications = () => api.get('/notifications');
+api.getNotifications = (cursor = null) => api.get('/notifications', { params: { cursor, limit: 20 } });
 api.getUnreadCount = () => api.get('/notifications/unread-count');
 api.markAllAsRead = () => api.post('/notifications/mark-all-read');
 api.markAsRead = (id) => api.patch(`/notifications/${id}/read`);
@@ -110,3 +113,4 @@ api.markAsRead = (id) => api.patch(`/notifications/${id}/read`);
 api.savePushToken = (pushToken) => api.put('/auth/push-token', { pushToken });
 
 export default api;
+

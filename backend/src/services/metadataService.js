@@ -369,7 +369,7 @@ export const getMetadata = async (inputUrl) => {
 
   const promise = (async () => {
     try {
-      const cached = await MetadataCache.findOne({ url: finalUrl });
+      const cached = await MetadataCache.findOne({ url: finalUrl }).lean();
       if (cached) {
         const normalized = normalizeShape({
           title: cached.title,

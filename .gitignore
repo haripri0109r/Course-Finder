@@ -44,3 +44,26 @@ yarn-error.log*
 
 # Other
 .cache/
+
+# ─── SECURITY: Credential files that must NEVER be committed ─────────────────
+# Firebase Admin SDK service account keys
+*-firebase-adminsdk-*.json
+firebase-adminsdk*.json
+*-adminsdk-*.json
+
+# Google Services
+google-services.json
+GoogleService-Info.plist
+
+# Any private key files
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Uploads directory
+.uploads/
+
+# Brain/local AI cache
+brain/
+

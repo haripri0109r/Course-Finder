@@ -1,9 +1,10 @@
 import express from 'express';
 import 'express-async-errors';
+import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
+import mongoSanitize from 'express-mongo-sanitize';
 
 // All Routes migrated to src/routes
 import healthRoutes from './src/routes/healthRoutes.js';
@@ -13,84 +14,103 @@ import completedRoutes from './src/routes/completedRoutes.js';
 import bookmarkRoutes from './src/routes/bookmarkRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
 import commentRoutes from './src/routes/commentRoutes.js';
-import followRoutes from './src/routes/followRoutes.js';
 
 // Middleware
 import errorHandler from './middleware/errorHandler.js';
+import { generalLimiter } from './src/middleware/rateLimiters.js';
 
 const app = express();
 
-// ─── Security Middleware ────────────────────────────────────────────────────
-app.use(helmet());
+// ─── Security & Performance Middleware ───────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://*.cloudinary.com"],
+      connectSrc: ["'self'"],
+    },
+  },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+app.use(compression());
+
+// ─── CORS — Whitelist allowed origins ────────────────────────────────────────
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://localhost:8081',
+  'http://localhost:19006',
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // In development, allow all origins
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+
+// ─── NoSQL Injection Protection ──────────────────────────────────────────────
+app.use(mongoSanitize({
+  replaceWith: '_',
+  onSanitize: ({ req, key }) => {
+    console.warn(`🛡️ Sanitized key "${key}" in ${req.method} ${req.originalUrl}`);
+  },
+}));
 
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 200,                  
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many requests, please try again later.',
-  },
-});
-app.use('/api', limiter);
-
-// ─── CORS ───────────────────────────────────────────────────────────────────
-app.use(cors());
+app.use('/api', generalLimiter);
 
 // ─── Body Parsing ────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// ─── Trust Proxy (for Render / cloud deploys behind reverse proxy) ───────────
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// ─── Response Timing ─────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (duration > 500) {
+      console.log(`⚠️ SLOW ENDPOINT: ${req.method} ${req.originalUrl} - ${duration}ms`);
+    }
+  });
+  next();
+});
+
 // ─── Logging ─────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 } else {
-  app.use(morgan('combined'));
+  app.use(morgan('tiny'));
 }
 
-// ─── Routes (Strict Alignment with /api/v1 prefix) ───────────────────────────
+// ─── Routes ──────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.send('Backend running \uD83D\uDE80'); // Backend running 🚀
+  res.send('Backend running 🚀');
 });
 
-app.use('/api/health', healthRoutes); // Keep health check at /api/health for internal monitoring
+app.use('/api/health', healthRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/courses', courseRoutes);
 app.use('/api/v1', completedRoutes);
 app.use('/api/v1/bookmarks', bookmarkRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/comments', commentRoutes);
-app.use('/api/v1/follow', followRoutes);
 
-// ─── FORCE TEST PUSH ROUTE ───────────────────────────────────────────────────
-app.get("/test-push", async (req, res) => {
-  const token = "ExponentPushToken[45cRA0H4tpZz847ORmFpKB]";
-
-  console.log("🔥 TEST PUSH TRIGGERED");
-
-  const response = await fetch("https://exp.host/--/api/v2/push/send", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      to: token,
-      sound: "default",
-      title: "TEST 🔥",
-      body: "If you see this → backend works",
-    }),
-  });
-
-  const data = await response.json();
-  console.log("EXPO RESPONSE:", data);
-
-  res.send(data);
-});
-
-// ─── 404 Handler (JSON for consistency) ──────────────────────────────────────
+// ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({
     success: false,

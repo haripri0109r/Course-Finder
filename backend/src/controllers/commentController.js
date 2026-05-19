@@ -1,26 +1,31 @@
 import Comment from '../models/Comment.js';
 import { CompletedCourse } from '../models/index.js';
 import Notification from '../models/Notification.js';
-import { createNotification, removeNotification } from '../services/notificationService.js';
+import { createNotification } from '../services/notificationService.js';
+import { validateBody, addCommentSchema } from '../validators/schemas.js';
 
 // ➕ Add Comment (Supports Threading)
 export const addComment = async (req, res) => {
-  const { text, postId, parentId } = req.body;
-
-  if (!text || !text.trim()) {
-    return res.status(400).json({ message: "Comment cannot be empty" });
+  const validation = validateBody(addCommentSchema, req.body);
+  if (!validation.success) {
+    return res.status(400).json({ message: "Validation failed", errors: validation.errors });
   }
 
+  const { text, postId, parentId } = validation.data;
+
   // Enforce Max Depth (LinkedIn Style: 1 level deep)
+  // FIX: Declare `parentComment` at function scope so it's available for notification logic
+  let parentComment = null;
+
   if (parentId) {
-    const parent = await Comment.findById(parentId);
-    if (!parent) return res.status(400).json({ message: "Parent comment not found" });
-    if (parent.parentId) {
+    parentComment = await Comment.findById(parentId).lean();
+    if (!parentComment) return res.status(400).json({ message: "Parent comment not found" });
+    if (parentComment.parentId) {
       return res.status(400).json({ message: "Max depth reached (Only 1-level replies allowed)" });
     }
   }
 
-  const completion = await CompletedCourse.findById(postId).populate('course', 'title');
+  const completion = await CompletedCourse.findById(postId).populate('course', 'title').lean();
   if (!completion) {
     return res.status(404).json({ message: 'Post not found' });
   }
@@ -28,7 +33,7 @@ export const addComment = async (req, res) => {
   const comment = await Comment.create({
     postId,
     userId: req.user._id,
-    text,
+    text: text.trim(),
     parentId: parentId || null,
   });
 
@@ -40,22 +45,15 @@ export const addComment = async (req, res) => {
     const actorId = req.user._id.toString();
     let recipientId;
 
-    if (isReply) {
-      const parentComment = await Comment.findById(parentId);
-      recipientId = parentComment?.userId?.toString();
+    if (isReply && parentComment) {
+      // FIX: Now correctly references `parentComment` (was `parent` — undefined)
+      recipientId = parentComment.userId?.toString();
     } else {
       recipientId = completion.user?.toString();
     }
 
-    console.log("🔔 COMMENT NOTIFICATION DEBUG:");
-    console.log("  ACTOR:", actorId);
-    console.log("  RECIPIENT:", recipientId);
-    console.log("  TYPE:", isReply ? 'reply' : 'comment');
-    console.log("  POST OWNER:", completion.user?.toString());
-
     // Prevent self-notification
     if (recipientId && recipientId !== actorId) {
-      console.log(`🔥 NOTIFICATION TRIGGERED: ${isReply ? 'reply' : 'comment'}`);
       await createNotification({
         userId: recipientId,
         actorId: actorId,
@@ -63,8 +61,6 @@ export const addComment = async (req, res) => {
         postId: postId,
         commentId: isReply ? parentId : undefined
       });
-    } else {
-      console.log("⏭️ Skipped: self-notification or missing recipient");
     }
   } catch (err) {
     console.error("Notification trigger failed:", err);
@@ -144,13 +140,8 @@ export const toggleLikeComment = async (req, res) => {
     if (liked) {
       const commentLikeRecipient = (updated.userId._id || updated.userId).toString();
       const commentLikeActor = req.user._id.toString();
-      console.log("🔔 COMMENT_LIKE NOTIFICATION DEBUG:");
-      console.log("  ACTOR:", commentLikeActor);
-      console.log("  RECIPIENT:", commentLikeRecipient);
-      console.log("  TYPE: comment_like");
 
       if (commentLikeRecipient !== commentLikeActor) {
-        console.log("🔥 NOTIFICATION TRIGGERED: comment_like");
         await createNotification({
           userId: commentLikeRecipient,
           actorId: commentLikeActor,
@@ -158,17 +149,15 @@ export const toggleLikeComment = async (req, res) => {
           commentId: updated._id,
           postId: updated.postId,
         });
-      } else {
-        console.log("⏭️ Skipped: self comment-like notification");
       }
     } else {
       const filter = {
         userId: updated.userId._id || updated.userId,
-        actorId: req.user.id,
+        actorId: req.user._id,
         type: 'comment_like',
         commentId: updated._id,
       };
-      
+
       const removedNotif = await Notification.findOneAndUpdate(
         filter,
         { $set: { isRead: true } }
@@ -176,7 +165,7 @@ export const toggleLikeComment = async (req, res) => {
 
       if (removedNotif && global.io) {
         global.io.to(filter.userId.toString()).emit("notification_removed", removedNotif._id);
-        
+
         const count = await Notification.countDocuments({
           userId: filter.userId,
           isRead: false

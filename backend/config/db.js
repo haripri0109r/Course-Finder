@@ -11,7 +11,14 @@ const connectDB = async () => {
 
     console.log("🔍 MONGO_URI:", uri ? "Loaded ✅" : "Missing ❌");
 
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, {
+      maxPoolSize: 10,
+      minPoolSize: 2,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      family: 4,
+      retryWrites: true,
+    });
 
     console.log("✅ MongoDB Connected");
   } catch (error) {

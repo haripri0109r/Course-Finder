@@ -22,6 +22,8 @@ const userSchema = new mongoose.Schema(
       minlength: [6, 'Password must be at least 6 characters'],
       select: false, // never returned by default in queries
     },
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
     bio: {
       type: String,
       default: '',
@@ -60,6 +62,15 @@ const userSchema = new mongoose.Schema(
       default: '',
       maxlength: [200, 'GitHub URL too long'],
     },
+    followersCount: {
+      type: Number,
+      default: 0,
+    },
+    followingCount: {
+      type: Number,
+      default: 0,
+    },
+    // DEPRECATED: Use Follow collection
     followers: [
       {
         type: mongoose.Schema.Types.ObjectId,

@@ -7,6 +7,7 @@ import * as userService from '../services/userService.js';
 import { uploadBufferToCloudinary, deleteFromCloudinary } from '../utils/cloudinary.js';
 import { formatCourse } from '../utils/formatter.js';
 import { PAGINATION_LIMIT, API_VERSION } from '../config/constants.js';
+import { validateBody, addCompletedCourseSchema } from '../validators/schemas.js';
 
 // ─── Helper: recalculate and persist course stats ─────────────────────────────
 const syncCourseStats = async (courseId) => {
@@ -48,12 +49,22 @@ const syncCourseStats = async (courseId) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const addCompletedCourse = async (req, res) => {
+  // Validate request body using Zod
+  const validation = validateBody(addCompletedCourseSchema, req.body);
+  if (!validation.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed',
+      errors: validation.errors,
+    });
+  }
+
   // If multipart/form-data, Multer puts files in req.files and body in req.body
   const { 
     title, platform, url, level, rating, review, image, duration, 
     certificateUrl, certificatePublicId,
     description, learnings, tags, progress
-  } = req.body;
+  } = validation.data;
 
   let finalTitle = title;
   let finalImage = image; // manual image URL
@@ -297,7 +308,8 @@ const getMyCompletedCourses = async (req, res) => {
       path: 'course',
       select: 'title platform url tags level averageRating totalCompletions totalRatings image',
     })
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .lean();
 
   const data = completedCourses.map(item => formatCourse(item, req.user._id));
 
@@ -370,12 +382,15 @@ const likeCompletion = async (req, res) => {
     });
   }
 
-  // $addToSet prevents duplicates even under race conditions
+  // Atomic update: add user to likes and increment count
   const updated = await CompletedCourse.findByIdAndUpdate(
     req.params.id,
-    { $addToSet: { likes: req.user._id } },
+    { 
+      $addToSet: { likes: req.user._id },
+      $inc: { likesCount: 1 } 
+    },
     { new: true }
-  ).populate('course', 'title image');
+  ).populate('course', 'title image tags').lean();
 
   // 🔔 Trigger Notification (only if liker ≠ post owner)
   const likeRecipient = completion.user.toString();
@@ -418,9 +433,12 @@ const unlikeCompletion = async (req, res) => {
 
   const updated = await CompletedCourse.findByIdAndUpdate(
     req.params.id,
-    { $pull: { likes: req.user._id } },
+    { 
+      $pull: { likes: req.user._id },
+      $inc: { likesCount: -1 }
+    },
     { new: true }
-  );
+  ).lean();
 
   // 🗑️ Soft-dismiss notification
   try {
@@ -477,7 +495,8 @@ const getRecentActivity = async (req, res) => {
 const getUserCompletions = async (req, res) => {
   const activity = await CompletedCourse.find({ user: req.params.userId, isPublic: true })
     .populate('course', 'title platform url tags level averageRating totalCompletions image')
-    .sort({ createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .lean();
 
   const data = activity.map(item => formatCourse(item, req.user?._id));
 
@@ -500,7 +519,8 @@ const getCompletedCourseById = async (req, res) => {
 
   const post = await CompletedCourse.findById(req.params.id)
     .populate('user', 'name profilePicture')
-    .populate('course', 'title platform url tags level averageRating totalCompletions totalRatings image');
+    .populate('course', 'title platform url tags level averageRating totalCompletions totalRatings image')
+    .lean();
 
   if (!post) {
     return res.status(404).json({
@@ -528,7 +548,8 @@ const getPostById = async (req, res) => {
 
   const post = await CompletedCourse.findById(req.params.id)
     .populate('user', 'name profilePicture')
-    .populate('course', 'title platform url tags level averageRating totalCompletions totalRatings image');
+    .populate('course', 'title platform url tags level averageRating totalCompletions totalRatings image')
+    .lean();
 
   if (!post) {
     return res.status(404).json({ message: 'Post not found' });

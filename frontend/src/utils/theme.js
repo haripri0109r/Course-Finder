@@ -119,13 +119,20 @@ export const RADIUS = {
   full: 999,
 };
 
+/**
+ * FONTS — typography tokens WITHOUT hardcoded colors.
+ * Colors should come from useAppTheme().colors in components.
+ * This ensures dark mode works correctly everywhere.
+ *
+ * Usage in components:
+ *   <Text style={[FONTS.h1, { color: colors.textPrimary }]}>
+ */
 export const FONTS = {
   // Display
   display: {
     fontSize: 32,
     fontWeight: '800',
     letterSpacing: -1,
-    color: COLORS.textPrimary,
     lineHeight: 40,
   },
   // Headings
@@ -133,58 +140,49 @@ export const FONTS = {
     fontSize: 24,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: COLORS.textPrimary,
     lineHeight: 32,
   },
   h2: {
     fontSize: 20,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: COLORS.textPrimary,
     lineHeight: 28,
   },
   h3: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.textPrimary,
     lineHeight: 24,
   },
   // Body
   body: {
     fontSize: 15,
     fontWeight: '400',
-    color: COLORS.textSecondary,
     lineHeight: 22,
   },
   bodyMedium: {
     fontSize: 15,
     fontWeight: '500',
-    color: COLORS.textPrimary,
     lineHeight: 22,
   },
   bodyBold: {
     fontSize: 15,
     fontWeight: '600',
-    color: COLORS.textPrimary,
     lineHeight: 22,
   },
   // Small
   caption: {
     fontSize: 13,
     fontWeight: '500',
-    color: COLORS.textMuted,
     lineHeight: 18,
   },
   captionBold: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.textSecondary,
     lineHeight: 18,
   },
   small: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.textSecondary,
     lineHeight: 16,
   },
   tiny: {
@@ -198,9 +196,27 @@ export const FONTS = {
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textPrimary,
   }
 };
+
+/**
+ * Factory: creates FONTS with colors baked in (for StyleSheet.create usage).
+ * Use in screens: const fonts = createFonts(colors);
+ */
+export const createFonts = (colors) => ({
+  display: { ...FONTS.display, color: colors.textPrimary },
+  h1: { ...FONTS.h1, color: colors.textPrimary },
+  h2: { ...FONTS.h2, color: colors.textPrimary },
+  h3: { ...FONTS.h3, color: colors.textPrimary },
+  body: { ...FONTS.body, color: colors.textSecondary },
+  bodyMedium: { ...FONTS.bodyMedium, color: colors.textPrimary },
+  bodyBold: { ...FONTS.bodyBold, color: colors.textPrimary },
+  caption: { ...FONTS.caption, color: colors.textMuted },
+  captionBold: { ...FONTS.captionBold, color: colors.textSecondary },
+  small: { ...FONTS.small, color: colors.textSecondary },
+  tiny: { ...FONTS.tiny, color: colors.textMuted },
+  label: { ...FONTS.label, color: colors.textPrimary },
+});
 
 export const SHADOW = {
   none: {

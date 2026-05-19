@@ -546,7 +546,6 @@ export default function ProfileScreen({ route, navigation }) {
             </Text>
           </TouchableOpacity>
         )}
-      </View>
 
       <View style={styles.statsContainer}>
         <View style={styles.statBox}>
