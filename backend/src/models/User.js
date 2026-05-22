@@ -101,6 +101,18 @@ const userSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    hiddenPosts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CompletedCourse',
+      },
+    ],
+    mutedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     expoPushTokens: {
       type: [String],
       default: [],

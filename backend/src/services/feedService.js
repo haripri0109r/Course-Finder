@@ -4,151 +4,230 @@ import { PAGINATION_LIMIT } from '../config/constants.js';
 import { formatCourse } from '../utils/formatter.js';
 import * as userService from './userService.js';
 import { trackEvent } from './activityService.js';
+import { getFeedRankingPipeline, RANKING_CONSTANTS } from './feedRankingService.js';
 
 /**
- * PRODUCTION-GRADE FEED SERVICE
- * Handles hybrid ranking aggregation, cursor pagination, and engagement tracking.
+ * ENHANCED STABLE CURSOR HELPERS
+ * Encodes: { score, createdAt, id }
  */
+const encodeCursor = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64');
+const decodeCursor = (str) => {
+  try {
+    const decoded = JSON.parse(Buffer.from(str, 'base64').toString('utf8'));
+    return {
+      score: decoded.score,
+      createdAt: new Date(decoded.createdAt),
+      id: decoded.id
+    };
+  } catch (e) {
+    return null;
+  }
+};
 
 /**
- * Fetches a personalized, hybrid-ranked feed.
- * 70% Personalized (Interests + Follows) | 30% Discovery (Trending)
+ * PRODUCTION-GRADE SMART FEED SERVICE
+ * Handles hybrid ranking aggregation, stable cursor pagination, and iterative refill.
  */
+
 export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIMIT) => {
   try {
-    // 1. Fetch User Personalization Profile
+    // 1. Fetch User Personalization Profile & Negative Feedback
     const user = await User.findById(userId)
-      .select('following interests likedTags viewedTags')
+      .select('following interests likedTags viewedTags hiddenPosts mutedUsers')
       .lean();
+    
     const followingIds = user?.following || [];
+    const hiddenPosts = user?.hiddenPosts || [];
+    const mutedUsers = user?.mutedUsers || [];
+    
+    // 1.1 Social Affinity (30d)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const recentInteractions = await ActivityEvent.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          createdAt: { $gte: thirtyDaysAgo },
+          eventType: { $in: ['bookmark_save', 'post_share', 'course_open', 'follow_user'] }
+        }
+      },
+      {
+        $lookup: {
+          from: 'completedcourses',
+          localField: 'targetId',
+          foreignField: '_id',
+          as: 'post'
+        }
+      },
+      { $unwind: { path: '$post', preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: '$post.user',
+          interactionCount: { $sum: 1 }
+        }
+      },
+      { $match: { _id: { $ne: null } } },
+      { $sort: { interactionCount: -1 } },
+      { $limit: 25 }
+    ]);
+    const affinityIds = recentInteractions.map(i => i._id);
+
+    // 1.2 Enhanced Interest Tags
+    const recentActivityEvents = await ActivityEvent.find({
+      userId,
+      createdAt: { $gte: thirtyDaysAgo },
+      eventType: { $in: ['search_query', 'course_open', 'bookmark_save'] }
+    }).limit(100).lean();
+
+    const activityTags = [];
+    recentActivityEvents.forEach(event => {
+      if (event.metadata?.tags) activityTags.push(...event.metadata.tags);
+      if (event.metadata?.query) activityTags.push(event.metadata.query);
+    });
+
     const preferenceTags = [
       ...(user?.interests || []),
       ...(user?.likedTags || []),
-      ...(user?.viewedTags || [])
+      ...(user?.viewedTags || []),
+      ...activityTags
     ];
-    // Unique set of interests
-    const userTags = [...new Set(preferenceTags.map(t => t.toLowerCase()))].slice(0, 100);
+    const userTags = [...new Set(preferenceTags.map(t => t.toLowerCase().trim()))].slice(0, 200);
 
-    const matchQuery = { isPublic: true };
-    if (cursor && mongoose.Types.ObjectId.isValid(cursor)) {
-      matchQuery._id = { $lt: new mongoose.Types.ObjectId(cursor) };
-    }
+    // 2. Base Query Construction (Negative Feedback Filters)
+    const matchQuery = { 
+      isPublic: true,
+      _id: { $nin: hiddenPosts },
+      user: { $nin: mutedUsers }
+    };
+    
+    // 3. Handle Stable Cursor Pagination (DEFERRED: Will be applied after scoring)
+    const clientCursor = cursor ? decodeCursor(cursor) : null;
+    let workingCursor = clientCursor; // Internal refill cursor
 
-    const pipeline = [
-      { $match: matchQuery },
-      // Join with course to get tags
-      {
-        $lookup: {
-          from: 'courses',
-          localField: 'course',
-          foreignField: '_id',
-          pipeline: [{ $project: { tags: 1, title: 1, platform: 1, image: 1 } }],
-          as: 'courseDetails'
-        }
-      },
-      { $unwind: '$courseDetails' },
-      // Compute Base Metrics
-      {
-        $addFields: {
-          hoursSince: {
-            $divide: [{ $subtract: ["$$NOW", "$createdAt"] }, 3600000]
-          },
-          isLikedByMe: { $in: [new mongoose.Types.ObjectId(userId), { $ifNull: ["$likes", []] }] },
-          isFollowed: { $in: ["$user", followingIds] },
-          courseTags: { $ifNull: ["$courseDetails.tags", []] }
-        }
-      },
-      {
-        $addFields: {
-          recencyBoost: { $max: [0, { $subtract: [100, "$hoursSince"] }] },
-          matchingTags: {
-            $size: { $setIntersection: ["$courseTags", userTags] }
+    // 4. Iterative Refill Loop
+    const diverseItems = [];
+    const creatorCounts = {};
+    const courseCounts = {};
+    let lastEvaluatedItem = null;
+    let iteration = 0;
+    const maxIterations = 5; 
+    const batchSize = limit * 3; 
+    let skipCount = 0; 
+
+    while (diverseItems.length < limit && iteration < maxIterations) {
+      iteration++;
+
+      // A) Generate Ranking Pipeline (30% Discovery Blend)
+      const isDiscoveryBatch = iteration % 3 === 0; 
+      const pipeline = [
+        { $match: matchQuery },
+        {
+          $lookup: {
+            from: 'courses',
+            localField: 'course',
+            foreignField: '_id',
+            pipeline: [{ $project: { tags: 1, title: 1, platform: 1, image: 1, averageRating: 1, totalCompletions: 1 } }],
+            as: 'courseDetails'
           }
-        }
-      },
-      // Calculate Factors
-      {
-        $addFields: {
-          baseScore: {
-            $add: [
-              { $multiply: [{ $ifNull: ["$likesCount", 0] }, 2] },
-              { $ifNull: ["$viewsCount", 0] },
-              "$recencyBoost"
+        },
+        { $unwind: { path: '$courseDetails', preserveNullAndEmptyArrays: true } },
+        ...getFeedRankingPipeline(userId, followingIds, userTags, affinityIds, isDiscoveryBatch),
+        
+        // B) Apply Cursor Filter (AFTER scoring)
+        ...(workingCursor ? [{
+          $match: {
+            $or: [
+              { finalFeedScore: { $lt: workingCursor.score } },
+              { 
+                $and: [
+                  { finalFeedScore: { $eq: workingCursor.score } },
+                  { createdAt: { $lt: workingCursor.createdAt } }
+                ]
+              },
+              { 
+                $and: [
+                  { finalFeedScore: { $eq: workingCursor.score } },
+                  { createdAt: { $eq: workingCursor.createdAt } },
+                  { _id: { $lt: new mongoose.Types.ObjectId(workingCursor.id) } }
+                ]
+              }
             ]
-          },
-          personalizationFactor: {
-            $add: [1, { $multiply: ["$matchingTags", 0.3] }]
-          },
-          followBoost: {
-            $cond: ["$isFollowed", 1.5, 1.0]
           }
-        }
-      },
-      {
-        $addFields: {
-          finalPersonalizedScore: {
-            $multiply: ["$baseScore", "$personalizationFactor", "$followBoost"]
-          }
-        }
-      },
-      // Hybrid Stream Split (70 Personalized / 30 Discovery)
-      {
-        $facet: {
-          personalized: [
-            { $sort: { finalPersonalizedScore: -1, _id: -1 } },
-            { $limit: Math.ceil(limit * 0.7) }
-          ],
-          discovery: [
-            { $sort: { baseScore: -1, _id: -1 } },
-            { $limit: Math.ceil(limit * 0.3) }
-          ]
-        }
-      },
-      // Merge and Interleave
-      {
-        $project: {
-          combined: { $setUnion: ["$personalized", "$discovery"] }
-        }
-      },
-      { $unwind: "$combined" },
-      { $replaceRoot: { newRoot: "$combined" } },
-      // Final global sort to keep feed somewhat ordered even after merge
-      { $sort: { finalPersonalizedScore: -1, _id: -1 } },
-      { $limit: limit }
-    ];
+        }] : []),
 
+        { $sort: { finalFeedScore: -1, createdAt: -1, _id: -1 } },
+        { $skip: skipCount },
+        { $limit: batchSize }
+      ];
 
+      const candidates = await CompletedCourse.aggregate(pipeline);
+      if (candidates.length === 0) break; 
 
-    // 4. Execute Pipeline
-    let items = [];
-    try {
-      items = await CompletedCourse.aggregate(pipeline);
-    } catch (error) {
-      console.error("Aggregation failed, falling back to simple query:", error);
-      items = [];
+      for (const item of candidates) {
+        const creatorIdStr = item.user.toString();
+        const courseIdStr = item.course.toString();
+        
+        const creatorCount = creatorCounts[creatorIdStr] || 0;
+        const courseCount = courseCounts[courseIdStr] || 0;
+
+        // Progressive Fatigue / Diversity
+        if (creatorCount < 2 && courseCount < 2) {
+          diverseItems.push(item);
+          creatorCounts[creatorIdStr] = creatorCount + 1;
+          courseCounts[courseIdStr] = courseCount + 1;
+        }
+
+        lastEvaluatedItem = item;
+        if (diverseItems.length === limit) break;
+      }
+
+      // D) Advance Pagination for Next Iteration
+      if (diverseItems.length < limit && lastEvaluatedItem) {
+        workingCursor = {
+          score: lastEvaluatedItem.finalFeedScore,
+          createdAt: lastEvaluatedItem.createdAt,
+          id: lastEvaluatedItem._id.toString()
+        };
+        skipCount = 0; 
+      }
     }
 
-    // Fallback Logic: If aggregation is empty or fails
-    if (items.length === 0) {
-      items = await CompletedCourse.find({
-        isPublic: true,
-        ...(cursor && mongoose.Types.ObjectId.isValid(cursor) && { _id: { $lt: new mongoose.Types.ObjectId(cursor) } })
-      })
-      .select('-likes') 
-      .sort({ _id: -1 })
-      .limit(limit)
-      .lean();
+    // 5. Cold Start Intelligence (Fallback)
+    if (diverseItems.length === 0 && !cursor) {
+      console.log("Feed Cold Start: Blending Popular/High-Quality FALLBACK");
+      const fallbackItems = await CompletedCourse.aggregate([
+        { $match: { isPublic: true } },
+        {
+          $lookup: {
+            from: 'courses',
+            localField: 'course',
+            foreignField: '_id',
+            pipeline: [{ $project: { tags: 1, title: 1, platform: 1, image: 1, averageRating: 1, totalCompletions: 1 } }],
+            as: 'courseDetails'
+          }
+        },
+        { $unwind: '$courseDetails' },
+        {
+          $addFields: {
+            finalFeedScore: {
+              $add: [
+                { $multiply: ["$courseDetails.averageRating", 10] },
+                { $multiply: [{ $log10: { $add: ["$viewsCount", 1] } }, 5] }
+              ]
+            }
+          }
+        },
+        { $sort: { finalFeedScore: -1, _id: -1 } },
+        { $limit: limit }
+      ]);
+      diverseItems.push(...fallbackItems);
     }
 
-    // 5. Populate User details (resiliently)
-    // Course details were already fetched via $lookup in the main pipeline.
-    // We only need to populate user details and potentially re-format.
-    const populated = await CompletedCourse.populate(items, [
+    // 6. Population & Formatting
+    const populated = await CompletedCourse.populate(diverseItems, [
       { path: 'user', select: 'name profilePicture' }
     ]);
 
     const posts = populated.map(item => {
-      // Map courseDetails back to course if it came from the aggregate pipeline
       const finalItem = {
         ...item,
         course: item.courseDetails || item.course
@@ -156,17 +235,20 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
       return formatCourse(finalItem, userId);
     });
 
-    return {
-      posts,
-      nextCursor: posts.length > 0 ? posts[posts.length - 1]._id : null,
-    };
+    // 7. Stable Cursor Generation
+    let nextCursor = null;
+    if (diverseItems.length === limit && lastEvaluatedItem) {
+      nextCursor = encodeCursor({
+        score: lastEvaluatedItem.finalFeedScore,
+        createdAt: lastEvaluatedItem.createdAt,
+        id: lastEvaluatedItem._id
+      });
+    }
+
+    return { posts, nextCursor };
   } catch (error) {
     console.error('getSmartFeed Fatal Error:', error);
-    // Ultimate safety return
-    return {
-      posts: [],
-      nextCursor: null
-    };
+    return { posts: [], nextCursor: null };
   }
 };
 

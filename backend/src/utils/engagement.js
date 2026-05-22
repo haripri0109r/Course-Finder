@@ -4,10 +4,10 @@
  */
 
 export const ENGAGEMENT_WEIGHTS = {
+  COMMENT: 15,
+  SHARE: 12,
+  BOOKMARK: 10,
   LIKE: 5,
-  COMMENT: 10,
-  BOOKMARK: 15,
-  SHARE: 20,
   VIEW: 1,
 };
 

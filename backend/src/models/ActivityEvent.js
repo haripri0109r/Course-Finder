@@ -19,6 +19,9 @@ const activityEventSchema = new mongoose.Schema(
         'follow_user', 
         'post_share', 
         'search_query',
+        'hide_post',
+        'not_interested',
+        'mute_user',
         
         // Legacy (Backward Compatibility)
         'impression',
