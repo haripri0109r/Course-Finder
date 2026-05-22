@@ -1,5 +1,6 @@
-import { User, Follow, ActivityEvent } from '../models/index.js';
+import { User, Follow } from '../models/index.js';
 import { createNotification } from '../services/notificationService.js';
+import { trackEvent } from '../services/activityService.js';
 import mongoose from 'mongoose';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,8 +35,15 @@ export const followUser = async (req, res) => {
     await Promise.all([
       User.findByIdAndUpdate(userId, { $inc: { followingCount: 1 } }),
       User.findByIdAndUpdate(targetId, { $inc: { followersCount: 1 } }),
-      ActivityEvent.create({ userId, eventType: 'follow', targetId }),
     ]);
+
+    // Async instrumentation
+    trackEvent({
+      userId,
+      eventType: 'follow_user',
+      targetId,
+      targetType: 'user'
+    });
 
     // Send notification
     await createNotification({
@@ -71,8 +79,8 @@ export const unfollowUser = async (req, res) => {
       await Promise.all([
         User.findByIdAndUpdate(userId, { $inc: { followingCount: -1 } }),
         User.findByIdAndUpdate(targetId, { $inc: { followersCount: -1 } }),
-        // Optional: remove the ActivityEvent to clean up analytics
-        ActivityEvent.findOneAndDelete({ userId, eventType: 'follow', targetId }),
+        // Optional: remove the ActivityEvent to clean up analytics (Backward compatible)
+        ActivityEvent.findOneAndDelete({ userId, eventType: { $in: ['follow', 'follow_user'] }, targetId }),
       ]);
     } else {
       return res.status(400).json({ success: false, message: 'You are not following this user.' });

@@ -72,7 +72,7 @@ export const addComment = async (req, res) => {
   return res.status(201).json(populated);
 };
 
-// 📥 Get Threaded Comments (Scalable Paginated)
+// 📥 Get Threaded Comments (Root level with initial replies batch)
 export const getComments = async (req, res) => {
   try {
     const { postId } = req.params;
@@ -93,24 +93,107 @@ export const getComments = async (req, res) => {
 
     const nextCursor = rootComments.length === limit ? rootComments[rootComments.length - 1]._id : null;
 
-    // 2. Fetch Replies (Max 20 per root)
-    const formattedComments = await Promise.all(rootComments.map(async (root) => {
-      // Fetch 21 to determine if there are more
-      const replies = await Comment.find({ parentId: root._id })
-        .sort({ _id: -1 }) // Sort newest first (matches previous Descending logic)
-        .limit(21)
-        .populate('userId', 'name profilePicture')
-        .lean();
+    // 2. Fetch total reply counts and the first few replies for each root (SCALABLE HYDRATION)
+    const rootIds = rootComments.map(c => c._id);
+    
+    // Fetch initial 5 replies for each root comment using aggregation + lookup for user data (Single Query)
+    const repliesAggregation = await Comment.aggregate([
+      { $match: { parentId: { $in: rootIds } } },
+      { $sort: { _id: -1 } },
+      {
+        $group: {
+          _id: "$parentId",
+          replies: { $push: "$$ROOT" },
+          totalCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          totalCount: 1,
+          topReplies: { $slice: ["$replies", 5] }
+        }
+      },
+      // Hydrate user data for the sliced replies efficiently
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'topReplies.userId',
+          foreignField: '_id',
+          as: 'replyUsers'
+        }
+      },
+      {
+        $project: {
+          totalCount: 1,
+          replies: {
+            $map: {
+              input: "$topReplies",
+              as: "reply",
+              in: {
+                $mergeObjects: [
+                  "$$reply",
+                  {
+                    userId: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: "$replyUsers",
+                            as: "u",
+                            cond: { $eq: ["$$u._id", "$$reply.userId"] }
+                          }
+                        },
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      // Final projection to cleanup user fields (matching current populate('userId', 'name profilePicture') logic)
+      {
+        $project: {
+          totalCount: 1,
+          "replies.userId.name": 1,
+          "replies.userId.profilePicture": 1,
+          "replies.userId._id": 1,
+          "replies._id": 1,
+          "replies.postId": 1,
+          "replies.text": 1,
+          "replies.parentId": 1,
+          "replies.likes": 1,
+          "replies.likesCount": 1,
+          "replies.createdAt": 1,
+          "replies.updatedAt": 1
+        }
+      }
+    ]);
 
-      const hasMoreReplies = replies.length > 20;
-      if (hasMoreReplies) replies.pop(); // Remove the 21st item
+    // Map aggregated results for easy lookup
+    const countMap = {};
+    const repliesMap = {};
+    
+    for (const group of repliesAggregation) {
+      countMap[group._id.toString()] = group.totalCount;
+      repliesMap[group._id.toString()] = group.replies;
+    }
 
+    // 3. Attach metadata and nested replies
+    const formattedComments = rootComments.map(root => {
+      const rootIdStr = root._id.toString();
+      const nestedReplies = repliesMap[rootIdStr] || [];
+      const totalCount = countMap[rootIdStr] || 0;
+      
       return {
         ...root,
-        replies,
-        hasMoreReplies
+        replies: nestedReplies,
+        replyCount: totalCount,
+        hasReplies: totalCount > 0,
+        hasMoreReplies: totalCount > 5
       };
-    }));
+    });
 
     return res.status(200).json({
       success: true,
@@ -120,6 +203,37 @@ export const getComments = async (req, res) => {
   } catch (error) {
     console.error("Get comments error:", error);
     return res.status(500).json({ success: false, message: 'Failed to fetch comments' });
+  }
+};
+
+// 📥 Get Replies for a Comment (Cursor Paginated)
+export const getReplies = async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 10, 30);
+    const cursor = req.query.cursor;
+
+    const query = { parentId: commentId };
+    if (cursor) {
+      query._id = { $lt: cursor };
+    }
+
+    const replies = await Comment.find(query)
+      .sort({ _id: -1 })
+      .limit(limit)
+      .populate('userId', 'name profilePicture')
+      .lean();
+
+    const nextCursor = replies.length === limit ? replies[replies.length - 1]._id : null;
+
+    return res.status(200).json({
+      success: true,
+      replies,
+      nextCursor
+    });
+  } catch (error) {
+    console.error("Get replies error:", error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch replies' });
   }
 };
 

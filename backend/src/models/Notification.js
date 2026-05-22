@@ -40,6 +40,7 @@ const notificationSchema = new mongoose.Schema(
 // Performance Index
 notificationSchema.index({ userId: 1, updatedAt: -1 });
 notificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
+notificationSchema.index({ userId: 1, _id: -1 }); // Stable sort for pagination
 
 // Partial unique index for post notifications (post_like, comment)
 notificationSchema.index(

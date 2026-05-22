@@ -5,15 +5,16 @@ export const getNotifications = async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const cursor = req.query.cursor;
+    const userId = req.user._id || req.user.id;
 
-    const query = { userId: req.user.id };
+    const query = { userId };
     if (cursor) {
       query._id = { $lt: cursor };
     }
 
     const notifications = await Notification.find(query)
       .populate('actorId', 'name profilePicture')
-      .sort({ createdAt: -1 })
+      .sort({ _id: -1 }) // Stable cursor sort
       .limit(limit)
       .lean();
 

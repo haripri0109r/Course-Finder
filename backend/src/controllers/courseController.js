@@ -1,8 +1,19 @@
 import mongoose from 'mongoose';
-import { Course } from '../models/index.js';
+import { Course, AnalyticsEvent } from '../models/index.js';
 import { API_VERSION, DEFAULT_IMAGE } from '../config/constants.js';
 import * as metadataService from '../services/metadataService.js';
 import { extractYouTubeId } from '../utils/extractYouTubeId.js';
+import { trackEvent } from '../services/activityService.js';
+
+// ─── Helpers for Compound Cursor Pagination ───────────────────────────────
+const encodeCursor = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64');
+const decodeCursor = (str) => {
+  try {
+    return JSON.parse(Buffer.from(str, 'base64').toString('utf8'));
+  } catch (e) {
+    return null;
+  }
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   GET /api/courses/search
@@ -17,67 +28,107 @@ const searchCourses = async (req, res) => {
     tags,
     limit = 10,
     page = 1,
+    cursor,
   } = req.query;
 
   const filter = {};
 
-  // 1. Text search (requires text index on title/tags)
+  // 1. Text search
   if (q) {
     filter.$text = { $search: q };
   }
 
-  // 2. Exact match filters
-  if (platform) {
-    filter.platform = platform;
-  }
-  
-  if (level) {
-    filter.level = level;
-  }
-
-  // 3. Range filter for rating
-  if (minRating) {
-    filter.averageRating = { $gte: Number(minRating) };
-  }
-
-  // 4. Array inclusion filter for tags
+  // 2. Filters
+  if (platform) filter.platform = platform;
+  if (level) filter.level = level;
+  if (minRating) filter.averageRating = { $gte: Number(minRating) };
   if (tags) {
-    // split by comma, trim, lowercase
     const tagList = tags.split(',').map((t) => t.toLowerCase().trim());
     filter.tags = { $in: tagList };
   }
 
-  // Pagination setup
-  const pageNum = Math.max(Number(page), 1);
-  const limitNum = Math.min(Number(limit), 50); // cap at 50 to prevent huge responses
-  const skip = (pageNum - 1) * limitNum;
+  // 3. Robust Pagination Logic
+  const sort = { averageRating: -1, totalCompletions: -1, _id: -1 };
+  const limitNum = Math.min(Number(limit), 50);
 
-  const [courses, totalResults] = await Promise.all([
-    Course.find(filter)
-      .sort({ averageRating: -1, totalCompletions: -1 })
-      .skip(skip)
+  let courses;
+  let totalResults = 0;
+
+  if (cursor) {
+    // 🛡️ Compound Cursor Pagination (Safety fix)
+    const decoded = decodeCursor(cursor);
+    if (decoded) {
+      const { rating, completions, id } = decoded;
+      // MongoDB compound inequality: (rating < r) OR (rating == r AND completions < c) OR (rating == r AND completions == c AND _id < id)
+      filter.$or = [
+        { averageRating: { $lt: rating } },
+        { averageRating: rating, totalCompletions: { $lt: completions } },
+        { averageRating: rating, totalCompletions: completions, _id: { $lt: id } }
+      ];
+    }
+    
+    courses = await Course.find(filter)
+      .sort(sort)
       .limit(limitNum)
-      .select('title platform url tags level averageRating totalRatings totalCompletions image'),
-    Course.countDocuments(filter),
-  ]);
+      .select('title platform url tags level averageRating totalRatings totalCompletions image')
+      .lean();
+  } else {
+    // Standard Page-based (Backward Compatibility)
+    const pageNum = Math.max(Number(page), 1);
+    const skip = (pageNum - 1) * limitNum;
 
-  // Ensure every course has a valid image fallback URL in memory
-  const processedCourses = courses.map(c => {
-    const course = c.toObject();
-    return {
-      ...course,
-      image: course.image || DEFAULT_IMAGE
-    };
-  });
+    [courses, totalResults] = await Promise.all([
+      Course.find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum)
+        .select('title platform url tags level averageRating totalRatings totalCompletions image')
+        .lean(),
+      Course.countDocuments(filter),
+    ]);
+  }
 
-  return res.status(200).json({
+  // 4. Generate Next Cursor
+  let nextCursor = null;
+  if (courses.length === limitNum) {
+    const last = courses[courses.length - 1];
+    nextCursor = encodeCursor({
+      rating: last.averageRating,
+      completions: last.totalCompletions,
+      id: last._id
+    });
+  }
+
+  // 5. Instrumentation
+  if (q) {
+    trackEvent({
+      userId: req.user?._id || req.user?.id,
+      eventType: 'search_query',
+      metadata: { query: q, resultsCount: courses.length }
+    });
+  }
+
+  const processedCourses = courses.map(c => ({
+    ...c,
+    image: c.image || DEFAULT_IMAGE
+  }));
+
+  const response = {
     success: true,
     version: API_VERSION,
-    page: pageNum,
-    totalPages: Math.ceil(totalResults / limitNum),
-    totalResults,
+    count: processedCourses.length,
     courses: processedCourses,
-  });
+    nextCursor
+  };
+
+  if (!cursor) {
+    const pageNum = Math.max(Number(page), 1);
+    response.page = pageNum;
+    response.totalResults = totalResults;
+    response.totalPages = Math.ceil(totalResults / limitNum);
+  }
+
+  return res.status(200).json(response);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,6 +221,15 @@ const getCourseById = async (req, res) => {
     });
   }
 
+  // 1. Instrumentation (Click/Open)
+  trackEvent({
+    userId: req.user?._id || req.user?.id,
+    eventType: 'course_open',
+    targetId: course._id,
+    targetType: 'course',
+    metadata: { platform: course.platform }
+  });
+
   return res.status(200).json({
     success: true,
     data: course,
@@ -186,19 +246,31 @@ const getCourseReviews = async (req, res) => {
   }
 
   const { CompletedCourse } = await import('../models/index.js');
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const cursor = req.query.cursor;
 
-  const reviews = await CompletedCourse.find({
+  const query = {
     course: req.params.id,
     isPublic: true,
     review: { $ne: '' },
-  })
+  };
+
+  if (cursor) {
+    query._id = { $lt: cursor };
+  }
+
+  const reviews = await CompletedCourse.find(query)
     .populate('user', 'name profilePicture')
-    .sort({ createdAt: -1 })
-    .limit(50);
+    .sort({ _id: -1 })
+    .limit(limit)
+    .lean();
+
+  const nextCursor = reviews.length === limit ? reviews[reviews.length - 1]._id : null;
 
   return res.status(200).json({
     success: true,
     count: reviews.length,
+    nextCursor,
     data: reviews,
   });
 };
@@ -273,22 +345,14 @@ const incrementViewCount = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Course not found' });
     }
 
-    // 2. Deterministic Analytics Sampling (30% Load reduction)
-    // Using simple additive hash of ID to ensure consistency
-    const hash = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 10;
-    
-    if (hash < 3) {
-      const { AnalyticsEvent } = await import('../models/index.js');
-      // Async (non-blocking)
-      setImmediate(() => {
-        AnalyticsEvent.create({
-          event: 'view_course_clicked',
-          courseId: id,
-          userId: req.user?._id || null, // Optional if authenticated
-          metadata: { platform: course.platform }
-        }).catch(() => {});
-      });
-    }
+    // 2. Instrumentation using ActivityService (Replacing Legacy Sampling)
+    trackEvent({
+      userId: req.user?._id || req.user?.id,
+      eventType: 'course_open',
+      targetId: id,
+      targetType: 'course',
+      metadata: { platform: course.platform }
+    });
 
     return res.status(200).json({ success: true, viewsCount: course.viewsCount });
   } catch (error) {

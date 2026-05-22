@@ -21,5 +21,9 @@ const followSchema = new mongoose.Schema(
 // Prevent duplicate follows
 followSchema.index({ followerId: 1, followingId: 1 }, { unique: true });
 
+// Sorting indexes for profile lists
+followSchema.index({ followerId: 1, createdAt: -1 });
+followSchema.index({ followingId: 1, createdAt: -1 });
+
 const Follow = mongoose.model('Follow', followSchema);
 export default Follow;

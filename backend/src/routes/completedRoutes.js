@@ -14,7 +14,8 @@ import {
   getTrendingCompletions,
   getPostById,
   getMyCompletedCoursesPaginated,
-  getUserCompletionsPaginated
+  getUserCompletionsPaginated,
+  shareCompletion
 } from '../controllers/completedCourseController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { sanitizeImage } from '../middleware/sanitizeImage.js';
@@ -53,9 +54,10 @@ router.get('/posts/feed', getRecentActivity);
 router.get('/posts/:id', getPostById);
 router.get('/recent', getRecentActivity);
 
-// ─── Social (Like/Unlike/View) ───────────────────────────────────────────────
+// ─── Social (Like/Unlike/View/Share) ───────────────────────────────────────────────
 router.post('/completed/:id/like', likeCompletion);
 router.post('/completed/:id/unlike', unlikeCompletion);
 router.post('/completed/:id/view', incrementViewCount);
+router.post('/completed/:id/share', shareCompletion);
 
 export default router;

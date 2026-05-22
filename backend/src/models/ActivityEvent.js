@@ -11,7 +11,25 @@ const activityEventSchema = new mongoose.Schema(
     eventType: {
       type: String,
       required: true,
-      enum: ['impression', 'click', 'share', 'search', 'dwell', 'save', 'follow', 'view'],
+      enum: [
+        // Canonical (New)
+        'feed_impression', 
+        'course_open', 
+        'bookmark_save', 
+        'follow_user', 
+        'post_share', 
+        'search_query',
+        
+        // Legacy (Backward Compatibility)
+        'impression',
+        'click',
+        'share',
+        'search',
+        'save',
+        'follow',
+        'view',
+        'dwell'
+      ],
       index: true,
     },
     targetId: {

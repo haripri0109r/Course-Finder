@@ -1,6 +1,7 @@
-import { Bookmark, CompletedCourse, ActivityEvent } from '../models/index.js';
+import { Bookmark, CompletedCourse } from '../models/index.js';
 import { formatCourse } from '../utils/formatter.js';
 import { API_VERSION } from '../config/constants.js';
+import { trackEvent } from '../services/activityService.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/bookmarks/:id
@@ -28,10 +29,14 @@ export const bookmarkCompletion = async (req, res) => {
     }
 
     // 3. Log Activity & Increment counter
-    await Promise.all([
-      ActivityEvent.create({ userId, eventType: 'save', targetId: courseId }),
-      CompletedCourse.findByIdAndUpdate(courseId, { $inc: { bookmarkCount: 1 } })
-    ]);
+    await CompletedCourse.findByIdAndUpdate(courseId, { $inc: { bookmarkCount: 1 } });
+    
+    trackEvent({
+      userId,
+      eventType: 'bookmark_save',
+      targetId: courseId,
+      targetType: 'course_completion'
+    });
 
     return res.status(200).json({ success: true, message: 'Bookmark added successfully' });
   } catch (error) {
@@ -53,7 +58,7 @@ export const removeBookmark = async (req, res) => {
     
     if (bookmark) {
       await Promise.all([
-        ActivityEvent.findOneAndDelete({ userId, eventType: 'save', targetId: courseId }),
+        ActivityEvent.findOneAndDelete({ userId, eventType: { $in: ['save', 'bookmark_save'] }, targetId: courseId }),
         CompletedCourse.findByIdAndUpdate(courseId, { $inc: { bookmarkCount: -1 } })
       ]);
     }

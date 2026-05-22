@@ -8,6 +8,7 @@ import { uploadBufferToCloudinary, deleteFromCloudinary } from '../utils/cloudin
 import { formatCourse } from '../utils/formatter.js';
 import { PAGINATION_LIMIT, API_VERSION } from '../config/constants.js';
 import { validateBody, addCompletedCourseSchema } from '../validators/schemas.js';
+import { trackEvent } from '../services/activityService.js';
 
 // ─── Helper: recalculate and persist course stats ─────────────────────────────
 const syncCourseStats = async (courseId) => {
@@ -229,7 +230,16 @@ const addCompletedCourse = async (req, res) => {
   // 8. Sync aggregated stats on the Course document
   await syncCourseStats(course._id);
 
-  // 9. Return populated response
+  // 9. Instrumentation (Save/Add Event)
+  trackEvent({
+    userId: req.user._id,
+    eventType: 'bookmark_save',
+    targetId: course._id,
+    targetType: 'course',
+    metadata: { platform: course.platform }
+  });
+
+  // 10. Return populated response
   const populated = await completed.populate({
     path: 'course',
     select: 'title platform url tags level averageRating totalCompletions image',
@@ -303,22 +313,8 @@ const uploadCertificate = async (req, res) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const getMyCompletedCourses = async (req, res) => {
-  const completedCourses = await CompletedCourse.find({ user: req.user._id })
-    .populate({
-      path: 'course',
-      select: 'title platform url tags level averageRating totalCompletions totalRatings image',
-    })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const data = completedCourses.map(item => formatCourse(item, req.user._id));
-
-  return res.status(200).json({
-    success: true,
-    version: API_VERSION,
-    count: data.length,
-    data,
-  });
+  // Use paginated logic internally to ensure consistency and limit fetch size
+  return getMyCompletedCoursesPaginated(req, res);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -417,6 +413,14 @@ const likeCompletion = async (req, res) => {
     userService.trackUserInterests(req.user._id, updated.course.tags, 'like');
   }
 
+  // Activity Log
+  trackEvent({
+    userId: req.user._id,
+    eventType: 'bookmark_save', // Liking is a form of saving/interest
+    targetId: completion._id,
+    targetType: 'post'
+  });
+
   return res.status(200).json({
     success: true,
     data: updated,
@@ -479,11 +483,23 @@ const unlikeCompletion = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const getRecentActivity = async (req, res) => {
   const { cursor, limit } = req.query;
+  const limitNum = limit ? parseInt(limit) : PAGINATION_LIMIT;
+
   const { posts, nextCursor } = await feedService.getSmartFeed(
     req.user._id, 
     cursor, 
-    limit ? parseInt(limit) : PAGINATION_LIMIT
+    limitNum
   );
+
+  // 1. Instrumentation (Feed Impression)
+  if (posts.length > 0) {
+    const postIds = posts.map(p => p._id || p.id);
+    trackEvent({
+      userId: req.user._id,
+      eventType: 'feed_impression',
+      metadata: { postIds, count: posts.length }
+    });
+  }
 
   return res.status(200).json({ posts, nextCursor });
 };
@@ -493,19 +509,8 @@ const getRecentActivity = async (req, res) => {
 // @access  Private
 // ─────────────────────────────────────────────────────────────────────────────
 const getUserCompletions = async (req, res) => {
-  const activity = await CompletedCourse.find({ user: req.params.userId, isPublic: true })
-    .populate('course', 'title platform url tags level averageRating totalCompletions image')
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const data = activity.map(item => formatCourse(item, req.user?._id));
-
-  return res.status(200).json({
-    success: true,
-    version: API_VERSION,
-    count: data.length,
-    data,
-  });
+  // Use paginated logic to prevent overfetching
+  return getUserCompletionsPaginated(req, res);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -530,6 +535,14 @@ const getCompletedCourseById = async (req, res) => {
   }
 
   const data = formatCourse(post, req.user?._id);
+
+  // 1. Instrumentation (View Event)
+  trackEvent({
+    userId: req.user?._id || req.user?.id,
+    eventType: 'course_open',
+    targetId: post._id,
+    targetType: 'post'
+  });
 
   return res.status(200).json({
     success: true,
@@ -556,6 +569,15 @@ const getPostById = async (req, res) => {
   }
 
   const data = formatCourse(post, req.user?._id);
+
+  // 1. Instrumentation (View Event)
+  trackEvent({
+    userId: req.user?._id || req.user?.id,
+    eventType: 'course_open',
+    targetId: post._id,
+    targetType: 'post'
+  });
+
   return res.json(data); // RAW RESPONSE
 };
 
@@ -649,6 +671,33 @@ const getUserCompletionsPaginated = async (req, res) => {
   });
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/completed/:id/share
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const shareCompletion = async (req, res) => {
+  try {
+    const updated = await CompletedCourse.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { shareCount: 1 } },
+      { new: true }
+    );
+
+    if (!updated) return res.status(404).json({ success: false, message: 'Post not found' });
+
+    trackEvent({
+      userId: req.user._id,
+      eventType: 'post_share',
+      targetId: req.params.id,
+      targetType: 'post'
+    });
+
+    return res.status(200).json({ success: true, shareCount: updated.shareCount });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to share' });
+  }
+};
+
 export { 
   addCompletedCourse,
   uploadCertificate,
@@ -657,6 +706,7 @@ export {
   deleteCompletedCourse,
   likeCompletion,
   unlikeCompletion,
+  shareCompletion, // Added
   getRecentActivity,
   getUserCompletions,
   getUserCompletionsPaginated,

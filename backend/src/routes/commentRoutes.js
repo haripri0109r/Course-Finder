@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { 
   addComment, 
   getComments, 
+  getReplies,
   toggleLikeComment 
 } from '../controllers/commentController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
@@ -13,6 +14,7 @@ router.use(authenticate);
 
 router.post('/', addComment);
 router.get('/:postId', getComments);
+router.get('/:commentId/replies', getReplies);
 router.post('/:id/like', toggleLikeComment);
 
 export default router;

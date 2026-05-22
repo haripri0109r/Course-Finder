@@ -3,6 +3,7 @@ import { CompletedCourse, ActivityEvent, User } from '../models/index.js';
 import { PAGINATION_LIMIT } from '../config/constants.js';
 import { formatCourse } from '../utils/formatter.js';
 import * as userService from './userService.js';
+import { trackEvent } from './activityService.js';
 
 /**
  * PRODUCTION-GRADE FEED SERVICE
@@ -118,6 +119,7 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
 
 
 
+    // 4. Execute Pipeline
     let items = [];
     try {
       items = await CompletedCourse.aggregate(pipeline);
@@ -126,28 +128,33 @@ export const getSmartFeed = async (userId, cursor = null, limit = PAGINATION_LIM
       items = [];
     }
 
-    // Fallback Logic: If aggregation is empty or fails, use a guaranteed simple query
+    // Fallback Logic: If aggregation is empty or fails
     if (items.length === 0) {
-      console.log("Empty feed result, executing fallback query...");
       items = await CompletedCourse.find({
         isPublic: true,
         ...(cursor && mongoose.Types.ObjectId.isValid(cursor) && { _id: { $lt: new mongoose.Types.ObjectId(cursor) } })
       })
-      .select('-likes') // Exclude heavy array
+      .select('-likes') 
       .sort({ _id: -1 })
       .limit(limit)
       .lean();
     }
 
-
-
-    // Populate post metadata (resiliently)
+    // 5. Populate User details (resiliently)
+    // Course details were already fetched via $lookup in the main pipeline.
+    // We only need to populate user details and potentially re-format.
     const populated = await CompletedCourse.populate(items, [
-      { path: 'user', select: 'name profilePicture' },
-      { path: 'course', select: 'title platform url tags level averageRating totalCompletions image' }
+      { path: 'user', select: 'name profilePicture' }
     ]);
 
-    const posts = populated.map(item => formatCourse(item, userId));
+    const posts = populated.map(item => {
+      // Map courseDetails back to course if it came from the aggregate pipeline
+      const finalItem = {
+        ...item,
+        course: item.courseDetails || item.course
+      };
+      return formatCourse(finalItem, userId);
+    });
 
     return {
       posts,
@@ -215,9 +222,9 @@ export const trackUniqueView = async (userId, postId) => {
 
   const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
 
-  // Check for recent view by this user
+  // Check for recent view by this user (Backward compatible check)
   const recentEvent = await ActivityEvent.findOne({
-    eventType: 'view',
+    eventType: { $in: ['view', 'course_open'] },
     userId,
     targetId: postId,
     createdAt: { $gte: sixHoursAgo }
@@ -240,9 +247,9 @@ export const trackUniqueView = async (userId, postId) => {
     throw new Error('Post not found');
   }
 
-  // Persist interaction
-  await ActivityEvent.create({
-    eventType: 'view',
+  // Persist interaction (Standardized to course_open)
+  trackEvent({
+    eventType: 'course_open',
     userId,
     targetId: postId,
     targetType: 'course_completion'

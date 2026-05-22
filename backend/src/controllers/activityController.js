@@ -1,7 +1,21 @@
 import { ActivityEvent } from '../models/index.js';
 import mongoose from 'mongoose';
 
-const VALID_EVENT_TYPES = ['impression', 'click', 'share', 'search', 'dwell', 'save', 'follow', 'view'];
+const VALID_EVENT_TYPES = [
+  'impression', 'click', 'share', 'search', 'dwell', 'save', 'follow', 'view', // Legacy
+  'feed_impression', 'course_open', 'bookmark_save', 'follow_user', 'post_share', 'search_query' // Canonical
+];
+
+// Mapping for incoming legacy events from clients
+const LEGACY_TO_CANONICAL = {
+  'impression': 'feed_impression',
+  'click': 'course_open',
+  'view': 'course_open',
+  'share': 'post_share',
+  'search': 'search_query',
+  'save': 'bookmark_save',
+  'follow': 'follow_user'
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // @route   POST /api/v1/activity/track
@@ -37,16 +51,19 @@ export const trackActivity = async (req, res) => {
         continue;
       }
       
+      // Standardize to canonical if it's a legacy write
+      const standardizedType = LEGACY_TO_CANONICAL[evt.eventType] || evt.eventType;
+
       const eventDoc = {
         userId,
-        eventType: evt.eventType,
+        eventType: standardizedType,
         targetId: evt.targetId || null,
         targetType: evt.targetType || 'unknown',
         metadata: evt.metadata || {},
         createdAt: new Date(),
       };
 
-      if (evt.eventType === 'impression') {
+      if (standardizedType === 'feed_impression') {
         impressionChecks.push(eventDoc);
       } else {
         validEvents.push(eventDoc);
@@ -63,7 +80,7 @@ export const trackActivity = async (req, res) => {
       if (targetIds.length > 0) {
         recentImpressions = await ActivityEvent.find({
           userId,
-          eventType: 'impression',
+          eventType: { $in: ['impression', 'feed_impression'] }, // Check both for deduplication safety
           targetId: { $in: targetIds },
           createdAt: { $gte: fiveMinsAgo }
         }).select('targetId').lean();

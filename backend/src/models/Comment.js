@@ -42,6 +42,10 @@ const commentSchema = new mongoose.Schema(
 commentSchema.index({ postId: 1, createdAt: -1 });
 commentSchema.index({ parentId: 1 });
 
+// Stable sorting indexes for pagination
+commentSchema.index({ postId: 1, parentId: 1, _id: -1 });
+commentSchema.index({ parentId: 1, _id: -1 });
+
 const Comment = mongoose.model('Comment', commentSchema);
 
 export default Comment;

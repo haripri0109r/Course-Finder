@@ -21,5 +21,8 @@ const bookmarkSchema = new mongoose.Schema(
 // Prevent duplicate bookmarks for the same course
 bookmarkSchema.index({ userId: 1, courseId: 1 }, { unique: true });
 
+// Sorting index for user bookmarks
+bookmarkSchema.index({ userId: 1, createdAt: -1 });
+
 const Bookmark = mongoose.model('Bookmark', bookmarkSchema);
 export default Bookmark;
