@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
@@ -315,6 +315,7 @@ export default function ProfileScreen({ route, navigation }) {
   const { user: currentUser } = useContext(AuthContext);
   const { colors, isDark, toggleTheme } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const targetUserId = route?.params?.userId;
   const isOwnProfile = !targetUserId || targetUserId === currentUser._id;
@@ -701,7 +702,7 @@ export default function ProfileScreen({ route, navigation }) {
             : renderTimelineItem
         }
         ListHeaderComponent={<ProfileHeader />}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 100 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />

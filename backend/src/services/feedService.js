@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { CompletedCourse, AnalyticsEvent, User } from '../models/index.js';
+import { CompletedCourse, ActivityEvent, User } from '../models/index.js';
 import { PAGINATION_LIMIT } from '../config/constants.js';
 import { formatCourse } from '../utils/formatter.js';
 import * as userService from './userService.js';
@@ -216,11 +216,11 @@ export const trackUniqueView = async (userId, postId) => {
   const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
 
   // Check for recent view by this user
-  const recentEvent = await AnalyticsEvent.findOne({
-    event: 'post_view',
+  const recentEvent = await ActivityEvent.findOne({
+    eventType: 'view',
     userId,
-    relatedPostId: postId,
-    timestamp: { $gte: sixHoursAgo }
+    targetId: postId,
+    createdAt: { $gte: sixHoursAgo }
   }).lean();
 
   if (recentEvent) {
@@ -241,11 +241,11 @@ export const trackUniqueView = async (userId, postId) => {
   }
 
   // Persist interaction
-  await AnalyticsEvent.create({
-    event: 'post_view',
+  await ActivityEvent.create({
+    eventType: 'view',
     userId,
-    relatedPostId: postId,
-    timestamp: new Date()
+    targetId: postId,
+    targetType: 'course_completion'
   });
 
   // Track Interest Based on Viewing Course (Async)

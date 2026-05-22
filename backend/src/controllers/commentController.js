@@ -37,6 +37,9 @@ export const addComment = async (req, res) => {
     parentId: parentId || null,
   });
 
+  // Atomically increment comment count
+  await CompletedCourse.findByIdAndUpdate(postId, { $inc: { commentCount: 1 } });
+
   const populated = await comment.populate('userId', 'name profilePicture');
 
   // 🔔 Trigger Notification
@@ -69,40 +72,55 @@ export const addComment = async (req, res) => {
   return res.status(201).json(populated);
 };
 
-// 📥 Get Threaded Comments (2-Pass Grouping)
+// 📥 Get Threaded Comments (Scalable Paginated)
 export const getComments = async (req, res) => {
-  const { postId } = req.params;
+  try {
+    const { postId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    const cursor = req.query.cursor;
 
-  const comments = await Comment.find({ postId })
-    .sort({ createdAt: -1 })
-    .populate('userId', 'name profilePicture')
-    .lean();
-
-  const map = {};
-  const roots = [];
-
-  // Pass 1: Map all comments
-  comments.forEach(c => {
-    map[c._id.toString()] = { ...c, replies: [] };
-  });
-
-  // Pass 2: Group by parent
-  comments.forEach(c => {
-    if (c.parentId) {
-      if (map[c.parentId.toString()]) {
-        map[c.parentId.toString()].replies.push(map[c._id.toString()]);
-      }
-    } else {
-      roots.push(map[c._id.toString()]);
+    const query = { postId, parentId: null };
+    if (cursor) {
+      query._id = { $lt: cursor };
     }
-  });
 
-  // Sort replies chronologically (Descending)
-  roots.forEach(c => {
-    c.replies.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  });
+    // 1. Fetch Root Comments (Cursor Paginated)
+    const rootComments = await Comment.find(query)
+      .sort({ _id: -1 })
+      .limit(limit)
+      .populate('userId', 'name profilePicture')
+      .lean();
 
-  return res.status(200).json(roots);
+    const nextCursor = rootComments.length === limit ? rootComments[rootComments.length - 1]._id : null;
+
+    // 2. Fetch Replies (Max 20 per root)
+    const formattedComments = await Promise.all(rootComments.map(async (root) => {
+      // Fetch 21 to determine if there are more
+      const replies = await Comment.find({ parentId: root._id })
+        .sort({ _id: -1 }) // Sort newest first (matches previous Descending logic)
+        .limit(21)
+        .populate('userId', 'name profilePicture')
+        .lean();
+
+      const hasMoreReplies = replies.length > 20;
+      if (hasMoreReplies) replies.pop(); // Remove the 21st item
+
+      return {
+        ...root,
+        replies,
+        hasMoreReplies
+      };
+    }));
+
+    return res.status(200).json({
+      success: true,
+      comments: formattedComments,
+      nextCursor
+    });
+  } catch (error) {
+    console.error("Get comments error:", error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch comments' });
+  }
 };
 
 // ❤️ Toggle Like (Atomic Pipeline)

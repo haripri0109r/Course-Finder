@@ -590,18 +590,79 @@ const getTrendingCompletions = async (req, res) => {
   return res.status(200).json(result);
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/completions/me/paginated
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const getMyCompletedCoursesPaginated = async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const cursor = req.query.cursor;
+
+  const query = { user: req.user._id };
+  if (cursor) query._id = { $lt: cursor };
+
+  const completedCourses = await CompletedCourse.find(query)
+    .populate({
+      path: 'course',
+      select: 'title platform url tags level averageRating totalCompletions totalRatings image',
+    })
+    .sort({ _id: -1 })
+    .limit(limit)
+    .lean();
+
+  const data = completedCourses.map(item => formatCourse(item, req.user._id));
+  const nextCursor = data.length === limit ? data[data.length - 1]._id : null;
+
+  return res.status(200).json({
+    success: true,
+    version: API_VERSION,
+    data,
+    nextCursor,
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   GET /api/users/:id/completions/paginated
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const getUserCompletionsPaginated = async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+  const cursor = req.query.cursor;
+
+  const query = { user: req.params.userId, isPublic: true };
+  if (cursor) query._id = { $lt: cursor };
+
+  const activity = await CompletedCourse.find(query)
+    .populate('course', 'title platform url tags level averageRating totalCompletions image')
+    .sort({ _id: -1 })
+    .limit(limit)
+    .lean();
+
+  const data = activity.map(item => formatCourse(item, req.user?._id));
+  const nextCursor = data.length === limit ? data[data.length - 1]._id : null;
+
+  return res.status(200).json({
+    success: true,
+    version: API_VERSION,
+    data,
+    nextCursor,
+  });
+};
+
 export { 
-  addCompletedCourse, 
+  addCompletedCourse,
   uploadCertificate,
-  getMyCompletedCourses, 
+  getMyCompletedCourses,
+  getMyCompletedCoursesPaginated,
   deleteCompletedCourse,
   likeCompletion,
   unlikeCompletion,
   getRecentActivity,
   getUserCompletions,
+  getUserCompletionsPaginated,
   getCompletedCourseById,
   getPostById,
   trackCertView,
   incrementViewCount,
-  getTrendingCompletions
+  getTrendingCompletions,
 };

@@ -62,6 +62,25 @@ const completedCourseSchema = new mongoose.Schema(
       default: 0,
       index: true,
     },
+    commentCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    bookmarkCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    shareCount: {
+      type: Number,
+      default: 0,
+    },
+    engagementScore: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
     viewsCount: {
       type: Number,
       default: 0,

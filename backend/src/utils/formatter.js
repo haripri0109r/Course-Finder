@@ -41,7 +41,14 @@ export const formatCourse = (item = {}, currentUserId = null) => {
     authorName: user.name || "Anonymous",
     userId: user._id?.toString() || "",
 
+    // Engagement & Feed 2.0 metrics
     likesCount: item.likesCount ?? likes.length,
+    commentCount: item.commentCount || 0,
+    bookmarkCount: item.bookmarkCount || 0,
+    shareCount: item.shareCount || 0,
+    viewsCount: item.viewsCount || 0,
+    engagementScore: item.engagementScore || 0,
+    
     isLikedByMe: item.isLikedByMe ?? (currentUserId ? likes.some(id => id.toString() === currentUserId.toString()) : false),
     duration: item.duration || course.duration || "N/A",
 

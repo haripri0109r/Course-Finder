@@ -27,8 +27,11 @@ export const bookmarkCompletion = async (req, res) => {
       throw err;
     }
 
-    // 3. Log Activity
-    await ActivityEvent.create({ userId, eventType: 'save', targetId: courseId });
+    // 3. Log Activity & Increment counter
+    await Promise.all([
+      ActivityEvent.create({ userId, eventType: 'save', targetId: courseId }),
+      CompletedCourse.findByIdAndUpdate(courseId, { $inc: { bookmarkCount: 1 } })
+    ]);
 
     return res.status(200).json({ success: true, message: 'Bookmark added successfully' });
   } catch (error) {
@@ -49,7 +52,10 @@ export const removeBookmark = async (req, res) => {
     const bookmark = await Bookmark.findOneAndDelete({ userId, courseId });
     
     if (bookmark) {
-      await ActivityEvent.findOneAndDelete({ userId, eventType: 'save', targetId: courseId });
+      await Promise.all([
+        ActivityEvent.findOneAndDelete({ userId, eventType: 'save', targetId: courseId }),
+        CompletedCourse.findByIdAndUpdate(courseId, { $inc: { bookmarkCount: -1 } })
+      ]);
     }
 
     return res.status(200).json({ success: true, message: 'Bookmark removed successfully' });

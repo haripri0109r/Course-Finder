@@ -67,3 +67,7 @@ GoogleService-Info.plist
 # Brain/local AI cache
 brain/
 
+.continue/
+
+GEMINI.md
+opencode.json

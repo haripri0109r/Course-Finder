@@ -12,7 +12,9 @@ import {
   trackCertView,
   incrementViewCount,
   getTrendingCompletions,
-  getPostById
+  getPostById,
+  getMyCompletedCoursesPaginated,
+  getUserCompletionsPaginated
 } from '../controllers/completedCourseController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { sanitizeImage } from '../middleware/sanitizeImage.js';
@@ -39,8 +41,10 @@ router.post('/completed',
 router.post('/completed/upload-certificate', uploadLimiter, upload.single('file'), uploadCertificate);
 router.post('/completed/analytics/cert-view', trackCertView);
 router.get('/completed/me', cacheHeaders, getMyCompletedCourses);
+router.get('/completions/me/paginated', cacheHeaders, getMyCompletedCoursesPaginated);
 router.get('/completed/trending', getTrendingCompletions);
 router.get('/completed/user/:userId', getUserCompletions);
+router.get('/users/:userId/completions/paginated', getUserCompletionsPaginated);
 router.get('/completed/:id', getCompletedCourseById);
 router.delete('/completed/:id', deleteCompletedCourse);
 
