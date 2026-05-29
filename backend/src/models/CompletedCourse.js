@@ -106,6 +106,26 @@ const completedCourseSchema = new mongoose.Schema(
       default: [],
       index: true,
     },
+    // Denormalized Course Metadata for High-Performance Retrieval
+    courseTags: {
+      type: [String],
+      default: [],
+      index: true, // Crucial for interest retrieval
+    },
+    coursePlatform: {
+      type: String,
+      index: true,
+    },
+    courseRating: {
+      type: Number,
+      default: 0,
+    },
+    courseCompletions: {
+      type: Number,
+      default: 0,
+    },
+    courseTitle: String,
+    courseImage: String,
   },
   {
     timestamps: true,
@@ -116,11 +136,13 @@ const completedCourseSchema = new mongoose.Schema(
 completedCourseSchema.index({ user: 1, course: 1 }, { unique: true });
 
 // ─── Performance Indexes ──────────────────────────────────────────────────────
-completedCourseSchema.index({ createdAt: -1 });              // Global Feed Sorting
-completedCourseSchema.index({ viewsCount: -1 });             // Trending Ranking
-completedCourseSchema.index({ user: 1, createdAt: -1 });     // User Profile Feed Sorting (Compound)
-completedCourseSchema.index({ course: 1 });                  // Course Statistics / Lookup
-completedCourseSchema.index({ isPublic: 1, createdAt: -1 }); // Optimized Public Feed Index
+completedCourseSchema.index({ createdAt: -1 });              
+completedCourseSchema.index({ viewsCount: -1 });             
+completedCourseSchema.index({ user: 1, createdAt: -1 });     
+completedCourseSchema.index({ course: 1 });                  
+completedCourseSchema.index({ isPublic: 1, finalFeedScore: -1, createdAt: -1, _id: -1 }); 
+completedCourseSchema.index({ isPublic: 1, courseTags: 1, createdAt: -1 }); // Optimized for interest retrieval
+completedCourseSchema.index({ isPublic: 1, courseRating: -1, viewsCount: -1 }); // Optimized for deterministic discovery
 
 // ─── After saving, update the Course's averageRating + totalRatings ───────────
 completedCourseSchema.post('save', async function () {

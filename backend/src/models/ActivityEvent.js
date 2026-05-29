@@ -19,6 +19,8 @@ const activityEventSchema = new mongoose.Schema(
         'follow_user', 
         'post_share', 
         'search_query',
+        'comment',
+        'course_completion',
         'hide_post',
         'not_interested',
         'mute_user',

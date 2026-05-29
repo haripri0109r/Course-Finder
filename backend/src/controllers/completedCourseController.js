@@ -225,6 +225,13 @@ const addCompletedCourse = async (req, res) => {
     description: finalDescription,
     learnings: finalLearnings,
     tags: finalTags,
+    // Denormalized snapshots for retrieval performance
+    courseTags: course.tags || [],
+    coursePlatform: course.platform,
+    courseRating: course.averageRating || 0,
+    courseCompletions: course.totalCompletions || 0,
+    courseTitle: course.title,
+    courseImage: course.image
   });
 
   // 8. Sync aggregated stats on the Course document
@@ -237,6 +244,13 @@ const addCompletedCourse = async (req, res) => {
     targetId: course._id,
     targetType: 'course',
     metadata: { platform: course.platform }
+  });
+
+  trackEvent({
+    userId: req.user._id,
+    eventType: 'course_completion',
+    targetId: completed._id,
+    targetType: 'post'
   });
 
   // 10. Return populated response

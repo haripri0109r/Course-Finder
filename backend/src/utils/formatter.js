@@ -22,15 +22,21 @@ export const formatCourse = (item = {}, currentUserId = null) => {
   const user = item.user || {};
   const likes = Array.isArray(item.likes) ? item.likes : [];
 
+  const title = course.title || item.courseTitle || "Untitled Course";
+  const image = isValidUrl(course.image) ? course.image : (isValidUrl(item.courseImage) ? item.courseImage : DEFAULT_IMAGE);
+  const platform = course.platform || item.coursePlatform || "Unknown";
+  const tags = (Array.isArray(item.tags) && item.tags.length > 0) ? item.tags : 
+               ((Array.isArray(item.courseTags) && item.courseTags.length > 0) ? item.courseTags : 
+               (Array.isArray(course.tags) ? course.tags : []));
+
   return {
     version: API_VERSION,
     _id: item._id, // Required for frontend FlatList keyExtractor
     id: item._id?.toString() || "",
-    courseId: course._id?.toString() || "",
-    title: course.title || "Untitled Course",
-    // Defensive URL check:
-    image: isValidUrl(course.image) ? course.image : DEFAULT_IMAGE,
-    platform: course.platform || "Unknown",
+    courseId: course._id?.toString() || item.course?.toString() || "",
+    title,
+    image,
+    platform,
     url: course.url || "",
     createdAt: item.createdAt || new Date(),
 
@@ -39,7 +45,7 @@ export const formatCourse = (item = {}, currentUserId = null) => {
     review: item.review ?? "",
     // User context
     authorName: user.name || "Anonymous",
-    userId: user._id?.toString() || "",
+    userId: user._id?.toString() || item.user?.toString() || "",
 
     // Engagement & Feed 2.0 metrics
     likesCount: item.likesCount ?? likes.length,
@@ -55,7 +61,8 @@ export const formatCourse = (item = {}, currentUserId = null) => {
     // Learning Post Metadata
     description: item.description || "",
     learnings: Array.isArray(item.learnings) ? item.learnings : [],
-    tags: Array.isArray(item.tags) ? item.tags : [],
+    tags,
+    source: item.source || "unknown",
     // likes: likes, // REMOVED to slim payload
 
     certificateUrl: item.certificateUrl || '',

@@ -11,3 +11,8 @@ export { default as Bookmark } from './Bookmark.js';
 export { default as PushToken } from './PushToken.js';
 export { default as Session } from './Session.js';
 export { default as ActivityEvent } from './ActivityEvent.js';
+export { default as UserPersonalization } from './UserPersonalization.js';
+export { default as TrendingPost } from './TrendingPost.js';
+export { default as CacheControl } from './CacheControl.js';
+export { default as FeedSession } from './FeedSession.js';
+export { default as SyncJob } from './SyncJob.js';

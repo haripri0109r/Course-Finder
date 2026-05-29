@@ -40,6 +40,14 @@ export const addComment = async (req, res) => {
   // Atomically increment comment count
   await CompletedCourse.findByIdAndUpdate(postId, { $inc: { commentCount: 1 } });
 
+  // Activity Log
+  trackEvent({
+    userId: req.user._id,
+    eventType: 'comment',
+    targetId: postId,
+    targetType: 'post'
+  });
+
   const populated = await comment.populate('userId', 'name profilePicture');
 
   // 🔔 Trigger Notification

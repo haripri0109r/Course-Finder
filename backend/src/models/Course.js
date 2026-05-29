@@ -77,6 +77,28 @@ courseSchema.index({ platform: 1 });                  // filter by platform
 courseSchema.index({ averageRating: -1 });            // sort by top-rated
 courseSchema.index({ totalCompletions: -1 });         // sort by popularity
 
+// ─── Denormalization Sync Hooks ──────────────────────────────────────────────
+const syncToCompletedCourses = (doc) => {
+  if (!doc) return;
+  // Non-blocking asynchronous sync to prevent write storms on hot paths
+  setImmediate(async () => {
+    try {
+      const SyncJob = mongoose.model('SyncJob');
+      await SyncJob.create({ courseId: doc._id });
+    } catch (error) {
+      console.error('[Course Model] Background denormalization queue failed:', error.message);
+    }
+  });
+};
+
+courseSchema.post('save', function(doc) {
+  syncToCompletedCourses(doc);
+});
+
+courseSchema.post('findOneAndUpdate', function(doc) {
+  syncToCompletedCourses(doc);
+});
+
 // ─── Clean output ─────────────────────────────────────────────────────────────
 courseSchema.set('toJSON', {
   transform: (_doc, ret) => {

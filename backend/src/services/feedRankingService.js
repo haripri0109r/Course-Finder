@@ -13,174 +13,133 @@ export const RANKING_CONSTANTS = {
     QUALITY_METADATA: 5,
     SOCIAL_FOLLOW: 30,
     SOCIAL_AFFINITY: 15,
-    INTEREST_MATCH: 10,
+    INTEREST_ST_MULT: 15, // Multiplier for short-term match
+    INTEREST_LT_MULT: 8,  // Multiplier for long-term match
     DISCOVERY_BOOST: 12,
-    RECENCY_BOOST: 40 // High max boost for fresh content
+    RECENCY_BOOST: 40,
   },
   FATIGUE: {
-    CREATOR_PENALTY_STEP: 0.3, // Progressive penalty (1.0 -> 0.7 -> 0.4 -> 0.1)
-    COURSE_PENALTY: 0.5       // Penalty if same course repeated
+    CREATOR_PENALTY: 15, // Penalty if creator in seenCreators
+    COURSE_PENALTY: 25,
+    TOPIC_PENALTY: 10   // Per matching seenTopic
+  },
+  SOURCE_BOOSTS: {
+    follow: 30,
+    affinity: 20,
+    interest_st: 25,
+    interest_lt: 15,
+    trending: 10,
+    discovery: 5
   }
 };
 
 /**
- * Generates the modular ranking aggregation pipeline.
+ * PRODUCTION-GRADE RE-RANKING ENGINE
+ * Features: Source Attribution Blending, Dual-Interest Weighting, Deterministic Fatigue.
+ * @param {Object[]} candidates - Array of CompletedCourse docs with .sources array.
+ * @param {Object} context
  */
-export const getFeedRankingPipeline = (userId, followingIds, userTags, affinityIds = [], discoveryMode = false) => {
-  return [
-    // 1. RECENCY SCORE (Time Decay)
-    {
-      $addFields: {
-        hoursSince: {
-          $divide: [{ $subtract: ["$$NOW", "$createdAt"] }, 3600000]
-        }
-      }
-    },
-    {
-      $addFields: {
-        recencyBoost: {
-          $switch: {
-            branches: [
-              { case: { $lte: ["$hoursSince", 1] }, then: RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST },
-              { case: { $lte: ["$hoursSince", 6] }, then: { $multiply: [RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST, 0.75] } },
-              { case: { $lte: ["$hoursSince", 12] }, then: { $multiply: [RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST, 0.5] } },
-              { case: { $lte: ["$hoursSince", 24] }, then: { $multiply: [RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST, 0.25] } },
-              { case: { $lte: ["$hoursSince", 72] }, then: { $multiply: [RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST, 0.1] } }
-            ],
-            default: 0
-          }
-        }
-      }
-    },
+export const rankCandidates = (candidates, {
+  followingIds = [],
+  interests = [],
+  shortTermInterests = [],
+  affinityScores = [],
+  seenCreators = [], // Session context for fatigue
+  seenCourses = [],
+  seenTopics = []
+}) => {
+  const interestMap = new Map(interests.map(i => [i.topic, i.score]));
+  const stInterestMap = new Map(shortTermInterests.map(i => [i.topic, i.score]));
+  const affinityMap = new Map(affinityScores.map(a => [a.creatorId.toString(), a.score]));
+  const followingSet = new Set(followingIds.map(id => id.toString()));
 
-    // 2. ENGAGEMENT SCORE (Weighted + Logarithmic Normalization)
-    {
-      $addFields: {
-        rawEngagement: {
-          $add: [
-            { $multiply: [{ $ifNull: ["$likesCount", 0] }, ENGAGEMENT_WEIGHTS.LIKE] },
-            { $multiply: [{ $ifNull: ["$commentCount", 0] }, ENGAGEMENT_WEIGHTS.COMMENT] },
-            { $multiply: [{ $ifNull: ["$bookmarkCount", 0] }, ENGAGEMENT_WEIGHTS.BOOKMARK] },
-            { $multiply: [{ $ifNull: ["$shareCount", 0] }, ENGAGEMENT_WEIGHTS.SHARE] },
-            { $multiply: [{ $ifNull: ["$viewsCount", 0] }, ENGAGEMENT_WEIGHTS.VIEW] }
-          ]
-        }
-      }
-    },
-    {
-      $addFields: {
-        // Engagement = log10(raw + 1) * multiplier to keep it in a healthy range
-        engagementScore: {
-          $multiply: [
-            { $log10: { $add: ["$rawEngagement", 1] } },
-            10
-          ]
-        }
-      }
-    },
+  const now = Date.now();
 
-    // 3. SOCIAL SCORE
-    {
-      $addFields: {
-        isFollowed: { $in: ["$user", followingIds] },
-        hasAffinity: { $in: ["$user", affinityIds] }
-      }
-    },
-    {
-      $addFields: {
-        socialScore: {
-          $add: [
-            { $cond: ["$isFollowed", RANKING_CONSTANTS.WEIGHTS.SOCIAL_FOLLOW, 0] },
-            { $cond: ["$hasAffinity", RANKING_CONSTANTS.WEIGHTS.SOCIAL_AFFINITY, 0] }
-          ]
-        }
-      }
-    },
+  const ranked = candidates.map(post => {
+    const courseDetails = post.courseDetails || post.course || {};
+    const tags = post.courseTags || courseDetails.tags || [];
+    const creatorIdStr = post.user?.toString();
+    const courseIdStr = (courseDetails._id || post.course)?.toString();
 
-    // 4. QUALITY SCORE
-    {
-      $addFields: {
-        courseRating: { $ifNull: ["$courseDetails.averageRating", 0] },
-        courseCompletions: { $ifNull: ["$courseDetails.totalCompletions", 0] },
-        hasGoodMetadata: {
-          $and: [
-            { $ne: ["$courseDetails.title", null] },
-            { $ne: ["$courseDetails.image", null] },
-            { $ne: ["$courseDetails.image", ""] },
-            { $ne: ["$courseDetails.image", "broken"] }
-          ]
-        }
-      }
-    },
-    {
-      $addFields: {
-        qualityScore: {
-          $add: [
-            RANKING_CONSTANTS.WEIGHTS.QUALITY_BASE,
-            { $multiply: ["$courseRating", RANKING_CONSTANTS.WEIGHTS.QUALITY_RATING] },
-            { $multiply: ["$courseCompletions", RANKING_CONSTANTS.WEIGHTS.QUALITY_COMPLETIONS] },
-            { $cond: ["$hasGoodMetadata", RANKING_CONSTANTS.WEIGHTS.QUALITY_METADATA, -15] }
-          ]
-        }
-      }
-    },
+    // 1. RECENCY (Additive)
+    const hoursSince = (now - new Date(post.createdAt).getTime()) / 3600000;
+    let recencyBoost = 0;
+    if (hoursSince <= 1) recencyBoost = RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST;
+    else if (hoursSince <= 6) recencyBoost = RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST * 0.75;
+    else if (hoursSince <= 12) recencyBoost = RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST * 0.5;
+    else if (hoursSince <= 24) recencyBoost = RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST * 0.25;
+    else if (hoursSince <= 72) recencyBoost = RANKING_CONSTANTS.WEIGHTS.RECENCY_BOOST * 0.1;
 
-    // 5. INTEREST AFFINITY SCORE
-    {
-      $addFields: {
-        courseTags: { $ifNull: ["$courseDetails.tags", []] },
-        courseTitle: { $toLower: { $ifNull: ["$courseDetails.title", ""] } }
-      }
-    },
-    {
-      $addFields: {
-        matchingTagsCount: {
-          $size: { $setIntersection: ["$courseTags", userTags] }
-        }
-        // Potential future: keyword matching in title
-      }
-    },
-    {
-      $addFields: {
-        interestScore: {
-          $multiply: ["$matchingTagsCount", RANKING_CONSTANTS.WEIGHTS.INTEREST_MATCH]
-        }
-      }
-    },
+    // 2. ENGAGEMENT (Log-Normalized)
+    const rawEngagement = 
+      ((post.likesCount || 0) * ENGAGEMENT_WEIGHTS.LIKE) +
+      ((post.commentCount || 0) * ENGAGEMENT_WEIGHTS.COMMENT) +
+      ((post.bookmarkCount || 0) * ENGAGEMENT_WEIGHTS.BOOKMARK) +
+      ((post.shareCount || 0) * ENGAGEMENT_WEIGHTS.SHARE) +
+      ((post.viewsCount || 0) * ENGAGEMENT_WEIGHTS.VIEW);
+    
+    const engagementScore = Math.log10(rawEngagement + 1) * 10;
 
-    // 6. DISCOVERY / EXPLORATION BLEND (DETERMINISTIC)
-    {
-      $addFields: {
-        discoveryScore: {
-          $cond: [
-            discoveryMode,
-            { 
-              $add: [
-                RANKING_CONSTANTS.WEIGHTS.DISCOVERY_BOOST,
-                // Deterministic jitter based on popularity to maintain ordering
-                { $multiply: [{ $log10: { $add: ["$courseDetails.totalCompletions", 1] } }, 2] }
-              ]
-            },
-            0
-          ]
-        }
-      }
-    },
+    // 3. SOCIAL (Following + Affinity)
+    const isFollowed = followingSet.has(creatorIdStr);
+    const affinityScoreVal = affinityMap.get(creatorIdStr) || 0;
+    const socialScore = 
+      (isFollowed ? RANKING_CONSTANTS.WEIGHTS.SOCIAL_FOLLOW : 0) +
+      (affinityScoreVal > 0 ? affinityScoreVal : 0);
 
-    // 7. FINAL SCORE AGGREGATION (ADDITIVE)
-    {
-      $addFields: {
-        finalFeedScore: {
-          $add: [
-            "$engagementScore",
-            "$socialScore",
-            "$qualityScore",
-            "$interestScore",
-            "$discoveryScore",
-            "$recencyBoost"
-          ]
-        }
+    // 4. QUALITY (Denormalized or Fetched)
+    const rating = post.courseRating || courseDetails.averageRating || 0;
+    const completions = post.courseCompletions || courseDetails.totalCompletions || 0;
+    const hasGoodMetadata = !!(post.courseTitle && (post.courseImage || courseDetails.image));
+    
+    const qualityScore = RANKING_CONSTANTS.WEIGHTS.QUALITY_BASE +
+      (rating * RANKING_CONSTANTS.WEIGHTS.QUALITY_RATING) +
+      (completions * RANKING_CONSTANTS.WEIGHTS.QUALITY_COMPLETIONS) +
+      (hasGoodMetadata ? 0 : -25);
+
+    // 5. INTEREST Match (Short-term vs Long-term)
+    let interestScore = 0;
+    for (const tag of tags) {
+      if (stInterestMap.has(tag)) {
+        interestScore += (stInterestMap.get(tag) * RANKING_CONSTANTS.WEIGHTS.INTEREST_ST_MULT);
+      }
+      if (interestMap.has(tag)) {
+        interestScore += (interestMap.get(tag) * RANKING_CONSTANTS.WEIGHTS.INTEREST_LT_MULT);
       }
     }
-  ];
+
+    // 6. SOURCE Blending (Preserves attribution)
+    let sourceScore = 0;
+    post.sources.forEach(src => {
+      sourceScore += (RANKING_CONSTANTS.SOURCE_BOOSTS[src] || 0);
+    });
+
+    // 7. DETERMINISTIC FATIGUE
+    let fatiguePenalty = 0;
+    if (seenCreators.includes(creatorIdStr)) fatiguePenalty += RANKING_CONSTANTS.FATIGUE.CREATOR_PENALTY;
+    if (seenCourses.includes(courseIdStr)) fatiguePenalty += RANKING_CONSTANTS.FATIGUE.COURSE_PENALTY;
+    
+    const matchingSeenTopics = tags.filter(t => seenTopics.includes(t));
+    fatiguePenalty += (matchingSeenTopics.length * RANKING_CONSTANTS.FATIGUE.TOPIC_PENALTY);
+
+    // FINAL DETERMINISTIC SCORE
+    const finalFeedScore = engagementScore + socialScore + qualityScore + interestScore + sourceScore + recencyBoost - fatiguePenalty;
+
+    return {
+      ...post,
+      finalFeedScore,
+      engagementScore
+    };
+  });
+
+  // Mathematically Stable Sort: Score DESC, then Date DESC, then ID DESC
+  ranked.sort((a, b) => {
+    if (b.finalFeedScore !== a.finalFeedScore) return b.finalFeedScore - a.finalFeedScore;
+    const dateA = new Date(a.createdAt).getTime();
+    const dateB = new Date(b.createdAt).getTime();
+    if (dateB !== dateA) return dateB - dateA;
+    return b._id.toString().localeCompare(a._id.toString());
+  });
+  
+  return ranked;
 };
