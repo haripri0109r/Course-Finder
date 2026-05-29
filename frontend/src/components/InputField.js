@@ -8,6 +8,7 @@ import {
   Platform,
   Animated,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { RADIUS, SPACING, FONTS } from '../utils/theme';
 import { useAppTheme } from '../context/ThemeContext';
 
@@ -16,6 +17,7 @@ export default function InputField({
   error,
   containerStyle,
   icon,
+  iconName,
   suffix,
   onSuffixPress,
   ...rest
@@ -58,6 +60,31 @@ export default function InputField({
     return { color: colors.textSecondary };
   }, [error, isFocused, colors]);
 
+  const renderIcon = () => {
+    if (iconName) {
+      return <Ionicons name={iconName} size={18} color={colors.textMuted} style={styles.icon} />;
+    }
+    if (icon) {
+      return <Text style={[styles.iconEmoji, { color: colors.textMuted }]}>{icon}</Text>;
+    }
+    return null;
+  };
+
+  const renderSuffix = () => {
+    if (!suffix) return null;
+    // Check if suffix is an Ionicons name (contains letters/numbers/hyphens, no emoji)
+    const isIconName = /^[a-z]/.test(suffix);
+    return (
+      <TouchableOpacity onPress={onSuffixPress} style={styles.suffixBtn} activeOpacity={0.7}>
+        {isIconName ? (
+          <Ionicons name={suffix} size={20} color={colors.textSecondary} />
+        ) : (
+          <Text style={[styles.suffixText, { color: colors.textSecondary }]}>{suffix}</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label ? <Text style={[styles.label, labelStyle]}>{label}</Text> : null}
@@ -69,7 +96,7 @@ export default function InputField({
           error && { borderColor: colors.danger },
         ]}
       >
-        {icon ? <Text style={[styles.icon, { color: colors.textMuted }]}>{icon}</Text> : null}
+        {renderIcon()}
 
         <TextInput
           style={[styles.input, { color: colors.textPrimary, outlineStyle: 'none' }, rest.multiline && styles.textArea]}
@@ -84,11 +111,7 @@ export default function InputField({
           {...rest}
         />
 
-        {suffix ? (
-          <TouchableOpacity onPress={onSuffixPress} style={styles.suffixBtn} activeOpacity={0.7}>
-            <Text style={[styles.suffixText, { color: colors.textSecondary }]}>{suffix}</Text>
-          </TouchableOpacity>
-        ) : null}
+        {renderSuffix()}
       </Animated.View>
 
       {error ? (
@@ -118,6 +141,9 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   icon: {
+    marginRight: SPACING.md,
+  },
+  iconEmoji: {
     fontSize: 16,
     marginRight: SPACING.md,
     opacity: 0.85,

@@ -38,6 +38,8 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: SPACING.md,
     paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center',
     borderRadius: RADIUS.full,
     borderWidth: 1,
     marginRight: SPACING.sm,

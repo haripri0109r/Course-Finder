@@ -1,26 +1,32 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { COLORS, RADIUS, SPACING, SHADOW } from '../utils/theme';
+import { RADIUS, SPACING, SHADOW } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 export default function Card({ children, style, padded = true, elevated = false }) {
+  const { colors } = useAppTheme();
+  const s = useMemo(() => createStyles(colors), [colors]);
+
   return (
-    <View style={[styles.card, padded && styles.padded, elevated && styles.elevated, style]}>
+    <View style={[s.card, padded && s.padded, elevated && s.elevated, style]}>
       {children}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.lg,
-  },
-  padded: {
-    padding: SPACING.md,
-  },
-  elevated: {
-    ...SHADOW.xs,
-  },
-});
+function createStyles(c) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: RADIUS.lg,
+    },
+    padded: {
+      padding: SPACING.md,
+    },
+    elevated: {
+      ...SHADOW.xs,
+    },
+  });
+}

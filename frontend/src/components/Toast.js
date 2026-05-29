@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Text, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { COLORS, RADIUS, SPACING, SHADOW, FONTS } from '../utils/theme';
+import { RADIUS, SPACING, SHADOW } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 let toastRef = null;
 
@@ -10,13 +11,14 @@ export function setToastRef(ref) {
 
 export const showToast = (data) => {
   if (!toastRef) {
-    console.log("⚠️ Toast not ready yet");
+    console.log("Toast not ready yet");
     return;
   }
   toastRef.show(data);
 };
 
 export default function Toast() {
+  const { colors } = useAppTheme();
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const [visible, setVisible] = useState(false);
@@ -26,15 +28,13 @@ export default function Toast() {
   const timer = useRef(null);
 
   useEffect(() => {
-    console.log("✅ Toast mounted");
-    
     setToastRef({
       show: (data) => {
         setTitle(data.title || '');
         setMessage(data.message || '');
         setToastType(data.type || 'info');
         setVisible(true);
-        
+
         Animated.parallel([
           Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }),
           Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
@@ -57,9 +57,9 @@ export default function Toast() {
   };
 
   const bg = {
-    success: COLORS.secondary,
-    error: '#EF4444',
-    info: COLORS.primary,
+    success: colors.success,
+    error: colors.danger,
+    info: colors.accent,
     warning: '#F59E0B',
   };
 
@@ -103,14 +103,14 @@ const styles = StyleSheet.create({
     marginRight: SPACING.sm,
   },
   title: {
-    color: '#fff', 
-    fontWeight: '800', 
+    color: '#fff',
+    fontWeight: '800',
     fontSize: 15,
     marginBottom: 2,
   },
-  message: { 
-    color: '#fff', 
-    fontWeight: '500', 
+  message: {
+    color: '#fff',
+    fontWeight: '500',
     fontSize: 13,
   },
   dismiss: { color: '#fff', fontSize: 16, fontWeight: '900', opacity: 0.8 },

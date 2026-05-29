@@ -3,14 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  SafeAreaView,
   StatusBar,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  TouchableOpacity,
+  Switch,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 import InputField from '../components/InputField';
@@ -95,7 +96,7 @@ export default function ProfileEditScreen({ navigation }) {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           {picUri ? (
             <View style={[styles.avatarPreview, { borderColor: colors.border, backgroundColor: colors.surfaceSubtle }]}>
               <Image source={{ uri: picUri }} style={styles.avatarImg} />
@@ -150,7 +151,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
   },
-  back: { padding: SPACING.sm },
+  back: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { ...FONTS.h3, fontWeight: '700' },
   scroll: { padding: SPACING.xl, paddingBottom: 120 },
   avatarPreview: {

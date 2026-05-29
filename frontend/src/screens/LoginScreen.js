@@ -1,16 +1,18 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  StatusBar,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
   Switch,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { AuthContext } from '../context/AuthContext';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
@@ -21,6 +23,7 @@ import { showToast } from '../components/Toast';
 export default function LoginScreen({ navigation }) {
   const { login } = useContext(AuthContext);
   const { colors, isDark } = useAppTheme();
+  const s = useMemo(() => createStyles(colors), [colors]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -55,19 +58,21 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.surface }]}>
+    <SafeAreaView style={s.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <View style={[styles.logoCircle, { backgroundColor: colors.primary }]}>
-              <Text style={styles.logoEmoji}>🎓</Text>
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+          {/* Logo + Header */}
+          <Animated.View entering={FadeInDown.duration(400)} style={s.header}>
+            <View style={s.logoCircle}>
+              <Ionicons name="school" size={32} color={colors.white} />
             </View>
-            <Text style={[styles.welcomeText, { color: colors.textPrimary }]}>Welcome back</Text>
-            <Text style={[styles.subText, { color: colors.textSecondary }]}>Sign in to continue your learning journey.</Text>
-          </View>
+            <Text style={s.welcomeText}>Welcome back</Text>
+            <Text style={s.subText}>Sign in to continue your learning journey</Text>
+          </Animated.View>
 
-          <View style={styles.formSection}>
+          {/* Form */}
+          <Animated.View entering={FadeInUp.delay(150).duration(400)} style={s.formSection}>
             <InputField
               label="Email Address"
               placeholder="name@example.com"
@@ -76,7 +81,7 @@ export default function LoginScreen({ navigation }) {
               autoCapitalize="none"
               keyboardType="email-address"
               error={errors.email}
-              icon="✉️"
+              iconName="mail-outline"
             />
 
             <InputField
@@ -86,110 +91,125 @@ export default function LoginScreen({ navigation }) {
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
               error={errors.password}
-              icon="🔒"
-              suffix={showPassword ? "👁️" : "👁️‍🗨️"}
+              iconName="lock-closed-outline"
+              suffix={showPassword ? 'eye-outline' : 'eye-off-outline'}
               onSuffixPress={() => setShowPassword(!showPassword)}
             />
 
-            <View style={styles.rememberRow}>
-              <Text style={[styles.rememberLabel, { color: colors.textSecondary }]}>Remember me</Text>
-              <Switch value={rememberMe} onValueChange={setRememberMe} trackColor={{ false: colors.border, true: colors.accentLight }} thumbColor={rememberMe ? colors.accent : colors.surface} />
+            <View style={s.rememberRow}>
+              <Text style={s.rememberLabel}>Remember me</Text>
+              <Switch
+                value={rememberMe}
+                onValueChange={setRememberMe}
+                trackColor={{ false: colors.border, true: colors.accentLight }}
+                thumbColor={rememberMe ? colors.accent : colors.surface}
+              />
             </View>
 
-            <TouchableOpacity style={styles.forgotBtn} onPress={() => navigation.navigate('ForgotPassword')}>
-              <Text style={[styles.forgotText, { color: colors.accent }]}>Forgot password?</Text>
+            <TouchableOpacity style={s.forgotBtn} onPress={() => navigation.navigate('ForgotPassword')}>
+              <Text style={s.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
 
-            <PrimaryButton 
-              title="Sign In" 
-              onPress={handleLogin} 
-              loading={loading} 
-              fullWidth 
-              style={styles.signInBtn}
+            <PrimaryButton
+              title="Sign In"
+              onPress={handleLogin}
+              loading={loading}
+              fullWidth
+              style={s.signInBtn}
             />
-          </View>
+          </Animated.View>
 
-          <View style={styles.footer}>
-            <Text style={[styles.footerLabel, { color: colors.textSecondary }]}>Don't have an account? </Text>
+          {/* Footer */}
+          <Animated.View entering={FadeInUp.delay(300).duration(300)} style={s.footer}>
+            <Text style={s.footerLabel}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={[styles.footerLink, { color: colors.accent }]}>Join now</Text>
+              <Text style={s.footerLink}>Join now</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  flex: { 
-    flex: 1 
-  },
-  scroll: { 
-    flexGrow: 1, 
-    paddingHorizontal: SPACING['2xl'], 
-    justifyContent: 'center', 
-    paddingVertical: 60 
-  },
-  header: { 
-    alignItems: 'center', 
-    marginBottom: SPACING['4xl'] 
-  },
-  logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: RADIUS.xl,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.xl,
-    ...SHADOW.md,
-  },
-  logoEmoji: { 
-    fontSize: 36 
-  },
-  welcomeText: {
-    ...FONTS.h1,
-    fontSize: 32,
-  },
-  subText: {
-    ...FONTS.body,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  rememberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm,
-    paddingVertical: SPACING.xs,
-  },
-  rememberLabel: { ...FONTS.body },
-  formSection: { 
-    width: '100%',
-  },
-  forgotBtn: { 
-    alignSelf: 'flex-end', 
-    marginBottom: SPACING.xl 
-  },
-  forgotText: {
-    ...FONTS.tiny,
-    fontWeight: '600',
-  },
-  signInBtn: { 
-    marginTop: SPACING.md 
-  },
-  footer: { 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
-    marginTop: SPACING['4xl'] 
-  },
-  footerLabel: {
-    ...FONTS.body,
-  },
-  footerLink: {
-    ...FONTS.bodyBold,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.surface,
+    },
+    flex: {
+      flex: 1,
+    },
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: SPACING.xl,
+      justifyContent: 'center',
+      paddingVertical: 60,
+    },
+    header: {
+      alignItems: 'center',
+      marginBottom: SPACING['4xl'],
+    },
+    logoCircle: {
+      width: 72,
+      height: 72,
+      borderRadius: RADIUS.xl,
+      backgroundColor: colors.accent,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: SPACING.xl,
+      ...SHADOW.md,
+    },
+    welcomeText: {
+      ...FONTS.h1,
+      fontSize: 28,
+      color: colors.textPrimary,
+    },
+    subText: {
+      ...FONTS.body,
+      color: colors.textSecondary,
+      marginTop: 8,
+      textAlign: 'center',
+    },
+    formSection: {
+      width: '100%',
+    },
+    rememberRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: SPACING.sm,
+      paddingVertical: SPACING.xs,
+    },
+    rememberLabel: {
+      ...FONTS.body,
+      color: colors.textSecondary,
+    },
+    forgotBtn: {
+      alignSelf: 'flex-end',
+      marginBottom: SPACING.xl,
+    },
+    forgotText: {
+      ...FONTS.caption,
+      color: colors.accent,
+      fontWeight: '600',
+    },
+    signInBtn: {
+      marginTop: SPACING.md,
+    },
+    footer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: SPACING['4xl'],
+    },
+    footerLabel: {
+      ...FONTS.body,
+      color: colors.textSecondary,
+    },
+    footerLink: {
+      ...FONTS.bodyBold,
+      color: colors.accent,
+    },
+  });
+}

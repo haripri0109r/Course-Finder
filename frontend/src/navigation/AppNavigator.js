@@ -3,8 +3,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, Platform, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SPACING, FONTS, LAYOUT } from '../utils/theme';
+// SafeAreaInsets handled by individual screens
+import { SPACING, FONTS } from '../utils/theme';
 import { useAppTheme } from '../context/ThemeContext';
 import FloatingTabBar from '../components/FloatingTabBar';
 import { ONBOARDING_STORAGE_KEY } from '../constants/onboarding';
@@ -28,19 +28,13 @@ const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
 function TabNavigator() {
-  const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
-  
-  // Global bottom padding for all tab screens to account for the floating tab bar.
-  // Calculation: Max of (safe area inset or min spacing) + tab bar height + floating offset + breathing room.
-  const bottomOffset = Math.max(insets.bottom, SPACING.sm) + LAYOUT.tabBarHeight + LAYOUT.floatingNavBottom + 16;
 
   return (
     <Tab.Navigator
       tabBar={(props) => <FloatingTabBar {...props} />}
       sceneContainerStyle={{
         backgroundColor: colors.background,
-        paddingBottom: bottomOffset,
       }}
       screenOptions={{
         headerShown: false,
@@ -50,7 +44,7 @@ function TabNavigator() {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: Platform.OS === 'ios' ? 98 : 90,
+          height: Platform.OS === 'ios' ? 100 : 88,
         },
       }}
     >

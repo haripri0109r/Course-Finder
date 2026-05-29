@@ -1,17 +1,18 @@
+import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
+  StyleSheet,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Image,
   Animated,
 } from 'react-native';
-import { useState, useEffect, useRef } from 'react';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +23,7 @@ import SectionHeader from '../components/SectionHeader';
 import Chip from '../components/Chip';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { showToast } from '../components/Toast';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import { useAppTheme } from '../context/ThemeContext';
 
 const PLATFORMS = ['Udemy', 'Coursera', 'YouTube', 'Other'];
@@ -40,6 +41,8 @@ const MAX_BYTES = 10 * 1024 * 1024;
 
 export default function AddCourseScreen({ navigation }) {
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [currentStep, setCurrentStep] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
 
@@ -365,7 +368,7 @@ export default function AddCourseScreen({ navigation }) {
               value={url}
               onChangeText={setUrl}
               error={errors.url}
-              icon="🔗"
+              iconName="link-outline"
             />
           </View>
         );
@@ -422,7 +425,7 @@ export default function AddCourseScreen({ navigation }) {
                       {providerBadge || platform || 'Other'}
                     </Text>
                     {generatedFallback && (
-                      <Text style={[styles.previewBadge, { backgroundColor: '#F59E0B', color: COLORS.white, borderColor: '#F59E0B' }]}>
+                      <Text style={[styles.previewBadge, { backgroundColor: '#F59E0B', color: colors.white, borderColor: '#F59E0B' }]}>
                         Auto-generated from URL
                       </Text>
                     )}
@@ -456,8 +459,8 @@ export default function AddCourseScreen({ navigation }) {
               ))}
             </View>
             {errors.platform ? <Text style={styles.fieldError}>{errors.platform}</Text> : null}
-            <InputField label="Estimated duration" placeholder="e.g. 12 hours" value={duration} onChangeText={setDuration} icon="⌛" />
-            <InputField label="Instructor / author" placeholder="e.g. Andrew Ng" value={author} onChangeText={setAuthor} icon="👤" />
+            <InputField label="Estimated duration" placeholder="e.g. 12 hours" value={duration} onChangeText={setDuration} iconName="time-outline" />
+            <InputField label="Instructor / author" placeholder="e.g. Andrew Ng" value={author} onChangeText={setAuthor} iconName="person-outline" />
             <InputField
               label="Description"
               placeholder="What is this course about?"
@@ -477,7 +480,7 @@ export default function AddCourseScreen({ navigation }) {
               placeholder="https://…"
               value={courseThumbnail}
               onChangeText={setCourseThumbnail}
-              icon="🖼️"
+              iconName="image-outline"
             />
             <View style={styles.uploadRow}>
               <PrimaryButton title="Photo library" onPress={pickThumbnailFromLibrary} variant="outline" style={{ flex: 1, marginRight: SPACING.sm }} />
@@ -502,7 +505,7 @@ export default function AddCourseScreen({ navigation }) {
               onPress={handlePickCertificateFile}
             >
               <View style={[styles.uploadIconCircle, { backgroundColor: colors.surface }]}>
-                <Text style={styles.uploadEmoji}>{certificateFile ? '🏆' : '📂'}</Text>
+                <Ionicons name={certificateFile ? 'trophy-outline' : 'cloud-upload-outline'} size={28} color={colors.textMuted} />
               </View>
               <Text style={[styles.uploadTitle, { color: colors.textPrimary }]}>
                 {certificateFile ? certificateFile.name : 'Upload certificate'}
@@ -529,7 +532,7 @@ export default function AddCourseScreen({ navigation }) {
               placeholder="react, system design, leadership"
               value={postTags}
               onChangeText={setPostTags}
-              icon="🏷️"
+              iconName="pricetag-outline"
             />
             <InputField
               label="Completion progress (0–100)"
@@ -538,13 +541,17 @@ export default function AddCourseScreen({ navigation }) {
               onChangeText={setProgressPercent}
               keyboardType="number-pad"
               error={errors.progress}
-              icon="📊"
+              iconName="stats-chart-outline"
             />
             <Text style={[styles.label, { color: colors.textPrimary }]}>Rating</Text>
             <View style={styles.ratingRow}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <TouchableOpacity key={n} onPress={() => setRating(String(n))} activeOpacity={0.7} style={styles.starBtn}>
-                  <Text style={[styles.star, Number(rating) >= n && styles.starActive]}>{Number(rating) >= n ? '★' : '☆'}</Text>
+                  <Ionicons
+                    name={Number(rating) >= n ? 'star' : 'star-outline'}
+                    size={36}
+                    color={Number(rating) >= n ? '#F59E0B' : colors.border}
+                  />
                 </TouchableOpacity>
               ))}
             </View>
@@ -578,7 +585,8 @@ export default function AddCourseScreen({ navigation }) {
               <View style={styles.finalMeta}>
                 <Text style={styles.finalPlatform}>{platform || '—'}</Text>
                 <View style={styles.metaDot} />
-                <Text style={styles.finalRating}>⭐ {rating || '—'}</Text>
+                <Ionicons name="star" size={12} color="#F59E0B" />
+                <Text style={styles.finalRating}> {rating || '—'}</Text>
                 <View style={styles.metaDot} />
                 <Text style={styles.finalRating}>{progressPercent}% done</Text>
               </View>
@@ -597,8 +605,8 @@ export default function AddCourseScreen({ navigation }) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={[styles.header, { borderBottomColor: colors.borderLight, backgroundColor: colors.surface }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-          <Text style={{ fontSize: 20, color: colors.textPrimary }}>✕</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="close" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Log achievement</Text>
         <View style={{ width: 40 }} />
@@ -606,27 +614,28 @@ export default function AddCourseScreen({ navigation }) {
 
       <StepBar />
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={0}>
+        <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: 140 + Math.max(insets.bottom, 16) }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <Animated.View style={{ opacity: fade }}>{renderStep()}</Animated.View>
         </ScrollView>
-
-        <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.borderLight }]}>
-          {currentStep > 0 && (
-            <PrimaryButton title="Back" onPress={prevStep} variant="outline" style={{ flex: 1, marginRight: SPACING.md }} />
-          )}
-          {currentStep < STEPS.length - 1 ? (
-            <PrimaryButton title="Next" onPress={nextStep} style={{ flex: 2 }} />
-          ) : (
-            <PrimaryButton title="Publish" onPress={handleSubmit} loading={loading} style={{ flex: 2 }} />
-          )}
-        </View>
       </KeyboardAvoidingView>
+
+      {/* Footer OUTSIDE KAV so it stays visible when keyboard opens */}
+      <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.borderLight, paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {currentStep > 0 && (
+          <PrimaryButton title="Back" onPress={prevStep} variant="outline" style={{ flex: 1, marginRight: SPACING.md }} />
+        )}
+        {currentStep < STEPS.length - 1 ? (
+          <PrimaryButton title="Next" onPress={nextStep} style={{ flex: 2 }} />
+        ) : (
+          <PrimaryButton title="Publish" onPress={handleSubmit} loading={loading} style={{ flex: 2 }} />
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) { return StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: 'row',
@@ -637,7 +646,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: { ...FONTS.h3 },
-  closeBtn: { width: 40, height: 40, justifyContent: 'center' },
+  closeBtn: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
   indicatorContainer: {
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xl,
@@ -659,10 +668,10 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  scroll: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, paddingBottom: 140 },
+  scroll: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl },
   stepContent: { flex: 1 },
   label: { ...FONTS.label, marginBottom: SPACING.sm, marginTop: SPACING.lg },
-  fieldError: { ...FONTS.tiny, color: COLORS.danger, marginTop: 4 },
+  fieldError: { ...FONTS.tiny, color: colors.danger, marginTop: 4 },
   fetchText: { ...FONTS.caption, marginLeft: 0 },
   metadataSkeleton: { marginTop: SPACING.sm },
   metadataAlert: {
@@ -683,7 +692,7 @@ const styles = StyleSheet.create({
   previewThumb: {
     width: '100%',
     aspectRatio: 16 / 9,
-    backgroundColor: COLORS.surfaceSubtle,
+    backgroundColor: colors.surfaceSubtle,
   },
   previewMeta: { padding: SPACING.md },
   previewTitle: { ...FONTS.bodyBold, fontSize: 14 },
@@ -702,23 +711,21 @@ const styles = StyleSheet.create({
   secondaryLink: { marginTop: SPACING.md, alignItems: 'center' },
   secondaryLinkText: { ...FONTS.captionBold },
   platformRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: SPACING.md },
-  ratingRow: { flexDirection: 'row', marginBottom: SPACING.xl },
-  starBtn: { marginRight: SPACING.md },
-  star: { fontSize: 42, color: COLORS.border },
-  starActive: { color: '#F59E0B' },
+  ratingRow: { flexDirection: 'row', marginBottom: SPACING.xl, gap: 8 },
+  starBtn: { padding: 4 },
   multilineInput: { minHeight: 80, textAlignVertical: 'top' },
   uploadRow: { flexDirection: 'row', marginTop: SPACING.md },
   thumbPreviewWrap: { marginTop: SPACING.md, borderRadius: RADIUS.md, overflow: 'hidden' },
-  thumbPreview: { width: '100%', aspectRatio: 16 / 9, backgroundColor: COLORS.surfaceSubtle },
+  thumbPreview: { width: '100%', aspectRatio: 16 / 9, backgroundColor: colors.surfaceSubtle },
   removePill: {
     alignSelf: 'flex-start',
     marginTop: SPACING.sm,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.dangerSoft,
+    backgroundColor: colors.dangerSoft,
   },
-  removePillText: { ...FONTS.captionBold, color: COLORS.danger },
+  removePillText: { ...FONTS.captionBold, color: colors.danger },
   uploadZone: {
     height: 180,
     borderRadius: RADIUS.xxl,
@@ -729,7 +736,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     padding: SPACING.xl,
   },
-  uploadZoneSuccess: { borderColor: COLORS.success, backgroundColor: COLORS.successSoft },
+  uploadZoneSuccess: { borderColor: colors.success, backgroundColor: colors.successSoft },
   uploadIconCircle: {
     width: 56,
     height: 56,
@@ -744,17 +751,17 @@ const styles = StyleSheet.create({
   uploadSub: { ...FONTS.caption, marginTop: 4 },
   finalCard: {
     marginTop: SPACING.lg,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     borderRadius: RADIUS.xl,
     padding: SPACING.xl,
     ...SHADOW.lg,
   },
   finalHeader: { ...FONTS.tiny, color: 'rgba(255,255,255,0.6)', marginBottom: 12 },
-  finalTitle: { ...FONTS.h3, color: COLORS.white, fontSize: 16 },
+  finalTitle: { ...FONTS.h3, color: colors.white, fontSize: 16 },
   finalMeta: { flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' },
-  finalPlatform: { ...FONTS.tiny, color: COLORS.accentLight },
+  finalPlatform: { ...FONTS.tiny, color: colors.accentLight },
   metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 8 },
-  finalRating: { ...FONTS.tiny, color: COLORS.white },
+  finalRating: { ...FONTS.tiny, color: colors.white },
   finalTiny: { ...FONTS.tiny, color: 'rgba(255,255,255,0.75)', marginTop: SPACING.sm },
   footer: {
     position: 'absolute',
@@ -763,7 +770,7 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     padding: SPACING.xl,
+    paddingTop: SPACING.lg,
     borderTopWidth: 1,
-    paddingBottom: Platform.OS === 'ios' ? 40 : SPACING.xl,
   },
-});
+}); }

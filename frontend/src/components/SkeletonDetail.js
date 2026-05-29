@@ -1,8 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, ScrollView, SafeAreaView } from 'react-native';
-import { COLORS, SPACING, RADIUS, ANIMATION } from '../utils/theme';
+
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { SPACING, RADIUS, ANIMATION } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 export default function SkeletonDetail() {
+  const { colors } = useAppTheme();
   const opacity = useRef(new Animated.Value(ANIMATION.shimmer.lowOpacity)).current;
 
   useEffect(() => {
@@ -22,25 +25,23 @@ export default function SkeletonDetail() {
     ).start();
   }, [opacity]);
 
-  const Bone = ({ width, height, radius = RADIUS.sm, mb = 0, style }) => (
+  const Bone = ({ width, height, radius = RADIUS.sm, mb = 0, style: extraStyle }) => (
     <Animated.View
       style={[
-        styles.bone,
+        { backgroundColor: colors.shimmer },
         { width, height, borderRadius: radius, marginBottom: mb, opacity },
-        style,
+        extraStyle,
       ]}
     />
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Bone */}
         <Bone width="100%" height={380} radius={0} />
 
-        <View style={styles.body}>
-          {/* Author Row Bone */}
-          <View style={styles.authorCard}>
+        <View style={s(colors).body}>
+          <View style={s(colors).authorCard}>
             <Bone width={40} height={40} radius={20} />
             <View style={{ marginLeft: 12, flex: 1 }}>
               <Bone width="40%" height={12} mb={6} />
@@ -48,13 +49,11 @@ export default function SkeletonDetail() {
             </View>
           </View>
 
-          {/* Stats Grid Bone */}
-          <View style={styles.statsRow}>
+          <View style={s(colors).statsRow}>
             <Bone width="45%" height={60} radius={RADIUS.lg} />
             <Bone width="45%" height={60} radius={RADIUS.lg} />
           </View>
 
-          {/* Content Bones */}
           <Bone width="60%" height={18} mb={16} />
           <Bone width="100%" height={12} mb={8} />
           <Bone width="100%" height={12} mb={8} />
@@ -63,8 +62,7 @@ export default function SkeletonDetail() {
           <Bone width="50%" height={18} mb={16} />
           <Bone width="100%" height={80} radius={RADIUS.md} mb={24} />
 
-          {/* Tags */}
-          <View style={styles.row}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Bone width={60} height={24} radius={RADIUS.sm} style={{ marginRight: 8 }} />
             <Bone width={70} height={24} radius={RADIUS.sm} style={{ marginRight: 8 }} />
             <Bone width={50} height={24} radius={RADIUS.sm} />
@@ -75,10 +73,9 @@ export default function SkeletonDetail() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.surface },
+const s = (colors) => StyleSheet.create({
   body: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: RADIUS.xxl,
     borderTopRightRadius: RADIUS.xxl,
     marginTop: -RADIUS.xxl,
@@ -88,7 +85,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: SPACING.lg,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     borderRadius: RADIUS.lg,
     marginBottom: SPACING.xxl,
   },
@@ -96,12 +93,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: SPACING.xxl,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bone: {
-    backgroundColor: COLORS.shimmer,
   },
 });

@@ -655,7 +655,8 @@ const styles = StyleSheet.create({
   actionItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 10,
+    minHeight: 44,
     minWidth: 52,
   },
   actionLabel: {
@@ -677,7 +678,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 10,
+    minHeight: 44,
   },
   secondarySep: {
     width: StyleSheet.hairlineWidth,

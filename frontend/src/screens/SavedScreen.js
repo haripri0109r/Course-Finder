@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useContext, useMemo } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl, Platform, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, FlatList, RefreshControl } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
@@ -10,6 +11,7 @@ import RetryBox from '../components/RetryBox';
 import EmptyState from '../components/EmptyState';
 import SectionHeader from '../components/SectionHeader';
 import { showToast } from '../components/Toast';
+import { triggerHaptic } from '../utils/haptics';
 import { prefetchImages } from '../utils/prefetch';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 
@@ -29,6 +31,7 @@ function createStyles(colors) {
 
 export default function SavedScreen({ navigation }) {
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
   const [savedItems, setSavedItems] = useState([]);
@@ -67,6 +70,7 @@ export default function SavedScreen({ navigation }) {
   );
 
   const onRefresh = () => {
+    triggerHaptic('impactLight');
     setRefreshing(true);
     fetchBookmarks(true);
   };
@@ -82,7 +86,7 @@ export default function SavedScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <View style={styles.header}>
         <SectionHeader 
@@ -106,8 +110,12 @@ export default function SavedScreen({ navigation }) {
             />
           )
         )}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: Math.max(insets.bottom, 12) + 68 + 24 }]}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }

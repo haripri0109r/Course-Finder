@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
+  StatusBar,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  SafeAreaView,
-  StatusBar,
   TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
 import { SPACING, FONTS } from '../utils/theme';
@@ -53,7 +53,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
             <Text style={{ color: colors.accent, ...FONTS.captionBold }}>← Back to sign in</Text>
           </TouchableOpacity>

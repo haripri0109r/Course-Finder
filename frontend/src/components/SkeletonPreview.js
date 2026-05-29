@@ -1,11 +1,13 @@
-import React from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
-import { COLORS, SPACING, RADIUS, SHADOW } from '../utils/theme';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
+import { RADIUS, SPACING, SHADOW } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 export default function SkeletonPreview() {
-  const animatedValue = new Animated.Value(0);
+  const { colors } = useAppTheme();
+  const animatedValue = useRef(new Animated.Value(0)).current;
 
-  React.useEffect(() => {
+  useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(animatedValue, {
@@ -20,22 +22,24 @@ export default function SkeletonPreview() {
         }),
       ])
     ).start();
-  }, []);
+  }, [animatedValue]);
 
   const opacity = animatedValue.interpolate({
     inputRange: [0, 1],
     outputRange: [0.3, 0.7],
   });
 
+  const boneColor = colors.shimmer;
+
   return (
-    <View style={styles.card}>
-      <Animated.View style={[styles.shimmer, { opacity }]} />
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.borderLight }]}>
+      <Animated.View style={[styles.shimmer, { backgroundColor: boneColor, opacity }]} />
       <View style={styles.content}>
-        <Animated.View style={[styles.titleLine, { opacity }]} />
-        <Animated.View style={[styles.smallLine, { opacity }]} />
+        <Animated.View style={[styles.titleLine, { backgroundColor: boneColor, opacity }]} />
+        <Animated.View style={[styles.smallLine, { backgroundColor: boneColor, opacity }]} />
         <View style={styles.footer}>
-          <Animated.View style={[styles.chip, { opacity }]} />
-          <Animated.View style={[styles.chip, { opacity }]} />
+          <Animated.View style={[styles.chip, { backgroundColor: boneColor, opacity }]} />
+          <Animated.View style={[styles.chip, { backgroundColor: boneColor, opacity }]} />
         </View>
       </View>
     </View>
@@ -44,32 +48,27 @@ export default function SkeletonPreview() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.card,
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.xl,
     marginLeft: SPACING.xs,
     ...SHADOW.md,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   shimmer: {
     height: 140,
-    backgroundColor: COLORS.border,
   },
   content: {
     padding: SPACING.lg,
   },
   titleLine: {
     height: 20,
-    backgroundColor: COLORS.border,
     borderRadius: RADIUS.sm,
     width: '80%',
     marginBottom: SPACING.md,
   },
   smallLine: {
     height: 14,
-    backgroundColor: COLORS.border,
     borderRadius: RADIUS.sm,
     width: '40%',
     marginBottom: SPACING.lg,
@@ -80,8 +79,7 @@ const styles = StyleSheet.create({
   chip: {
     height: 24,
     width: 60,
-    backgroundColor: COLORS.border,
     borderRadius: RADIUS.pill,
     marginRight: SPACING.md,
-  }
+  },
 });

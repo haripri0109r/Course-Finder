@@ -1,21 +1,26 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TextInput, 
-  KeyboardAvoidingView, 
+import React, { useState, useEffect, useContext, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  StatusBar,
+  TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import { showToast } from '../components/Toast';
 import AnimatedPressable from '../components/AnimatedPressable';
 import SkeletonDetail from '../components/SkeletonDetail';
 import RetryBox from '../components/RetryBox';
+import Avatar from '../components/Avatar';
 import { timeAgo } from '../utils/format';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import { useAppTheme } from '../context/ThemeContext';
@@ -24,7 +29,9 @@ export default function CompletionDetailScreen({ route, navigation }) {
   const { id } = route.params;
   const { user: currentUser, bookmarks, toggleBookmark } = useContext(AuthContext);
   const { colors, isDark } = useAppTheme();
-  
+  const insets = useSafeAreaInsets();
+  const s = useMemo(() => createStyles(colors, insets), [colors, insets]);
+
   const [completion, setCompletion] = useState(null);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
@@ -40,29 +47,21 @@ export default function CompletionDetailScreen({ route, navigation }) {
       setError(null);
       if (!isRefresh && !completion) setLoading(true);
       const startTime = Date.now();
-      
+
       const [compRes, commRes] = await Promise.all([
         api.getCompletedCourse(id, { signal }),
-        api.getComments(id, { signal })
+        api.getComments(id, { signal }),
       ]);
 
-      if (compRes.data.success) {
-        console.log("API Response:", compRes.data);
-        setCompletion(compRes.data.data);
-      }
+      if (compRes.data.success) setCompletion(compRes.data.data);
       if (commRes.data.success) setComments(commRes.data.data);
 
       const elapsed = Date.now() - startTime;
-      if (elapsed < 300) await new Promise(r => setTimeout(r, 300 - elapsed));
+      if (elapsed < 300) await new Promise((r) => setTimeout(r, 300 - elapsed));
     } catch (err) {
       if (err.name === 'CanceledError' || err.name === 'AbortError') return;
-      
       setError(err);
-      if (err.response?.status === 404) {
-        showToast('This post has been removed', 'error');
-      } else {
-        showToast('Could not load discussion', 'error');
-      }
+      showToast({ message: 'Could not load discussion', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -71,7 +70,6 @@ export default function CompletionDetailScreen({ route, navigation }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    console.log("Clicked ID:", id);
     fetchData(false, controller.signal);
     return () => controller.abort();
   }, [id]);
@@ -83,23 +81,19 @@ export default function CompletionDetailScreen({ route, navigation }) {
 
   const handleLike = async () => {
     if (!completion || isLikeLoading) return;
-    const isLiked = completion.isLikedByMe;
-    
-    // Optimistic Update
-    setCompletion({ 
-      ...completion, 
-      isLikedByMe: !isLiked,
-      likesCount: isLiked ? completion.likesCount - 1 : completion.likesCount + 1
+    const wasLiked = completion.isLikedByMe;
+    setCompletion({
+      ...completion,
+      isLikedByMe: !wasLiked,
+      likesCount: wasLiked ? completion.likesCount - 1 : completion.likesCount + 1,
     });
     setIsLikeLoading(true);
-
     try {
-      if (isLiked) await api.unlikeCompletion(id);
+      if (wasLiked) await api.unlikeCompletion(id);
       else await api.likeCompletion(id);
     } catch (err) {
-      // Revert on error
       setCompletion(completion);
-      showToast('Interaction failed', 'error');
+      showToast({ message: 'Interaction failed', type: 'error' });
     } finally {
       setIsLikeLoading(false);
     }
@@ -111,7 +105,7 @@ export default function CompletionDetailScreen({ route, navigation }) {
     try {
       await toggleBookmark(id);
     } catch (err) {
-      showToast('Bookmark failed', 'error');
+      showToast({ message: 'Bookmark failed', type: 'error' });
     } finally {
       setIsBookmarkLoading(false);
     }
@@ -125,216 +119,407 @@ export default function CompletionDetailScreen({ route, navigation }) {
       if (res.data.success) {
         setComments([res.data.data, ...comments]);
         setCommentText('');
-        showToast('Comment posted!', 'success');
+        showToast({ message: 'Comment posted!', type: 'success' });
       }
     } catch (err) {
-      showToast('Failed to post comment', 'error');
+      showToast({ message: 'Failed to post comment', type: 'error' });
     } finally {
       setSubmitting(false);
     }
   };
 
   if (loading) return <SkeletonDetail />;
-  if (error && !completion) return <RetryBox message="Unable to load post" error={error} onRetry={() => fetchData(false)} />;
+  if (error && !completion)
+    return <RetryBox message="Unable to load post" error={error} onRetry={() => fetchData(false)} />;
   if (!completion) return null;
 
   const isLiked = completion.isLikedByMe;
   const isBookmarked = bookmarks.has(id);
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <View style={styles.header}>
-        <AnimatedPressable onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Text style={[styles.backIcon, { color: colors.textPrimary }]}>←</Text>
-        </AnimatedPressable>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Discussion</Text>
-        <AnimatedPressable 
-          onPress={handleBookmark} 
-          style={styles.headerBtn}
+    <SafeAreaView style={s.container} edges={['top']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={s.headerBtn}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>Discussion</Text>
+        <TouchableOpacity
+          onPress={handleBookmark}
+          style={s.headerBtn}
+          activeOpacity={0.7}
           disabled={isBookmarkLoading}
-          haptic="impactMedium"
         >
-          <Text style={{ fontSize: 22 }}>{isBookmarked ? '🔖' : '🔖'}</Text>
-          {!isBookmarked && <View style={styles.bookmarkOverlay} />}
-        </AnimatedPressable>
+          <Ionicons
+            name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+            size={22}
+            color={isBookmarked ? colors.accent : colors.textSecondary}
+          />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
-        }
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
       >
-        <AnimatedPressable 
-          style={styles.authorRow}
-          onPress={() => navigation.navigate('UserProfile', { userId: completion.userId })}
+        <ScrollView
+          contentContainerStyle={s.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+          }
         >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(completion.authorName || 'U').charAt(0).toUpperCase()}</Text>
-          </View>
-          <View>
-            <Text style={styles.authorName}>{completion.authorName}</Text>
-            <Text style={styles.timestamp}>{timeAgo(completion.createdAt)}</Text>
-          </View>
-        </AnimatedPressable>
+          {/* Author row */}
+          <TouchableOpacity
+            style={s.authorRow}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('UserProfile', { userId: completion.userId })}
+          >
+            <Avatar name={completion.authorName} size="md" />
+            <View style={{ marginLeft: SPACING.md }}>
+              <Text style={s.authorName}>{completion.authorName}</Text>
+              <Text style={s.timestamp}>{timeAgo(completion.createdAt)}</Text>
+            </View>
+          </TouchableOpacity>
 
-        <View style={[styles.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={styles.courseTitle}>{completion.title}</Text>
-          <View style={styles.courseHeaderRow}>
-            <Text style={[styles.platform, { color: colors.accent }]}>{completion.platform}</Text>
-            {completion.duration && completion.duration !== 'N/A' && (
-              <View style={styles.durationBadge}>
-                <Text style={styles.durationText}>⌛ {completion.duration}</Text>
+          {/* Content card */}
+          <View style={s.contentCard}>
+            <Text style={s.courseTitle}>{completion.title}</Text>
+            <View style={s.courseHeaderRow}>
+              <Text style={s.platform}>{completion.platform}</Text>
+              {completion.duration && completion.duration !== 'N/A' && (
+                <View style={s.durationBadge}>
+                  <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
+                  <Text style={s.durationText}>{completion.duration}</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={s.ratingRow}>
+              <View style={s.starsRow}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Ionicons
+                    key={i}
+                    name={i < Math.round(completion.rating || 0) ? 'star' : 'star-outline'}
+                    size={16}
+                    color={colors.warning || '#FBBF24'}
+                    style={{ marginRight: 2 }}
+                  />
+                ))}
               </View>
+              <Text style={s.ratingVal}>{completion.rating?.toFixed(1)} / 5.0</Text>
+            </View>
+
+            {completion.review ? (
+              <View style={s.reviewBox}>
+                <Text style={s.reviewText}>{completion.review}</Text>
+              </View>
+            ) : null}
+
+            <View style={s.actionRow}>
+              <TouchableOpacity
+                onPress={handleLike}
+                style={s.actionBtn}
+                activeOpacity={0.7}
+                disabled={isLikeLoading}
+              >
+                <Ionicons
+                  name={isLiked ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={isLiked ? colors.danger : colors.textSecondary}
+                />
+                <Text style={s.actionText}>{completion.likesCount}</Text>
+              </TouchableOpacity>
+              <View style={s.actionBtn}>
+                <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
+                <Text style={s.actionText}>{comments.length}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Comments */}
+          <Text style={s.sectionTitle}>Community Feedback</Text>
+          {comments.map((item) => (
+            <View key={item._id} style={s.commentCard}>
+              <View style={s.commentHeader}>
+                <View style={s.commentAuthorRow}>
+                  <Avatar name={item.user?.name} size="xs" />
+                  <Text style={s.commentAuthor}>{item.user?.name}</Text>
+                </View>
+                <Text style={s.commentTime}>{timeAgo(item.createdAt)}</Text>
+              </View>
+              <Text style={s.commentText}>{item.text}</Text>
+            </View>
+          ))}
+          {comments.length === 0 && (
+            <View style={s.emptyComments}>
+              <Ionicons name="chatbubbles-outline" size={32} color={colors.textMuted} />
+              <Text style={s.noComments}>No comments yet. Start the conversation!</Text>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Comment Input */}
+        <View style={[s.inputArea, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
+          <Avatar name={currentUser?.name} size="sm" />
+          <TextInput
+            style={s.input}
+            placeholder="Share your thoughts..."
+            value={commentText}
+            onChangeText={setCommentText}
+            multiline
+            placeholderTextColor={colors.textMuted}
+            underlineColorAndroid="transparent"
+            selectionColor={colors.accent}
+            cursorColor={colors.accent}
+          />
+          <TouchableOpacity
+            onPress={handleAddComment}
+            style={[s.sendBtn, !commentText.trim() && s.disabledSend]}
+            activeOpacity={0.7}
+            disabled={!commentText.trim() || submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Ionicons name="send" size={18} color={colors.white} />
             )}
-          </View>
-          
-          <View style={styles.ratingRow}>
-            <Text style={styles.stars}>{'⭐'.repeat(Math.round(completion.rating || 0))}</Text>
-            <Text style={styles.ratingVal}>{completion.rating?.toFixed(1)} / 5.0</Text>
-          </View>
-
-          {completion.review ? (
-            <View style={styles.reviewBox}>
-              <Text style={[styles.reviewText, { color: colors.textSecondary }]}>{completion.review}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.actionRow}>
-            <AnimatedPressable 
-              onPress={handleLike} 
-              style={styles.actionBtn}
-              disabled={isLikeLoading}
-              haptic="impactMedium"
-            >
-              <Text style={styles.actionEmoji}>{isLiked ? '❤️' : '🤍'}</Text>
-              <Text style={styles.actionText}>{completion.likesCount} Likes</Text>
-            </AnimatedPressable>
-            <View style={styles.actionBtn}>
-              <Text style={styles.actionEmoji}>💬</Text>
-              <Text style={styles.actionText}>{comments.length} Comments</Text>
-            </View>
-          </View>
+          </TouchableOpacity>
         </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Community Feedback</Text>
-        {comments.map((item) => (
-          <View key={item._id} style={[styles.commentCard, { backgroundColor: colors.surface, borderLeftColor: colors.accent }]}>
-            <View style={styles.commentHeader}>
-              <Text style={styles.commentAuthor}>{item.user?.name}</Text>
-              <Text style={styles.commentTime}>{timeAgo(item.createdAt)}</Text>
-            </View>
-            <Text style={[styles.commentText, { color: colors.textSecondary }]}>{item.text}</Text>
-          </View>
-        ))}
-        {comments.length === 0 && (
-          <View style={styles.emptyComments}>
-            <Text style={styles.noComments}>No comments yet. Start the conversation!</Text>
-          </View>
-        )}
-      </ScrollView>
-
-      <View style={styles.inputArea}>
-        <TextInput
-          style={[styles.input, { outlineStyle: 'none' }]}
-          placeholder="Share your thoughts..."
-          value={commentText}
-          onChangeText={setCommentText}
-          multiline
-          placeholderTextColor={colors.textMuted}
-          underlineColorAndroid="transparent"
-          selectionColor={colors.accent}
-          cursorColor={colors.accent}
-          importantForAutofill="no"
-          autoComplete="off"
-        />
-        <AnimatedPressable 
-          style={[styles.sendBtn, !commentText.trim() && styles.disabledSend, { backgroundColor: colors.accent }]} 
-          onPress={handleAddComment}
-          disabled={!commentText.trim() || submitting}
-        >
-          {submitting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.sendText}>Post</Text>}
-        </AnimatedPressable>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: { 
-    height: 110, paddingTop: 60, flexDirection: 'row', alignItems: 'center', 
-    justifyContent: 'space-between', paddingHorizontal: SPACING.lg, backgroundColor: colors.surface,
-    borderBottomWidth: 1, borderBottomColor: colors.border, ...SHADOW.sm 
-  },
-  headerBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  backIcon: { fontSize: 24, fontWeight: 'bold' },
-  headerTitle: { ...FONTS.h3 },
-  bookmarkOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderRadius: 8,
-  },
+function createStyles(colors, insets) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
 
-  scrollContent: { padding: SPACING.xl, paddingBottom: 120 },
-  authorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.xl },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center', marginRight: SPACING.md },
-  avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 20 },
-  authorName: { ...FONTS.bodyBold, fontSize: 17 },
-  timestamp: { ...FONTS.small, color: colors.textMuted, marginTop: 2 },
+    // Header
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      backgroundColor: colors.background,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    headerBtn: {
+      width: 48,
+      height: 48,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerTitle: {
+      ...FONTS.h3,
+      color: colors.textPrimary,
+    },
 
-  contentCard: { backgroundColor: COLORS.card, padding: SPACING.xl, borderRadius: RADIUS.lg, ...SHADOW.md, marginBottom: SPACING.xxxl },
-  courseTitle: { ...FONTS.h2, fontSize: 22, marginBottom: 4 },
-  courseHeaderRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginBottom: SPACING.md 
-  },
-  platform: { ...FONTS.caption, color: COLORS.primary, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
-  durationBadge: {
-    backgroundColor: `${colors.secondary}15`,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: RADIUS.sm,
-    marginLeft: SPACING.md,
-  },
-  durationText: {
-    ...FONTS.small,
-    fontSize: 11,
-    color: colors.secondary,
-    fontWeight: '700',
-  },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.lg },
-  stars: { fontSize: 20, marginRight: 8 },
-  ratingVal: { ...FONTS.caption, fontWeight: '700', color: colors.textPrimary },
-  reviewBox: { backgroundColor: colors.background, padding: SPACING.lg, borderRadius: RADIUS.md, marginBottom: SPACING.xl },
-  reviewText: { ...FONTS.body, fontStyle: 'italic', color: COLORS.textSecondary, lineHeight: 24 },
+    // Scroll
+    scrollContent: {
+      padding: SPACING.xl,
+      paddingBottom: 120,
+    },
 
-  actionRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: SPACING.lg },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', marginRight: SPACING.xxl },
-  actionEmoji: { fontSize: 20, marginRight: 8 },
-  actionText: { ...FONTS.small, fontWeight: '700', color: colors.textPrimary },
+    // Author
+    authorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: SPACING.xl,
+    },
+    authorName: {
+      ...FONTS.bodyBold,
+      color: colors.textPrimary,
+    },
+    timestamp: {
+      ...FONTS.small,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
 
-  sectionTitle: { ...FONTS.h3, marginBottom: SPACING.lg, fontSize: 18 },
-  commentCard: { backgroundColor: COLORS.card, padding: SPACING.lg, borderRadius: RADIUS.md, marginBottom: SPACING.md, borderLeftWidth: 4, borderLeftColor: COLORS.primaryLight, ...SHADOW.sm },
-  commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  commentAuthor: { ...FONTS.small, fontWeight: '800', color: colors.textPrimary },
-  commentTime: { ...FONTS.small, color: colors.textMuted, fontSize: 10 },
-  commentText: { ...FONTS.body, fontSize: 15, color: COLORS.textSecondary, lineHeight: 22 },
-  emptyComments: { paddingVertical: 40, alignItems: 'center' },
-  noComments: { ...FONTS.caption, textAlign: 'center', color: colors.textMuted },
+    // Content card
+    contentCard: {
+      backgroundColor: colors.surface,
+      padding: SPACING.xl,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: SPACING.xxxl,
+    },
+    courseTitle: {
+      ...FONTS.h2,
+      color: colors.textPrimary,
+      marginBottom: 4,
+    },
+    courseHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: SPACING.md,
+    },
+    platform: {
+      ...FONTS.captionBold,
+      color: colors.accent,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
+    durationBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceSubtle,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: RADIUS.sm,
+      marginLeft: SPACING.md,
+      gap: 4,
+    },
+    durationText: {
+      ...FONTS.small,
+      color: colors.textSecondary,
+      fontWeight: '600',
+    },
+    ratingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: SPACING.lg,
+    },
+    starsRow: {
+      flexDirection: 'row',
+      marginRight: 8,
+    },
+    ratingVal: {
+      ...FONTS.captionBold,
+      color: colors.textPrimary,
+    },
+    reviewBox: {
+      backgroundColor: colors.background,
+      padding: SPACING.lg,
+      borderRadius: RADIUS.md,
+      marginBottom: SPACING.xl,
+    },
+    reviewText: {
+      ...FONTS.body,
+      fontStyle: 'italic',
+      color: colors.textSecondary,
+      lineHeight: 24,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: SPACING.lg,
+      gap: SPACING.xl,
+    },
+    actionBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    actionText: {
+      ...FONTS.small,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
 
-  inputArea: { 
-    position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.surface, 
-    flexDirection: 'row', padding: SPACING.lg, paddingBottom: Platform.OS === 'ios' ? 40 : SPACING.lg, 
-    alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, ...SHADOW.md
-  },
-  input: { flex: 1, backgroundColor: colors.background, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.xl, paddingVertical: 12, marginRight: SPACING.md, maxHeight: 120, ...FONTS.body, fontSize: 15 },
-  sendBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: RADIUS.pill, ...SHADOW.sm },
-  disabledSend: { opacity: 0.4 },
-  sendText: { color: colors.surface, fontWeight: '800', fontSize: 15 }
-});
+    // Comments
+    sectionTitle: {
+      ...FONTS.h3,
+      color: colors.textPrimary,
+      marginBottom: SPACING.lg,
+    },
+    commentCard: {
+      backgroundColor: colors.surface,
+      padding: SPACING.lg,
+      borderRadius: RADIUS.md,
+      marginBottom: SPACING.md,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.accent,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    commentHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 6,
+    },
+    commentAuthorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    commentAuthor: {
+      ...FONTS.small,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    commentTime: {
+      ...FONTS.small,
+      color: colors.textMuted,
+      fontSize: 10,
+    },
+    commentText: {
+      ...FONTS.body,
+      color: colors.textSecondary,
+      lineHeight: 22,
+    },
+    emptyComments: {
+      paddingVertical: 40,
+      alignItems: 'center',
+      gap: SPACING.md,
+    },
+    noComments: {
+      ...FONTS.caption,
+      textAlign: 'center',
+      color: colors.textMuted,
+    },
+
+    // Input
+    inputArea: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: SPACING.md,
+      backgroundColor: colors.surface,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      gap: SPACING.sm,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: colors.background,
+      borderRadius: RADIUS.lg,
+      paddingHorizontal: SPACING.lg,
+      paddingVertical: 10,
+      maxHeight: 100,
+      ...FONTS.body,
+      fontSize: 14,
+      color: colors.textPrimary,
+    },
+    sendBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    disabledSend: {
+      opacity: 0.4,
+    },
+  });
+}

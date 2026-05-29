@@ -1,35 +1,44 @@
-import React, { useRef } from 'react';
-import { Animated, Pressable } from 'react-native';
+import React from 'react';
+import { Pressable } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import { triggerHaptic } from '../utils/haptics';
 
-export default function AnimatedPressable({ 
-  children, 
-  onPress, 
-  style, 
+const AnimatedPressableComponent = Animated.createAnimatedComponent(Pressable);
+
+const SPRING_CONFIG = {
+  damping: 15,
+  stiffness: 200,
+  mass: 0.5,
+};
+
+export default function AnimatedPressable({
+  children,
+  onPress,
+  style,
   haptic = 'impactLight',
   scaleTo = 0.96,
-  disabled = false
+  disabled = false,
 }) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const handlePressIn = () => {
-    if (disabled) return;
-    Animated.spring(scaleAnim, {
-      toValue: scaleTo,
-      useNativeDriver: true,
-      speed: 20,
-      bounciness: 10,
-    }).start();
+    if (!disabled) {
+      scale.value = withSpring(scaleTo, SPRING_CONFIG);
+    }
   };
 
   const handlePressOut = () => {
-    if (disabled) return;
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 20,
-      bounciness: 10,
-    }).start();
+    if (!disabled) {
+      scale.value = withSpring(1, SPRING_CONFIG);
+    }
   };
 
   const handlePress = () => {
@@ -39,15 +48,14 @@ export default function AnimatedPressable({
   };
 
   return (
-    <Pressable
+    <AnimatedPressableComponent
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onPress={handlePress}
       disabled={disabled}
+      style={[style, animatedStyle]}
     >
-      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
-        {children}
-      </Animated.View>
-    </Pressable>
+      {children}
+    </AnimatedPressableComponent>
   );
 }

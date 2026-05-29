@@ -3,20 +3,21 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Switch,
   StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useAppTheme } from '../context/ThemeContext';
 import { AuthContext } from '../context/AuthContext';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
-import PrimaryButton from '../components/PrimaryButton';
+import { triggerHaptic } from '../utils/haptics';
 import { showToast } from '../components/Toast';
 import Avatar from '../components/Avatar';
 
@@ -26,185 +27,67 @@ const DEFAULT_PREFS = {
   profileVisibility: true,
   publicPortfolio: true,
   emailPrefs: true,
-  connectedAccounts: false,
-
   notificationsEnabled: true,
   autoplayMedia: true,
   downloadsWifiOnly: true,
   language: 'English',
-
   reminders: true,
   streakAlerts: true,
   celebrations: true,
   achievementNotifs: true,
 };
 
-function createStyles(colors) {
-  return StyleSheet.create({
-    safe: { flex: 1, backgroundColor: colors.background },
-    header: {
-      paddingHorizontal: SPACING.xl,
-      paddingTop: SPACING.md,
-      paddingBottom: SPACING.md,
-      backgroundColor: colors.surface,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-      ...SHADOW.xs,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    headerTitle: {
-      ...FONTS.h2,
-      fontWeight: '800',
-      color: colors.textPrimary,
-    },
-    headerIconBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceSubtle,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    headerSub: {
-      ...FONTS.small,
-      color: colors.textSecondary,
-      marginTop: 6,
-    },
-
-    content: { padding: SPACING.xl, paddingBottom: 120 },
-
-    sectionLabel: {
-      ...FONTS.tiny,
-      color: colors.textMuted,
-      letterSpacing: 1.2,
-      marginBottom: SPACING.sm,
-      marginTop: SPACING.xl,
-    },
-    card: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
-      borderRadius: RADIUS.lg,
-      overflow: 'hidden',
-      ...SHADOW.xs,
-    },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.md,
-    },
-    rowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    rowIcon: { marginRight: SPACING.md },
-    rowText: { flex: 1 },
-    rowTitle: { ...FONTS.bodyBold, color: colors.textPrimary },
-    rowSub: { ...FONTS.small, color: colors.textSecondary, marginTop: 2 },
-    rowRight: { marginLeft: SPACING.md, flexDirection: 'row', alignItems: 'center' },
-    divider: { height: 1, backgroundColor: colors.border },
-
-    dangerRowTitle: { ...FONTS.bodyBold, color: colors.danger },
-    dangerRowSub: { ...FONTS.small, color: colors.textSecondary, marginTop: 2 },
-
-    versionPill: {
-      alignSelf: 'flex-start',
-      marginTop: SPACING.md,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.full,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
-    },
-    versionText: { ...FONTS.captionBold, color: colors.textSecondary },
-
-    footer: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      padding: SPACING.xl,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      backgroundColor: colors.surface,
-    },
-    userCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: SPACING.lg,
-      backgroundColor: colors.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: SPACING.xl,
-      ...SHADOW.xs,
-    },
-    userCardInfo: {
-      flex: 1,
-      marginLeft: SPACING.md,
-    },
-    userCardName: {
-      ...FONTS.bodyBold,
-      color: colors.textPrimary,
-    },
-    userCardSub: {
-      ...FONTS.tiny,
-      color: colors.textSecondary,
-      marginTop: 2,
-    },
-  });
-}
-
-function Row({ colors, icon, title, subtitle, right, onPress, destructive = false, showChevron = true }) {
-  const TitleComp = destructive ? Text : Text;
+// ─── Row Component ──────────────────────────────────────────────────
+function Row({ colors, styles, icon, title, subtitle, right, onPress, destructive = false, showChevron = true }) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={onPress ? 0.85 : 1} disabled={!onPress}>
-      <View style={stylesShared.row}>
-        <View style={stylesShared.rowLeft}>
-          {icon ? (
+    <TouchableOpacity
+      onPress={() => {
+        if (onPress) {
+          triggerHaptic('selection');
+          onPress();
+        }
+      }}
+      activeOpacity={onPress ? 0.7 : 1}
+      disabled={!onPress}
+      style={styles.row}
+    >
+      <View style={styles.rowLeft}>
+        {icon ? (
+          <View style={[styles.rowIconWrap, destructive && { backgroundColor: colors.dangerSoft }]}>
             <Ionicons
               name={icon}
               size={18}
               color={destructive ? colors.danger : colors.textSecondary}
-              style={stylesShared.rowIcon}
             />
-          ) : null}
-          <View style={stylesShared.rowText}>
-            <Text style={destructive ? stylesShared.dangerRowTitle : stylesShared.rowTitle}>
-              {title}
-            </Text>
-            {subtitle ? (
-              <Text style={destructive ? stylesShared.dangerRowSub : stylesShared.rowSub}>
-                {subtitle}
-              </Text>
-            ) : null}
           </View>
-        </View>
-        <View style={stylesShared.rowRight}>
-          {right}
-          {showChevron ? (
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        ) : null}
+        <View style={styles.rowText}>
+          <Text style={destructive ? styles.dangerRowTitle : styles.rowTitle}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={destructive ? styles.dangerRowSub : styles.rowSub}>
+              {subtitle}
+            </Text>
           ) : null}
         </View>
+      </View>
+      <View style={styles.rowRight}>
+        {right}
+        {showChevron && (
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        )}
       </View>
     </TouchableOpacity>
   );
 }
 
-let stylesShared;
-
+// ─── SettingsScreen ─────────────────────────────────────────────────
 export default function SettingsScreen({ navigation }) {
   const { colors, isDark, toggleTheme } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  stylesShared = styles;
-
-  const { logout } = useContext(AuthContext);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors, insets), [colors, insets]);
+  const { user: currentUser, logout } = useContext(AuthContext);
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
 
   useEffect(() => {
@@ -221,12 +104,11 @@ export default function SettingsScreen({ navigation }) {
         // ignore
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const setPref = async (key, value) => {
+    triggerHaptic('selection');
     setPrefs((prev) => {
       const next = { ...prev, [key]: value };
       AsyncStorage.setItem(PREFS_KEY, JSON.stringify(next)).catch(() => {});
@@ -234,9 +116,8 @@ export default function SettingsScreen({ navigation }) {
     });
   };
 
-  const comingSoon = (label) => showToast({ message: `${label} — coming soon`, type: 'info' });
-
   const confirmLogout = () => {
+    triggerHaptic('impactMedium');
     Alert.alert('Logout', 'Ready to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Logout', style: 'destructive', onPress: logout },
@@ -244,13 +125,10 @@ export default function SettingsScreen({ navigation }) {
   };
 
   const confirmDeleteAccount = () => {
-    Alert.alert(
-      'Delete account',
-      'Account deletion requires contacting support. This ensures your data is handled securely.',
-      [
-        { text: 'OK', style: 'default' },
-      ]
-    );
+    triggerHaptic('notificationError');
+    Alert.alert('Delete account', 'Account deletion requires contacting support.', [
+      { text: 'OK', style: 'default' },
+    ]);
   };
 
   const appVersion =
@@ -259,44 +137,54 @@ export default function SettingsScreen({ navigation }) {
     '1.0.0';
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
+      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              triggerHaptic('impactLight');
+              navigation.goBack();
+            }}
             style={styles.headerIconBtn}
-            accessibilityLabel="Go back"
+            activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={18} color={colors.textSecondary} />
+            <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Settings</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <Text style={styles.headerSub}>Fine-tune privacy, preferences, and learning reminders.</Text>
-        <View style={styles.versionPill}>
-          <Text style={styles.versionText}>Version {appVersion}</Text>
+          <View style={{ width: 48 }} />
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity 
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        alwaysBounceVertical={false}
+      >
+        {/* User Card */}
+        <TouchableOpacity
           style={styles.userCard}
+          activeOpacity={0.85}
           onPress={() => navigation.navigate('Profile')}
         >
-          <Avatar name={currentUser?.name} uri={currentUser?.profilePicture} size="md" />
+          <View style={styles.avatarWrap}>
+            <Avatar name={currentUser?.name} uri={currentUser?.profilePicture} size="lg" />
+          </View>
           <View style={styles.userCardInfo}>
             <Text style={styles.userCardName}>{currentUser?.name || 'Learner'}</Text>
-            <Text style={styles.userCardSub}>{currentUser?.email}</Text>
+            <Text style={styles.userCardEmail}>{currentUser?.email || ''}</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
+        {/* Account */}
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <View style={styles.card}>
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="eye-outline"
             title="Profile visibility"
             subtitle="Show your profile to other learners"
@@ -312,7 +200,7 @@ export default function SettingsScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="briefcase-outline"
             title="Public portfolio"
             subtitle="Allow your course logs to be shared publicly"
@@ -328,15 +216,15 @@ export default function SettingsScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="key-outline"
             title="Change password"
             subtitle="Update your password"
-            onPress={() => Alert.alert('Change password', 'Password reset is available from the login screen via "Forgot password".', [{ text: 'OK' }])}
+            onPress={() => Alert.alert('Change password', 'Password reset is available from the login screen via "Forgot password".')}
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="mail-outline"
             title="Email preferences"
             subtitle="Product updates and newsletters"
@@ -350,20 +238,13 @@ export default function SettingsScreen({ navigation }) {
             }
             showChevron={false}
           />
-          <View style={styles.divider} />
-          <Row
-            colors={colors}
-            icon="link-outline"
-            title="Connected accounts"
-            subtitle="Google, GitHub, LinkedIn"
-            onPress={() => comingSoon('Connected accounts')}
-          />
         </View>
 
-        <Text style={styles.sectionLabel}>APP PREFERENCES</Text>
+        {/* App Preferences */}
+        <Text style={styles.sectionLabel}>APP</Text>
         <View style={styles.card}>
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon={isDark ? 'moon-outline' : 'sunny-outline'}
             title="Dark mode"
             subtitle={isDark ? 'Enabled' : 'Disabled'}
@@ -379,7 +260,7 @@ export default function SettingsScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="notifications-outline"
             title="Notifications"
             subtitle="Push notifications for activity"
@@ -395,50 +276,19 @@ export default function SettingsScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="language-outline"
             title="Language"
             subtitle={prefs.language}
-            onPress={() => comingSoon('Language')}
-          />
-          <View style={styles.divider} />
-          <Row
-            colors={colors}
-            icon="play-outline"
-            title="Autoplay media"
-            subtitle="Auto-play videos when available"
-            right={
-              <Switch
-                value={prefs.autoplayMedia}
-                onValueChange={(v) => setPref('autoplayMedia', v)}
-                trackColor={{ false: colors.border, true: colors.accentLight }}
-                thumbColor={prefs.autoplayMedia ? colors.accent : colors.surface}
-              />
-            }
-            showChevron={false}
-          />
-          <View style={styles.divider} />
-          <Row
-            colors={colors}
-            icon="download-outline"
-            title="Downloads"
-            subtitle="Wi‑Fi only"
-            right={
-              <Switch
-                value={prefs.downloadsWifiOnly}
-                onValueChange={(v) => setPref('downloadsWifiOnly', v)}
-                trackColor={{ false: colors.border, true: colors.accentLight }}
-                thumbColor={prefs.downloadsWifiOnly ? colors.accent : colors.surface}
-              />
-            }
-            showChevron={false}
+            onPress={() => showToast({ message: 'Language — coming soon', type: 'info' })}
           />
         </View>
 
+        {/* Learning */}
         <Text style={styles.sectionLabel}>LEARNING</Text>
         <View style={styles.card}>
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="alarm-outline"
             title="Reminders"
             subtitle="Daily nudges to keep your streak alive"
@@ -454,7 +304,7 @@ export default function SettingsScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="flame-outline"
             title="Streak alerts"
             subtitle="Celebrate streak milestones"
@@ -470,7 +320,7 @@ export default function SettingsScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="sparkles-outline"
             title="Celebrations"
             subtitle="Animations when you ship a win"
@@ -486,7 +336,7 @@ export default function SettingsScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="ribbon-outline"
             title="Achievement notifications"
             subtitle="Notify when you unlock badges"
@@ -502,81 +352,49 @@ export default function SettingsScreen({ navigation }) {
           />
         </View>
 
-        <Text style={styles.sectionLabel}>PRIVACY</Text>
-        <View style={styles.card}>
-          <Row
-            colors={colors}
-            icon="shield-checkmark-outline"
-            title="Privacy settings"
-            subtitle="Control what you share"
-            onPress={() => comingSoon('Privacy settings')}
-          />
-          <View style={styles.divider} />
-          <Row
-            colors={colors}
-            icon="lock-closed-outline"
-            title="Session management"
-            subtitle="Manage active sessions"
-            onPress={() => comingSoon('Session management')}
-          />
-          <View style={styles.divider} />
-          <Row
-            colors={colors}
-            icon="finger-print-outline"
-            title="Security"
-            subtitle="Device & sign-in protections"
-            onPress={() => comingSoon('Security')}
-          />
-        </View>
-
+        {/* Support */}
         <Text style={styles.sectionLabel}>SUPPORT</Text>
         <View style={styles.card}>
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="help-circle-outline"
             title="Help center"
             subtitle="FAQs and guides"
-            onPress={() => comingSoon('Help center')}
+            onPress={() => showToast({ message: 'Help center — coming soon', type: 'info' })}
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="chatbubbles-outline"
             title="Contact support"
             subtitle="Get help from the team"
-            onPress={() => comingSoon('Contact support')}
+            onPress={() => showToast({ message: 'Contact support — coming soon', type: 'info' })}
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="megaphone-outline"
             title="Feedback"
             subtitle="Suggest improvements"
-            onPress={() => comingSoon('Feedback')}
-          />
-          <View style={styles.divider} />
-          <Row
-            colors={colors}
-            icon="bug-outline"
-            title="Report an issue"
-            subtitle="Crash or bug report"
-            onPress={() => comingSoon('Report an issue')}
+            onPress={() => showToast({ message: 'Feedback — coming soon', type: 'info' })}
           />
         </View>
 
+        {/* About */}
         <Text style={styles.sectionLabel}>ABOUT</Text>
         <View style={styles.card}>
-          <Row colors={colors} icon="document-text-outline" title="Privacy policy" onPress={() => comingSoon('Privacy policy')} />
+          <Row colors={colors} styles={styles} icon="document-text-outline" title="Privacy policy" onPress={() => {}} />
           <View style={styles.divider} />
-          <Row colors={colors} icon="receipt-outline" title="Terms" onPress={() => comingSoon('Terms')} />
+          <Row colors={colors} styles={styles} icon="receipt-outline" title="Terms of service" onPress={() => {}} />
           <View style={styles.divider} />
-          <Row colors={colors} icon="albums-outline" title="Licenses" onPress={() => comingSoon('Licenses')} />
+          <Row colors={colors} styles={styles} icon="albums-outline" title="Licenses" onPress={() => {}} />
         </View>
 
-        <Text style={styles.sectionLabel}>ACCOUNT ACTIONS</Text>
+        {/* Account Actions */}
+        <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <View style={styles.card}>
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="log-out-outline"
             title="Logout"
             subtitle="Sign out from this device"
@@ -585,7 +403,7 @@ export default function SettingsScreen({ navigation }) {
           />
           <View style={styles.divider} />
           <Row
-            colors={colors}
+            colors={colors} styles={styles}
             icon="trash-outline"
             title="Delete account"
             subtitle="Irreversible"
@@ -595,18 +413,170 @@ export default function SettingsScreen({ navigation }) {
           />
         </View>
 
-        <View style={{ height: SPACING.xl }} />
-      </ScrollView>
+        {/* Version */}
+        <View style={styles.versionWrap}>
+          <Text style={styles.versionText}>Version {appVersion}</Text>
+        </View>
 
-      <View style={styles.footer}>
-        <PrimaryButton
-          title="Done"
-          onPress={() => navigation.goBack()}
-          fullWidth
-          variant="secondary"
-        />
-      </View>
+        <View style={{ height: SPACING['4xl'] }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ─── Styles ─────────────────────────────────────────────────────────
+function createStyles(colors, insets) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+
+    // Header
+    header: {
+      paddingHorizontal: SPACING.xl,
+      paddingVertical: SPACING.md,
+      backgroundColor: colors.background,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    headerIconBtn: {
+      width: 48,
+      height: 48,
+      borderRadius: RADIUS.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginLeft: -8,
+    },
+    headerTitle: {
+      ...FONTS.h2,
+      color: colors.textPrimary,
+    },
+
+    // Scroll content
+    scrollContent: {
+      paddingHorizontal: SPACING.xl,
+      paddingBottom: Math.max(insets.bottom, SPACING.xl) + SPACING.xl,
+    },
+
+    // User card
+    userCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: SPACING.lg,
+      backgroundColor: colors.surface,
+      borderRadius: RADIUS.xl,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: SPACING.lg,
+      marginBottom: SPACING.xl,
+    },
+    avatarWrap: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceSubtle,
+    },
+    userCardInfo: {
+      flex: 1,
+      marginLeft: SPACING.md,
+    },
+    userCardName: {
+      ...FONTS.bodyBold,
+      color: colors.textPrimary,
+    },
+    userCardEmail: {
+      ...FONTS.small,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+
+    // Section label
+    sectionLabel: {
+      ...FONTS.tiny,
+      color: colors.textMuted,
+      letterSpacing: 1.2,
+      marginBottom: SPACING.sm,
+      marginTop: SPACING.lg,
+    },
+
+    // Card
+    card: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      borderRadius: RADIUS.lg,
+      overflow: 'hidden',
+    },
+
+    // Row
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: SPACING.lg,
+      minHeight: 56,
+      paddingVertical: SPACING.sm,
+    },
+    rowLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+    },
+    rowIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: RADIUS.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: SPACING.md,
+      backgroundColor: colors.surfaceSubtle,
+    },
+    rowText: {
+      flex: 1,
+    },
+    rowTitle: {
+      ...FONTS.bodyMedium,
+      color: colors.textPrimary,
+    },
+    rowSub: {
+      ...FONTS.small,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    rowRight: {
+      marginLeft: SPACING.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    dangerRowTitle: {
+      ...FONTS.bodyMedium,
+      color: colors.danger,
+    },
+    dangerRowSub: {
+      ...FONTS.small,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginLeft: SPACING.lg + 32 + SPACING.md,
+    },
+
+    // Version
+    versionWrap: {
+      alignItems: 'center',
+      marginTop: SPACING.xl,
+    },
+    versionText: {
+      ...FONTS.small,
+      color: colors.textMuted,
+    },
+  });
+}

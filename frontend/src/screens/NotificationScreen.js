@@ -1,15 +1,6 @@
 import React, { useContext, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
-  RefreshControl,
-  StatusBar,
-} from 'react-native';
+import { View, Text, StyleSheet, StatusBar, FlatList, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import { useAppTheme } from '../context/ThemeContext';
@@ -17,6 +8,7 @@ import { timeAgo } from '../utils/format';
 import { NotificationContext } from '../context/NotificationContext';
 import Avatar from '../components/Avatar';
 import EmptyState from '../components/EmptyState';
+import { triggerHaptic } from '../utils/haptics';
 
 function createStyles(colors, isDark) {
   return StyleSheet.create({
@@ -48,14 +40,14 @@ function createStyles(colors, isDark) {
       textTransform: 'none',
     },
     listContent: {
-      paddingBottom: SPACING.md,
       paddingTop: SPACING.md,
+      // paddingBottom applied inline to account for floating tab bar + safe area
     },
     notificationItem: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.md,
+      paddingVertical: SPACING.lg,
       backgroundColor: colors.surface,
       marginHorizontal: SPACING.md,
       marginBottom: SPACING.sm,
@@ -124,6 +116,7 @@ function createStyles(colors, isDark) {
 
 const NotificationScreen = ({ navigation }) => {
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const {
@@ -137,6 +130,7 @@ const NotificationScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = React.useState(false);
 
   const handleRefresh = async () => {
+    triggerHaptic('impactLight');
     setRefreshing(true);
     await fetchNotifications();
     setRefreshing(false);
@@ -226,7 +220,7 @@ const NotificationScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
@@ -247,8 +241,12 @@ const NotificationScreen = ({ navigation }) => {
           data={notifications}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 12) + 68 + 24 }]}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={7}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

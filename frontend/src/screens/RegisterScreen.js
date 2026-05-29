@@ -3,14 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
+  StatusBar,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
   Switch,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
@@ -57,7 +57,7 @@ export default function RegisterScreen({ navigation }) {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.primary }]}>Join us</Text>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>Start sharing your learning journey with the world.</Text>

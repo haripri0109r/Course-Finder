@@ -1,42 +1,48 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { COLORS, RADIUS, SPACING, FONTS } from '../utils/theme';
+import { RADIUS, SPACING, FONTS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 export default function Tag({ label, active = false, onPress, style }) {
+  const { colors } = useAppTheme();
+  const s = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <TouchableOpacity
       activeOpacity={0.75}
       onPress={onPress}
       disabled={!onPress}
-      style={[styles.base, active ? styles.active : styles.inactive, style]}
+      style={[s.base, active ? s.active : s.inactive, style]}
     >
-      <Text style={[styles.label, active ? styles.activeLabel : styles.inactiveLabel]}>{label}</Text>
+      <Text style={[s.label, active ? s.activeLabel : s.inactiveLabel]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  base: {
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 6,
-  },
-  active: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-  },
-  inactive: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border,
-  },
-  label: {
-    ...FONTS.captionBold,
-  },
-  activeLabel: {
-    color: COLORS.white,
-  },
-  inactiveLabel: {
-    color: COLORS.textSecondary,
-  },
-});
+function createStyles(c) {
+  return StyleSheet.create({
+    base: {
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: 6,
+    },
+    active: {
+      backgroundColor: c.accent,
+      borderColor: c.accent,
+    },
+    inactive: {
+      backgroundColor: c.surface,
+      borderColor: c.border,
+    },
+    label: {
+      ...FONTS.captionBold,
+    },
+    activeLabel: {
+      color: c.white,
+    },
+    inactiveLabel: {
+      color: c.textSecondary,
+    },
+  });
+}

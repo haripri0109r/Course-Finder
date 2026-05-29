@@ -1,37 +1,37 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
-import { COLORS, SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
 export default function CoursePreview({ title, image, platform, duration }) {
-  // Edge Case Protection: Don't render empty card
+  const { colors } = useAppTheme();
   if (!title && !image && !platform) return null;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       {image ? (
-        <Image source={{ uri: image }} style={styles.image} />
+        <Image source={{ uri: image }} style={[styles.image, { backgroundColor: colors.border }]} />
       ) : (
-        <View style={styles.placeholderImage}>
-          <Text style={styles.placeholderText}>No Image 🖼️</Text>
+        <View style={[styles.placeholderImage, { backgroundColor: colors.background }]}>
+          <Text style={[styles.placeholderText, { color: colors.textMuted }]}>No Image</Text>
         </View>
       )}
-      
+
       <View style={styles.content}>
-        <Text style={styles.platform}>{platform || 'Select Platform'}</Text>
-        <Text style={styles.title} numberOfLines={2}>
+        <Text style={[styles.platform, { color: colors.primary }]}>{platform || 'Select Platform'}</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={2}>
           {title || 'Course Title Preview...'}
         </Text>
-        
+
         {duration && duration !== 'N/A' && (
           <View style={styles.durationRow}>
             <Text style={styles.durationEmoji}>⌛</Text>
-            <Text style={styles.durationText}>{duration}</Text>
+            <Text style={[styles.durationText, { color: colors.textSecondary }]}>{duration}</Text>
           </View>
         )}
       </View>
-      
-      {/* Visual Badge for "Preview" */}
-      <View style={styles.previewBadge}>
+
+      <View style={[styles.previewBadge, { backgroundColor: colors.secondary }]}>
         <Text style={styles.previewBadgeText}>LIVE PREVIEW</Text>
       </View>
     </View>
@@ -40,44 +40,37 @@ export default function CoursePreview({ title, image, platform, duration }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.card,
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
     marginBottom: SPACING.xl,
     marginLeft: SPACING.xs,
     ...SHADOW.md,
     borderWidth: 1,
-    borderColor: COLORS.primaryLight,
   },
   image: {
     height: 140,
     width: '100%',
     resizeMode: 'cover',
-    backgroundColor: COLORS.border,
   },
   placeholderImage: {
     height: 140,
-    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
   placeholderText: {
     ...FONTS.small,
-    color: COLORS.textMuted,
   },
   content: {
     padding: SPACING.lg,
   },
   platform: {
     ...FONTS.caption,
-    color: COLORS.primary,
     fontWeight: '800',
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   title: {
     ...FONTS.bodyBold,
-    color: COLORS.textPrimary,
     lineHeight: 22,
   },
   durationRow: {
@@ -91,14 +84,12 @@ const styles = StyleSheet.create({
   },
   durationText: {
     ...FONTS.small,
-    color: COLORS.textSecondary,
     fontWeight: '700',
   },
   previewBadge: {
     position: 'absolute',
     top: 12,
     right: 12,
-    backgroundColor: COLORS.secondary,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: RADIUS.sm,

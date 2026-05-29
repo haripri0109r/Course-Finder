@@ -27,6 +27,7 @@ import { showToast } from '../components/Toast';
 import { timeAgo } from '../utils/format';
 import { prefetchImages } from '../utils/prefetch';
 import { on as onEvent } from '../utils/eventBus';
+import { triggerHaptic } from '../utils/haptics';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 
 function createStyles(colors) {
@@ -66,8 +67,8 @@ function createStyles(colors) {
       alignItems: 'center',
     },
     iconAction: {
-      width: 36,
-      height: 36,
+      width: 44,
+      height: 44,
       borderRadius: RADIUS.md,
       borderWidth: 1,
       borderColor: colors.border,
@@ -228,7 +229,7 @@ function createStyles(colors) {
       flex: 1,
       flexDirection: 'row',
       borderRadius: RADIUS.md,
-      padding: SPACING.sm,
+      padding: SPACING.md,
       marginBottom: SPACING.md,
       borderWidth: 1,
       alignItems: 'center',
@@ -370,6 +371,7 @@ export default function ProfileScreen({ route, navigation }) {
   );
 
   const onRefresh = () => {
+    triggerHaptic('impactLight');
     setRefreshing(true);
     fetchProfileData(true);
   };
@@ -420,8 +422,8 @@ export default function ProfileScreen({ route, navigation }) {
     return points;
   };
 
-  const completeness = calculateCompleteness();
-  const nextStep = !displayUser?.bio ? 'Add your bio' : !displayUser?.profilePicture ? 'Add a photo' : !displayUser?.headline ? 'Add a headline' : 'Add your skills';
+  const completeness = useMemo(() => calculateCompleteness(), [displayUser]);
+  const nextStep = useMemo(() => !displayUser?.bio ? 'Add your bio' : !displayUser?.profilePicture ? 'Add a photo' : !displayUser?.headline ? 'Add a headline' : 'Add your skills', [displayUser]);
 
   const achievements = [
     {
@@ -450,7 +452,7 @@ export default function ProfileScreen({ route, navigation }) {
     },
   ];
 
-  const ProfileHeader = () => (
+  const ProfileHeader = useMemo(() => () => (
     <View style={styles.header}>
       <View style={styles.heroSection}>
         <View style={styles.topRow}>
@@ -639,9 +641,9 @@ export default function ProfileScreen({ route, navigation }) {
         <SectionHeader title="Activity" subtitle="Your published learning logs" />
       </View>
     </View>
-  );
+  ), [styles, colors, isDark, displayUser, isOwnProfile, completeness, nextStep, achievements, completed, navigation, toggleTheme]);
 
-  const renderTimelineItem = ({ item }) => (
+  const renderTimelineItem = useCallback(({ item }) => (
     <TouchableOpacity
       activeOpacity={0.9}
       style={styles.timelineItem}
@@ -680,14 +682,14 @@ export default function ProfileScreen({ route, navigation }) {
         </View>
       </View>
     </TouchableOpacity>
-  );
+  ), [styles, colors, navigation]);
 
   if (error && completed.length === 0) {
     return <RetryBox message="Error loading profile" error={error} onRetry={onRefresh} />;
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <FlatList
         data={loading ? [1, 2, 3] : completed}
@@ -704,6 +706,10 @@ export default function ProfileScreen({ route, navigation }) {
         ListHeaderComponent={<ProfileHeader />}
         contentContainerStyle={[styles.list, { paddingBottom: Math.max(insets.bottom, SPACING.md) + 100 }]}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={7}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
         }

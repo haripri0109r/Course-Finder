@@ -1,78 +1,79 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS, SPACING, FONTS, RADIUS } from '../utils/theme';
+import { SPACING, FONTS, RADIUS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 import PrimaryButton from './PrimaryButton';
 
-/**
- * Premium error state with retry action
- */
 export default function RetryBox({ message, onRetry, error }) {
+  const { colors } = useAppTheme();
+  const s = styles(colors);
+
   return (
-    <View style={styles.container}>
-      <View style={styles.iconContainer}>
-        <Text style={styles.icon}>!</Text>
+    <View style={s.container}>
+      <View style={s.iconContainer}>
+        <Text style={s.icon}>!</Text>
       </View>
-      
-      <Text style={styles.message}>{message || 'Something went wrong'}</Text>
-      
+
+      <Text style={s.message}>{message || 'Something went wrong'}</Text>
+
       {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error.message || String(error)}</Text>
+        <View style={s.errorContainer}>
+          <Text style={s.errorText}>{error.message || String(error)}</Text>
         </View>
       )}
-      
+
       <PrimaryButton
         title="Try Again"
         onPress={onRetry}
         variant="secondary"
         size="md"
-        style={styles.button}
+        style={s.button}
         icon="↻"
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = (colors) => StyleSheet.create({
   container: {
     padding: SPACING['5xl'],
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   iconContainer: {
     width: 80,
     height: 80,
     borderRadius: RADIUS.md,
-    backgroundColor: COLORS.dangerSoft,
+    backgroundColor: colors.dangerSoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xl,
   },
   icon: {
     fontSize: 28,
-    color: COLORS.danger,
+    color: colors.danger,
     fontWeight: '700',
   },
   message: {
     ...FONTS.h3,
-    color: COLORS.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: SPACING.md,
   },
   errorContainer: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     padding: SPACING.md,
     borderRadius: RADIUS.md,
     marginBottom: SPACING['3xl'],
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor: colors.borderLight,
     width: '100%',
   },
   errorText: {
     ...FONTS.tiny,
-    color: COLORS.danger,
+    color: colors.danger,
     textAlign: 'center',
     fontWeight: '600',
   },

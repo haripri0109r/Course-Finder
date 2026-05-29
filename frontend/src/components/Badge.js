@@ -1,11 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS } from '../utils/theme';
+import { useAppTheme } from '../context/ThemeContext';
 
-/**
- * Small status badge (notification count, status dot, etc.)
- * Variants: primary | success | danger | warning | muted
- */
 export default function Badge({
   count,
   label,
@@ -17,22 +13,25 @@ export default function Badge({
   dot = false,
   style,
 }) {
+  const { colors } = useAppTheme();
+  const s = useMemo(() => createStyles(colors), [colors]);
+
   const variantColors = {
-    primary: { bg: COLORS.accent, text: COLORS.textInverse },
-    success: { bg: COLORS.success, text: COLORS.textInverse },
-    danger:  { bg: COLORS.danger,  text: COLORS.textInverse },
-    warning: { bg: COLORS.warning, text: COLORS.textInverse },
-    muted: { bg: COLORS.borderLight, text: COLORS.textSecondary },
-    soft: { bg: COLORS.surfaceSubtle, text: COLORS.textPrimary },
+    primary: { bg: colors.accent, text: colors.textInverse },
+    success: { bg: colors.success, text: colors.textInverse },
+    danger:  { bg: colors.danger,  text: colors.textInverse },
+    warning: { bg: colors.warning, text: colors.textInverse },
+    muted: { bg: colors.borderLight, text: colors.textSecondary },
+    soft: { bg: colors.surfaceSubtle, text: colors.textPrimary },
   };
 
   const v = color
-    ? { bg: color, text: COLORS.textInverse }
+    ? { bg: color, text: colors.textInverse }
     : (variantColors[variant] || variantColors.primary);
 
   if (dot) {
     return (
-      <View style={[styles.dot, { backgroundColor: v.bg }, style]} />
+      <View style={[s.dot, { backgroundColor: v.bg }, style]} />
     );
   }
 
@@ -43,14 +42,14 @@ export default function Badge({
 
   return (
     <View style={[
-      styles.badge,
-      size === 'sm' && styles.badgeSm,
+      s.badge,
+      size === 'sm' && s.badgeSm,
       { backgroundColor: v.bg },
       style,
     ]}>
       <Text style={[
-        styles.text,
-        size === 'sm' && styles.textSm,
+        s.text,
+        size === 'sm' && s.textSm,
         { color: v.text },
       ]}>
         {icon ? `${icon} ${displayText}` : displayText}
@@ -59,33 +58,35 @@ export default function Badge({
   );
 }
 
-const styles = StyleSheet.create({
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeSm: {
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    paddingHorizontal: 4,
-  },
-  text: {
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  textSm: {
-    fontSize: 9,
-    fontWeight: '800',
-  },
-});
+function createStyles(c) {
+  return StyleSheet.create({
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    badge: {
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      paddingHorizontal: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badgeSm: {
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      paddingHorizontal: 4,
+    },
+    text: {
+      fontSize: 11,
+      fontWeight: '700',
+      textAlign: 'center',
+    },
+    textSm: {
+      fontSize: 9,
+      fontWeight: '800',
+    },
+  });
+}

@@ -3,19 +3,19 @@ import {
   View,
   Text,
   StyleSheet,
+  StatusBar,
   ScrollView,
-  ActivityIndicator,
-  SafeAreaView,
-  TouchableOpacity,
   TextInput,
-  Image,
   KeyboardAvoidingView,
   Platform,
-  StatusBar,
+  TouchableOpacity,
   Share,
-  Alert,
   Linking,
+  Image,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SPACING, FONTS, RADIUS, SHADOW } from '../utils/theme';
 import { useAppTheme } from '../context/ThemeContext';
@@ -65,7 +65,7 @@ function createStyles(colors, isDark) {
       padding: SPACING.xl,
     },
     flex: { flex: 1 },
-    scrollContent: { flexGrow: 1, paddingBottom: 120 },
+    scrollContent: { flexGrow: 1, paddingBottom: 140 },
     hero: { height: 360, backgroundColor: colors.primary },
     heroImg: { width: '100%', height: '100%', opacity: isDark ? 0.85 : 0.75 },
     heroOverlay: {
@@ -83,9 +83,9 @@ function createStyles(colors, isDark) {
       zIndex: 10,
     },
     navBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       backgroundColor: 'rgba(0,0,0,0.35)',
       justifyContent: 'center',
       alignItems: 'center',
@@ -327,7 +327,6 @@ function createStyles(colors, isDark) {
       right: 0,
       backgroundColor: colors.surface,
       padding: SPACING.xl,
-      paddingBottom: Platform.OS === 'ios' ? 36 : SPACING.xl,
       borderTopWidth: 1,
       borderTopColor: colors.border,
       ...SHADOW.lg,
@@ -341,6 +340,7 @@ const PostDetailScreen = ({ route, navigation }) => {
   const { postId } = route.params;
   const { bookmarks, toggleBookmark, user: currentUser } = useContext(AuthContext);
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [post, setPost] = useState(null);
@@ -635,12 +635,13 @@ const PostDetailScreen = ({ route, navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <View style={styles.hero}>
           <CourseImage uri={post.image || DEFAULT_IMAGE} style={styles.heroImg} />
           <View style={styles.heroOverlay} />
 
-          <SafeAreaView style={styles.heroNav}>
+          <SafeAreaView style={styles.heroNav} edges={['top']}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.navBtn}>
               <Ionicons name="close" size={22} color={colors.white} />
             </TouchableOpacity>
@@ -795,7 +796,7 @@ const PostDetailScreen = ({ route, navigation }) => {
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, SPACING.md) + SPACING.md }]}>
         <PrimaryButton
           title="Open course"
           onPress={handleOpenCourse}

@@ -1,21 +1,25 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { Platform, Button, View, AppState } from 'react-native';
-import { Audio } from 'expo-av';
-import * as Notifications from 'expo-notifications'; // 🔥 FIX 5: SYSTEM NOTIF
 import { navigationRef } from '../navigation/navigationRef';
 import Constants from 'expo-constants';
-import { AuthContext } from "./AuthContext"; 
+import { AuthContext } from "./AuthContext";
 import { showToast } from "../components/Toast";
-import socket, { connectWithAuth, disconnectSocket } from '../services/socket'; 
+import socket, { connectWithAuth, disconnectSocket } from '../services/socket';
 import api from '../services/api';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Guard native-only modules for web compatibility
+let Audio, Notifications;
+if (Platform.OS !== 'web') {
+  Audio = require('expo-av').Audio;
+  Notifications = require('expo-notifications');
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 export const NotificationContext = createContext();
 
@@ -33,9 +37,9 @@ export const NotificationProvider = ({ children }) => {
   const appStateRef = useRef(AppState.currentState);
   const isPlayingRef = useRef(false); 
 
-  // --- 🔥 FIX 5: SET SYSTEM NOTIFICATION CHANNEL (ANDROID ONLY) ---
+  // --- SET SYSTEM NOTIFICATION CHANNEL (ANDROID ONLY) ---
   useEffect(() => {
-    if (Platform.OS === 'android') {
+    if (Platform.OS === 'android' && Notifications) {
       Notifications.setNotificationChannelAsync("default", {
         name: "default",
         importance: Notifications.AndroidImportance.MAX,
@@ -91,8 +95,9 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user?._id, fetchNotifications]);
 
-  // --- 🔥 FIX 1 & 2: GENERATE EXPO PUSH TOKEN OVER-THE-AIR ---
+  // --- GENERATE EXPO PUSH TOKEN OVER-THE-AIR ---
   const registerForPushNotificationsAsync = async () => {
+    if (Platform.OS === 'web' || !Notifications) return;
     let token;
     
     try {
@@ -146,7 +151,7 @@ export const NotificationProvider = ({ children }) => {
     socket.on("connect", () => console.log("🟢 Socket connected"));
     socket.on("connect_error", (err) => console.log("❌ Socket error:", err.message));
     socket.on("new_notification", (notif) => {
-      showToast(`${notif.actorName} ${notif.type}`);
+      showToast({ message: `${notif.actorName || 'Someone'} ${notif.type || 'activity'}`, type: 'info' });
       setNotifications(prev => [notif, ...prev]);
     });
     socket.on("unread_count", (count) => {
@@ -183,24 +188,23 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  // --- 🔥 DEEP LINKING: HANDLE CLICK (BACKGROUND/FOREGROUND) ---
+  // --- DEEP LINKING: HANDLE CLICK (BACKGROUND/FOREGROUND) ---
   useEffect(() => {
+    if (Platform.OS === 'web' || !Notifications) return;
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
-      console.log("📩 Notification clicked:", data);
       handleNavigation(data);
     });
-
     return () => subscription.remove();
   }, []);
 
-  // --- 🔥 DEEP LINKING: HANDLE COLD START (KILLED APP) ---
+  // --- DEEP LINKING: HANDLE COLD START (KILLED APP) ---
   useEffect(() => {
+    if (Platform.OS === 'web' || !Notifications) return;
     const checkInitialNotification = async () => {
       const response = await Notifications.getLastNotificationResponseAsync();
       if (response) {
         const data = response.notification.request.content.data;
-        console.log("🚀 Opened from notification (Cold Start):", data);
         handleNavigation(data);
       }
     };
@@ -209,6 +213,7 @@ export const NotificationProvider = ({ children }) => {
 
   // --- AUDIO RE-SYNC ON APP ACTIVE ---
   useEffect(() => {
+    if (Platform.OS === 'web' || !Audio) return;
     const sub = AppState.addEventListener("change", async (next) => {
       appStateRef.current = next;
 
@@ -243,7 +248,7 @@ export const NotificationProvider = ({ children }) => {
 
   // --- INITIAL AUDIO MOUNTING ---
   useEffect(() => {
-    if (isLoadedRef.current) return;
+    if (Platform.OS === 'web' || !Audio || isLoadedRef.current) return;
 
     let isMounted = true;
 
@@ -339,21 +344,23 @@ export const NotificationProvider = ({ children }) => {
       message: msg || data.message || "New activity detected",
     });
 
-    // 🔥 FIX 5: EXPO SYSTEM BELL TRIGGER
-    try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: data.actorId?.name || "Notification",
-          body: msg || data.message,
-        },
-        trigger: null, // instantly drop the notification banner from iOS/Android OS
-      });
-    } catch(e) {
-      console.log("⚠️ System push notification error:", e.message);
+    // EXPO SYSTEM BELL TRIGGER
+    if (Platform.OS !== 'web' && Notifications) {
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: data.actorId?.name || "Notification",
+            body: msg || data.message,
+          },
+          trigger: null,
+        });
+      } catch(e) {
+        console.log("System push notification error:", e.message);
+      }
     }
 
     // Audio Block Guards
-    if (appStateRef.current !== "active") return;
+    if (Platform.OS === 'web' || !Audio || appStateRef.current !== "active") return;
 
     const now = Date.now();
     if (now - lastPlayRef.current < 1000) return;

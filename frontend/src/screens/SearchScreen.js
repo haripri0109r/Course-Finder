@@ -2,14 +2,15 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  FlatList,
-  TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
-  ScrollView,
   StatusBar,
   TextInput,
+  FlatList,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import CourseCard from '../components/CourseCard';
@@ -83,7 +84,7 @@ function createStyles(colors) {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surfaceSubtle,
-      height: 46,
+      height: 48,
       borderRadius: RADIUS.md,
       paddingHorizontal: SPACING.md,
       borderWidth: 1,
@@ -141,7 +142,7 @@ function createStyles(colors) {
     recentChip: {
       backgroundColor: colors.surface,
       paddingHorizontal: 14,
-      paddingVertical: 9,
+      paddingVertical: 12,
       borderRadius: RADIUS.full,
       marginRight: SPACING.sm,
       marginBottom: SPACING.sm,
@@ -231,6 +232,7 @@ function createStyles(colors) {
 
 export default function SearchScreen({ navigation }) {
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [query, setQuery] = useState('');
@@ -260,7 +262,7 @@ export default function SearchScreen({ navigation }) {
   };
 
   const DiscoveryView = () => (
-    <ScrollView style={styles.discovery} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: SPACING.md }}>
+    <ScrollView style={styles.discovery} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 12) + 68 + 24 }}>
       <View style={styles.discoverySection}>
         <View style={styles.rowHeader}>
           <Text style={styles.sectionTitle}>Recent searches</Text>
@@ -350,7 +352,7 @@ export default function SearchScreen({ navigation }) {
         );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.searchHeader}>
@@ -439,7 +441,7 @@ export default function SearchScreen({ navigation }) {
               <CourseCard item={item} />
             </View>
           )}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={[styles.listContainer, { paddingBottom: Math.max(insets.bottom, 12) + 68 + 24 }]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <EmptyState
