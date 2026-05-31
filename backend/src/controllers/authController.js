@@ -1,9 +1,32 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
-import { User } from '../models/index.js';
-import generateToken from '../utils/generateToken.js';
+import jwt from 'jsonwebtoken';
+import { User, Session } from '../models/index.js';
+import { generateAccessToken, generateRefreshToken } from '../utils/generateToken.js';
 import { validateBody, registerSchema, loginSchema, forgotPasswordSchema, updateProfileSchema, pushTokenSchema } from '../validators/schemas.js';
 import { deleteFromCloudinary } from '../utils/cloudinary.js';
+
+// ─── Helper: create session and tokens ────────────────────────────────────────
+const createTokensAndSession = async (user, req) => {
+  const accessToken = generateAccessToken(user._id);
+  const refreshToken = generateRefreshToken(user._id);
+
+  // Hash refresh token for DB storage
+  const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+  // Decode refresh token to get exact expiry
+  const decoded = jwt.decode(refreshToken);
+  
+  await Session.create({
+    userId: user._id,
+    refreshTokenHash,
+    deviceInfo: req.headers['user-agent'] || 'Unknown Device',
+    ipAddress: req.ip || req.connection.remoteAddress || 'Unknown IP',
+    expiresAt: new Date(decoded.exp * 1000),
+  });
+
+  return { accessToken, refreshToken };
+};
 
 // ─── Helper: shape the response payload ──────────────────────────────────────
 const userPayload = (user) => ({
@@ -53,13 +76,14 @@ const registerUser = async (req, res) => {
   const user = await User.create({ name: name.trim(), email: email.toLowerCase().trim(), password });
 
   // Generate token and respond
-  const token = generateToken(user._id);
+  const { accessToken, refreshToken } = await createTokensAndSession(user, req);
 
   return res.status(201).json({
     success: true,
     message: 'Account created successfully',
     data: {
-      token,
+      token: accessToken,
+      refreshToken,
       user: userPayload(user),
     },
   });
@@ -95,13 +119,14 @@ const loginUser = async (req, res) => {
   }
 
   // Issue token and respond
-  const token = generateToken(user._id);
+  const { accessToken, refreshToken } = await createTokensAndSession(user, req);
 
   return res.status(200).json({
     success: true,
     message: 'Logged in successfully',
     data: {
-      token,
+      token: accessToken,
+      refreshToken,
       user: userPayload(user),
     },
   });
@@ -447,6 +472,77 @@ const changePassword = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/v1/auth/refresh
+// @access  Public
+// ─────────────────────────────────────────────────────────────────────────────
+const refreshTokenHandler = async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(401).json({ success: false, message: 'Refresh token required' });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+    const session = await Session.findOne({
+      userId: decoded.id,
+      refreshTokenHash,
+      isRevoked: false,
+    });
+
+    if (!session) {
+      return res.status(401).json({ success: false, message: 'Session invalid or revoked' });
+    }
+
+    // Revoke old session (Token Rotation)
+    session.isRevoked = true;
+    await session.save();
+
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found' });
+    }
+
+    // Create new pair
+    const tokens = await createTokensAndSession(user, req);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Token refreshed',
+      data: { token: tokens.accessToken, refreshToken: tokens.refreshToken },
+    });
+  } catch (error) {
+    return res.status(401).json({ success: false, message: 'Invalid or expired refresh token' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/v1/auth/logout
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const logout = async (req, res) => {
+  const { refreshToken } = req.body;
+  if (refreshToken) {
+    const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    await Session.findOneAndUpdate(
+      { userId: req.user._id, refreshTokenHash },
+      { isRevoked: true }
+    );
+  }
+  return res.status(200).json({ success: true, message: 'Logged out successfully' });
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// @route   POST /api/v1/auth/logout-all
+// @access  Private
+// ─────────────────────────────────────────────────────────────────────────────
+const logoutAll = async (req, res) => {
+  await Session.updateMany({ userId: req.user._id }, { isRevoked: true });
+  return res.status(200).json({ success: true, message: 'Logged out from all devices' });
+};
+
 export {
   registerUser,
   loginUser,
@@ -458,4 +554,7 @@ export {
   resetPassword,
   deleteAccount,
   changePassword,
+  refreshTokenHandler,
+  logout,
+  logoutAll,
 };

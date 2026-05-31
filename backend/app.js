@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import mongoSanitize from 'express-mongo-sanitize';
+import xss from 'xss-clean';
 
 // All Routes migrated to src/routes
 import healthRoutes from './src/routes/healthRoutes.js';
@@ -66,6 +67,9 @@ app.use(mongoSanitize({
     console.warn(`🛡️ Sanitized key "${key}" in ${req.method} ${req.originalUrl}`);
   },
 }));
+
+// ─── XSS Protection ──────────────────────────────────────────────────────────
+app.use(xss());
 
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
 app.use('/api', generalLimiter);

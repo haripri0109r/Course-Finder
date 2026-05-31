@@ -10,6 +10,9 @@ import {
   resetPassword,
   deleteAccount,
   changePassword,
+  refreshTokenHandler,
+  logout,
+  logoutAll,
 } from '../controllers/authController.js';
 import { followUser, unfollowUser, getFollowers, getFollowing } from '../controllers/userSocialController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
@@ -22,8 +25,11 @@ router.post('/register', registerLimiter, registerUser);
 router.post('/login', loginLimiter, loginUser);
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.post('/reset-password/:token', resetPasswordLimiter, resetPassword);
+router.post('/refresh', refreshTokenHandler);
 
 // ─── Protected Profile ───────────────────────────────────────────────────────
+router.post('/logout', authenticate, logout);
+router.post('/logout-all', authenticate, logoutAll);
 router.get('/me', authenticate, getMe);
 router.put('/me', authenticate, updateProfile);
 router.delete('/me', authenticate, deleteAccount);

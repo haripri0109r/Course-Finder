@@ -54,6 +54,18 @@ export const resetPasswordLimiter = rateLimit({
   },
 });
 
+// Refresh token: 10 requests per 15 minutes
+export const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many token refresh attempts. Please try again later.',
+  },
+});
+
 // General API: 200 req / 15 min (inherited from existing config)
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
