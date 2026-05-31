@@ -101,6 +101,10 @@ export default function FloatingTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
 
+  // Hide tab bar if we are on the Add screen (achievement wizard)
+  const currentRouteName = state.routes[state.index].name;
+  if (currentRouteName === 'Add') return null;
+
   // Proper safe area: at least 12px below bar, plus device safe area
   const bottomPad = Math.max(insets.bottom, 12);
 

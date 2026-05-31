@@ -45,6 +45,16 @@ export default function AddCourseScreen({ navigation }) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [currentStep, setCurrentStep] = useState(0);
   const fade = useRef(new Animated.Value(1)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(progressAnim, {
+      toValue: ((currentStep + 1) / STEPS.length) * 100,
+      useNativeDriver: false,
+      tension: 20,
+      friction: 7,
+    }).start();
+  }, [currentStep]);
 
   const [title, setTitle] = useState('');
   const [platform, setPlatform] = useState('');
@@ -243,6 +253,7 @@ export default function AddCourseScreen({ navigation }) {
     setMetadataFetched(false);
     setMetadataError('');
     showToast({ message: 'Manual entry — fill details in the next step.', type: 'info' });
+    transitionToStep(2);
   };
 
   const nextStep = () => {
@@ -250,6 +261,7 @@ export default function AddCourseScreen({ navigation }) {
     if (currentStep === 0) {
       if (!url.trim() || !isValidHttpUrl(url)) {
         setErrors({ url: 'A valid http(s) course URL is required' });
+        showToast({ message: 'Valid course URL is required', type: 'error' });
         return;
       }
     }
@@ -261,11 +273,13 @@ export default function AddCourseScreen({ navigation }) {
       }
     }
     if (currentStep === 2) {
-      if (!title.trim() || !platform) {
-        setErrors({
-          title: !title.trim() ? 'Title is required' : null,
-          platform: !platform ? 'Select a platform' : null,
-        });
+      const newErrors = {};
+      if (!title.trim()) newErrors.title = 'Title is required';
+      if (!platform) newErrors.platform = 'Select a platform';
+      
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        showToast({ message: 'Please fill in required fields', type: 'error' });
         return;
       }
     }
@@ -276,6 +290,7 @@ export default function AddCourseScreen({ navigation }) {
       const n = Number(progressPercent);
       if (progressPercent.trim() === '' || Number.isNaN(n) || n < 0 || n > 100) {
         setErrors({ progress: 'Progress must be a number from 0 to 100' });
+        showToast({ message: 'Progress must be 0–100', type: 'error' });
         return;
       }
     }
@@ -342,7 +357,10 @@ export default function AddCourseScreen({ navigation }) {
   };
 
   const StepBar = () => {
-    const pct = ((currentStep + 1) / STEPS.length) * 100;
+    const width = progressAnim.interpolate({
+      inputRange: [0, 100],
+      outputRange: ['0%', '100%'],
+    });
     return (
       <View style={[styles.indicatorContainer, { backgroundColor: colors.background }]}>
         <Text style={[styles.stepCount, { color: colors.textSecondary }]}>
@@ -350,7 +368,7 @@ export default function AddCourseScreen({ navigation }) {
         </Text>
         <Text style={[styles.stepLabel, { color: colors.accent }]}>{STEPS[currentStep]}</Text>
         <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-          <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: colors.accent }]} />
+          <Animated.View style={[styles.progressFill, { width, backgroundColor: colors.accent }]} />
         </View>
       </View>
     );
@@ -369,6 +387,9 @@ export default function AddCourseScreen({ navigation }) {
               onChangeText={setUrl}
               error={errors.url}
               iconName="link-outline"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
             />
           </View>
         );
@@ -614,23 +635,33 @@ export default function AddCourseScreen({ navigation }) {
 
       <StepBar />
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={0}>
-        <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: 140 + Math.max(insets.bottom, 16) }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-          <Animated.View style={{ opacity: fade }}>{renderStep()}</Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={[styles.scroll, { paddingBottom: 160 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            <Animated.View style={{ opacity: fade }}>{renderStep()}</Animated.View>
+          </ScrollView>
 
-      {/* Footer OUTSIDE KAV so it stays visible when keyboard opens */}
-      <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.borderLight, paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {currentStep > 0 && (
-          <PrimaryButton title="Back" onPress={prevStep} variant="outline" style={{ flex: 1, marginRight: SPACING.md }} />
-        )}
-        {currentStep < STEPS.length - 1 ? (
-          <PrimaryButton title="Next" onPress={nextStep} style={{ flex: 2 }} />
-        ) : (
-          <PrimaryButton title="Publish" onPress={handleSubmit} loading={loading} style={{ flex: 2 }} />
-        )}
-      </View>
+          <View style={[styles.footer, { backgroundColor: colors.surface, borderTopColor: colors.borderLight, paddingBottom: Math.max(insets.bottom, SPACING.lg) }]}>
+            {currentStep > 0 && (
+              <PrimaryButton title="Back" onPress={prevStep} variant="outline" style={{ flex: 1, marginRight: SPACING.md }} />
+            )}
+            {currentStep < STEPS.length - 1 ? (
+              <PrimaryButton title="Next" onPress={nextStep} style={{ flex: 2 }} />
+            ) : (
+              <PrimaryButton title="Publish" onPress={handleSubmit} loading={loading} style={{ flex: 2 }} />
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -668,9 +699,9 @@ function createStyles(colors) { return StyleSheet.create({
     height: 6,
     borderRadius: 3,
   },
-  scroll: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl },
-  stepContent: { flex: 1 },
-  label: { ...FONTS.label, marginBottom: SPACING.sm, marginTop: SPACING.lg },
+  scroll: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg },
+  stepContent: { flex: 1, paddingBottom: SPACING.xl },
+  label: { ...FONTS.label, marginBottom: SPACING.xs, marginTop: SPACING.md },
   fieldError: { ...FONTS.tiny, color: colors.danger, marginTop: 4 },
   fetchText: { ...FONTS.caption, marginLeft: 0 },
   metadataSkeleton: { marginTop: SPACING.sm },
