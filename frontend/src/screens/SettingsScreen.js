@@ -180,6 +180,21 @@ export default function SettingsScreen({ navigation }) {
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
+        {currentUser?.role && ['MODERATOR', 'ADMIN', 'SUPER_ADMIN'].includes(currentUser.role) && (
+          <>
+            <Text style={styles.sectionLabel}>ADMINISTRATION</Text>
+            <View style={styles.card}>
+              <Row
+                colors={colors} styles={styles}
+                icon="shield-checkmark-outline"
+                title="Admin Dashboard"
+                subtitle="Moderation and management"
+                onPress={() => navigation.navigate('AdminDashboard')}
+              />
+            </View>
+          </>
+        )}
+
         {/* Account */}
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <View style={styles.card}>

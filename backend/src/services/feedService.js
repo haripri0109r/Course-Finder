@@ -255,7 +255,7 @@ export const getTrendingCompletions = async (userId) => {
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const pipeline = [
-    { $match: { isPublic: true, createdAt: { $gte: twentyFourHoursAgo } } },
+    { $match: { isPublic: true, isRemoved: false, createdAt: { $gte: twentyFourHoursAgo } } },
     {
       $addFields: {
         trendingScore: {

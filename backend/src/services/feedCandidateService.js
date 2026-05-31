@@ -23,6 +23,7 @@ export const getCandidates = async (userId, userProfile, followingIds, mutedUser
 
   const baseMatch = {
     isPublic: true,
+    isRemoved: false,
     user: { $nin: [userObjId, ...mutedObjIds] }
   };
   

@@ -17,7 +17,7 @@ import {
   getUserCompletionsPaginated,
   shareCompletion
 } from '../controllers/completedCourseController.js';
-import { authenticate } from '../middleware/authMiddleware.js';
+import { authenticate, enforceNotSuspended } from '../middleware/authMiddleware.js';
 import { sanitizeImage } from '../middleware/sanitizeImage.js';
 import { cacheHeaders } from '../middleware/cacheHeaders.js';
 import upload from '../middleware/uploadMiddleware.js';
@@ -31,6 +31,7 @@ router.use(authenticate);
 // ─── Course Completions ──────────────────────────────────────────────────────
 router.post('/completed',
   uploadLimiter,
+  enforceNotSuspended,
   upload.fields([
     { name: 'thumbnail', maxCount: 1 },
     { name: 'certificate', maxCount: 1 }
@@ -39,7 +40,7 @@ router.post('/completed',
   addCompletedCourse
 );
 
-router.post('/completed/upload-certificate', uploadLimiter, upload.single('file'), uploadCertificate);
+router.post('/completed/upload-certificate', uploadLimiter, enforceNotSuspended, upload.single('file'), uploadCertificate);
 router.post('/completed/analytics/cert-view', trackCertView);
 router.get('/completed/me', cacheHeaders, getMyCompletedCourses);
 router.get('/completions/me/paginated', cacheHeaders, getMyCompletedCoursesPaginated);
@@ -55,9 +56,9 @@ router.get('/posts/:id', getPostById);
 router.get('/recent', getRecentActivity);
 
 // ─── Social (Like/Unlike/View/Share) ───────────────────────────────────────────────
-router.post('/completed/:id/like', likeCompletion);
+router.post('/completed/:id/like', enforceNotSuspended, likeCompletion);
 router.post('/completed/:id/unlike', unlikeCompletion);
 router.post('/completed/:id/view', incrementViewCount);
-router.post('/completed/:id/share', shareCompletion);
+router.post('/completed/:id/share', enforceNotSuspended, shareCompletion);
 
 export default router;

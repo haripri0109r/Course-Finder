@@ -6,7 +6,11 @@ import jwt from 'jsonwebtoken';
  * @returns {string} signed access token
  */
 export const generateAccessToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  const secret = process.env.JWT_ACCESS_SECRET;
+  if (!secret) {
+    throw new Error('JWT_ACCESS_SECRET is not defined in environment variables');
+  }
+  return jwt.sign({ id }, secret, {
     expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
   });
 };
@@ -17,7 +21,11 @@ export const generateAccessToken = (id) => {
  * @returns {string} signed refresh token
  */
 export const generateRefreshToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  const secret = process.env.JWT_REFRESH_SECRET;
+  if (!secret) {
+    throw new Error('JWT_REFRESH_SECRET is not defined in environment variables');
+  }
+  return jwt.sign({ id }, secret, {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   });
 };

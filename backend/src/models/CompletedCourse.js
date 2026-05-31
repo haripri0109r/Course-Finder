@@ -126,6 +126,24 @@ const completedCourseSchema = new mongoose.Schema(
     },
     courseTitle: String,
     courseImage: String,
+    isRemoved: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    removedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    removedAt: {
+      type: Date,
+      default: null,
+    },
+    removalReason: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

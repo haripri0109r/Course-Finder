@@ -117,6 +117,20 @@ const userSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    role: {
+      type: String,
+      enum: ['USER', 'MODERATOR', 'ADMIN', 'SUPER_ADMIN'],
+      default: 'USER',
+    },
+    accountStatus: {
+      type: String,
+      enum: ['ACTIVE', 'SUSPENDED', 'BANNED'],
+      default: 'ACTIVE',
+    },
+    suspensionExpiresAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true, // adds createdAt and updatedAt automatically

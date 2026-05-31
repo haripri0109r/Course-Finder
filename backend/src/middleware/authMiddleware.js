@@ -20,16 +20,27 @@ const authenticate = async (req, res, next) => {
 
   try {
     // 2. Verify the token — throws if expired or tampered
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const secret = process.env.JWT_ACCESS_SECRET;
+    if (!secret) {
+      throw new Error('JWT_ACCESS_SECRET is not defined');
+    }
+    const decoded = jwt.verify(token, secret);
 
     // 3. Fetch the user (exclude password field and heavy arrays)
     const user = await User.findById(decoded.id)
-      .select('name email');
+      .select('name email role accountStatus suspensionExpiresAt');
 
     if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Not authorized — user no longer exists',
+      });
+    }
+
+    if (user.accountStatus === 'BANNED') {
+      return res.status(403).json({
+        success: false,
+        message: 'Account banned. Access denied.',
       });
     }
 
@@ -46,4 +57,55 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-export { authenticate, authenticate as protect };
+/**
+ * Role checking middleware factory.
+ * @param {Array<string>} roles - Allowed roles (e.g. ['ADMIN', 'SUPER_ADMIN'])
+ */
+const requireRole = (roles) => {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden — insufficient permissions',
+      });
+    }
+    next();
+  };
+};
+
+/**
+ * Ensure user is not suspended for write actions.
+ * Suspended users can read but not write.
+ */
+const enforceNotSuspended = async (req, res, next) => {
+  if (req.user && req.user.accountStatus === 'SUSPENDED') {
+    // Check if suspension has expired
+    if (req.user.suspensionExpiresAt && new Date() > req.user.suspensionExpiresAt) {
+      // It has expired, update the user in DB and allow access
+      try {
+        await User.findByIdAndUpdate(req.user._id, {
+          accountStatus: 'ACTIVE',
+          suspensionExpiresAt: null,
+        });
+        // Update the req.user object for downstream logic
+        req.user.accountStatus = 'ACTIVE';
+        req.user.suspensionExpiresAt = null;
+        return next();
+      } catch (err) {
+        console.error('Failed to auto-clear suspension:', err.message);
+        // Fall through to denying access if DB update fails, for safety
+      }
+    }
+    return res.status(403).json({
+      success: false,
+      message: 'Account suspended. Action denied.',
+    });
+  }
+  next();
+};
+
+const requireAdmin = requireRole(['ADMIN', 'SUPER_ADMIN']);
+const requireModerator = requireRole(['MODERATOR', 'ADMIN', 'SUPER_ADMIN']);
+const requireSuperAdmin = requireRole(['SUPER_ADMIN']);
+
+export { authenticate, authenticate as protect, requireRole, requireAdmin, requireModerator, requireSuperAdmin, enforceNotSuspended };

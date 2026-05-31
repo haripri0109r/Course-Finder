@@ -22,6 +22,7 @@ import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ProfileEditScreen from '../screens/ProfileEditScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import { AuthContext } from '../context/AuthContext';
 
 const Tab = createBottomTabNavigator();
@@ -143,6 +144,9 @@ export default function AppNavigator() {
           <Stack.Screen name="UserProfile" component={ProfileScreen} />
           <Stack.Screen name="ProfileEdit" component={ProfileEditScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          {user?.role && ['MODERATOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
+            <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+          )}
         </>
       )}
     </Stack.Navigator>

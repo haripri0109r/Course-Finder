@@ -15,11 +15,12 @@ export const refreshTrendingCache = async () => {
 
   // 1. Calculate Trending Posts
   const trendingCandidates = await CompletedCourse.aggregate([
-    { 
-      $match: { 
+    {
+      $match: {
         isPublic: true,
+        isRemoved: false,
         createdAt: { $gte: twentyFourHoursAgo }
-      } 
+      }
     },
     {
       $addFields: {

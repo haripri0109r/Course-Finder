@@ -16,3 +16,5 @@ export { default as TrendingPost } from './TrendingPost.js';
 export { default as CacheControl } from './CacheControl.js';
 export { default as FeedSession } from './FeedSession.js';
 export { default as SyncJob } from './SyncJob.js';
+export { default as Report } from './Report.js';
+export { default as AdminAuditLog } from './AdminAuditLog.js';

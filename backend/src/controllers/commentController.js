@@ -26,8 +26,8 @@ export const addComment = async (req, res) => {
   }
 
   const completion = await CompletedCourse.findById(postId).populate('course', 'title').lean();
-  if (!completion) {
-    return res.status(404).json({ message: 'Post not found' });
+  if (!completion || completion.isRemoved) {
+    return res.status(404).json({ message: 'Post not found or has been removed' });
   }
 
   const comment = await Comment.create({
@@ -87,7 +87,7 @@ export const getComments = async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 20, 50);
     const cursor = req.query.cursor;
 
-    const query = { postId, parentId: null };
+    const query = { postId, parentId: null, isRemoved: false };
     if (cursor) {
       query._id = { $lt: cursor };
     }
@@ -106,7 +106,7 @@ export const getComments = async (req, res) => {
     
     // Fetch initial 5 replies for each root comment using aggregation + lookup for user data (Single Query)
     const repliesAggregation = await Comment.aggregate([
-      { $match: { parentId: { $in: rootIds } } },
+      { $match: { parentId: { $in: rootIds }, isRemoved: false } },
       { $sort: { _id: -1 } },
       {
         $group: {
@@ -221,7 +221,7 @@ export const getReplies = async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit) || 10, 30);
     const cursor = req.query.cursor;
 
-    const query = { parentId: commentId };
+    const query = { parentId: commentId, isRemoved: false };
     if (cursor) {
       query._id = { $lt: cursor };
     }

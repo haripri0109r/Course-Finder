@@ -5,7 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import mongoSanitize from 'express-mongo-sanitize';
-import xss from 'xss-clean';
+import { xss } from 'express-xss-sanitizer';
 
 // All Routes migrated to src/routes
 import healthRoutes from './src/routes/healthRoutes.js';
@@ -16,6 +16,9 @@ import bookmarkRoutes from './src/routes/bookmarkRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
 import commentRoutes from './src/routes/commentRoutes.js';
 import activityRoutes from './src/routes/activityRoutes.js';
+import reportRoutes from './src/routes/reportRoutes.js';
+import moderationRoutes from './src/routes/moderationRoutes.js';
+import adminRoutes from './src/routes/adminRoutes.js';
 
 // Middleware
 import errorHandler from './middleware/errorHandler.js';
@@ -68,15 +71,15 @@ app.use(mongoSanitize({
   },
 }));
 
+// ─── Body Parsing ────────────────────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // ─── XSS Protection ──────────────────────────────────────────────────────────
 app.use(xss());
 
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
 app.use('/api', generalLimiter);
-
-// ─── Body Parsing ────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ─── Trust Proxy (for Render / cloud deploys behind reverse proxy) ───────────
 if (process.env.NODE_ENV === 'production') {
@@ -115,6 +118,9 @@ app.use('/api/v1/bookmarks', bookmarkRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/comments', commentRoutes);
 app.use('/api/v1/activity', activityRoutes);
+app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/moderation', moderationRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => {

@@ -246,8 +246,8 @@ const forgotPassword = async (req, res) => {
       await user.save({ validateBeforeSave: false });
 
       // TODO: Integrate actual email service
-      const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
-      console.log(`📧 Simulated Email Sent to: ${email}\nReset Link: ${resetUrl}`);
+      // SECURITY: Do not log the actual token or URL in production/development logs
+      console.log(`📧 Simulated Email Sent to: ${email} (Reset link generated)`);
     }
   } catch (e) {
     console.error('Forgot password error:', e);
@@ -287,7 +287,10 @@ const resetPassword = async (req, res) => {
   user.resetPasswordExpire = undefined;
   await user.save();
 
-  return res.status(200).json({ success: true, message: 'Password reset successful' });
+  // SECURITY: Revoke all active sessions after password reset
+  await Session.updateMany({ userId: user._id }, { isRevoked: true });
+
+  return res.status(200).json({ success: true, message: 'Password reset successful. All previous sessions have been logged out.' });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -462,9 +465,12 @@ const changePassword = async (req, res) => {
     user.password = newPassword;
     await user.save(); // Pre-save hook handles hashing
 
+    // SECURITY: Revoke all active sessions after password change
+    await Session.updateMany({ userId: req.user._id }, { isRevoked: true });
+
     return res.status(200).json({
       success: true,
-      message: 'Password changed successfully',
+      message: 'Password changed successfully. All previous sessions have been logged out.',
     });
   } catch (error) {
     console.error('Change password error:', error);
@@ -483,7 +489,11 @@ const refreshTokenHandler = async (req, res) => {
   }
 
   try {
-    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const secret = process.env.JWT_REFRESH_SECRET;
+    if (!secret) {
+      throw new Error('JWT_REFRESH_SECRET is not defined');
+    }
+    const decoded = jwt.verify(refreshToken, secret);
     const refreshTokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
     const session = await Session.findOne({

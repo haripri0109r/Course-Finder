@@ -8,8 +8,25 @@ import Notification from './src/models/Notification.js';
 
 const PORT = process.env.PORT || 5000;
 
+const validateEnv = () => {
+  const required = [
+    'MONGODB_URI',
+    'JWT_ACCESS_SECRET',
+    'JWT_REFRESH_SECRET',
+    'CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET'
+  ];
+  const missing = required.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    console.error(`💥 CRITICAL ERROR: Missing environment variables: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+};
+
 const startServer = async () => {
   try {
+    validateEnv();
     await connectDB();
 
     if (process.env.NODE_ENV !== 'production') {
@@ -65,7 +82,11 @@ const startServer = async () => {
       }
 
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const secret = process.env.JWT_ACCESS_SECRET;
+        if (!secret) {
+          return next(new Error("Server configuration error"));
+        }
+        const decoded = jwt.verify(token, secret);
         socket.userId = decoded.id;
         next();
       } catch (err) {

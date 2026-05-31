@@ -377,10 +377,10 @@ const likeCompletion = async (req, res) => {
 
   const completion = await CompletedCourse.findById(req.params.id);
 
-  if (!completion) {
+  if (!completion || completion.isRemoved) {
     return res.status(404).json({
       success: false,
-      message: 'Completion log not found',
+      message: 'Completion log not found or has been removed',
     });
   }
 
@@ -536,7 +536,7 @@ const getCompletedCourseById = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid ID format' });
   }
 
-  const post = await CompletedCourse.findById(req.params.id)
+  const post = await CompletedCourse.findOne({ _id: req.params.id, isRemoved: false })
     .populate('user', 'name profilePicture')
     .populate('course', 'title platform url tags level averageRating totalCompletions totalRatings image')
     .lean();
@@ -573,7 +573,7 @@ const getPostById = async (req, res) => {
     return res.status(400).json({ message: 'Invalid ID format' });
   }
 
-  const post = await CompletedCourse.findById(req.params.id)
+  const post = await CompletedCourse.findOne({ _id: req.params.id, isRemoved: false })
     .populate('user', 'name profilePicture')
     .populate('course', 'title platform url tags level averageRating totalCompletions totalRatings image')
     .lean();
@@ -665,7 +665,7 @@ const getUserCompletionsPaginated = async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 20, 50);
   const cursor = req.query.cursor;
 
-  const query = { user: req.params.userId, isPublic: true };
+  const query = { user: req.params.userId, isPublic: true, isRemoved: false };
   if (cursor) query._id = { $lt: cursor };
 
   const activity = await CompletedCourse.find(query)
@@ -691,13 +691,13 @@ const getUserCompletionsPaginated = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const shareCompletion = async (req, res) => {
   try {
-    const updated = await CompletedCourse.findByIdAndUpdate(
-      req.params.id,
+    const updated = await CompletedCourse.findOneAndUpdate(
+      { _id: req.params.id, isRemoved: false },
       { $inc: { shareCount: 1 } },
       { new: true }
     );
 
-    if (!updated) return res.status(404).json({ success: false, message: 'Post not found' });
+    if (!updated) return res.status(404).json({ success: false, message: 'Post not found or has been removed' });
 
     trackEvent({
       userId: req.user._id,
